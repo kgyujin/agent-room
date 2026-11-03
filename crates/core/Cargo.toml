@@ -1,0 +1,16 @@
+[package]
+name = "agent-room-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Local, rule-based agent event model for Agent Room (no network, no LLM calls)"
+
+[features]
+default = ["runtime"]
+# socket server + process liveness; the hook binary builds without it
+runtime = ["dep:sysinfo"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sysinfo = { version = "0.37", optional = true, default-features = false, features = ["system"] }
