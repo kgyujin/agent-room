@@ -265,7 +265,10 @@ pub fn restore_latest(t: Target) -> Result<String, String> {
 /// "remove" action and by `agent-room-hook --uninstall`.
 pub fn uninstall_all() -> Vec<Result<HookStatus, String>> {
     let res = vec![uninstall(Target::Claude), uninstall(Target::Codex)];
-    let _ = fs::remove_file(paths::installed_hook_bin());
+    // keep the binary while any config may still reference it
+    if res.iter().all(|r| r.is_ok()) {
+        let _ = fs::remove_file(paths::installed_hook_bin());
+    }
     res
 }
 

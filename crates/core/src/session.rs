@@ -410,7 +410,8 @@ impl SessionStore {
                     sess.tasks.push((id, PlanItem { text: t, status: status.unwrap_or_else(|| "pending".into()) }));
                 }
                 let items: Vec<PlanItem> = sess.tasks.iter().filter(|(_, p)| p.status != "deleted").map(|(_, p)| p.clone()).collect();
-                if !items.is_empty() {
+                // once task tracking has begun, the task list is authoritative (deleting the last task clears it)
+                if !sess.tasks.is_empty() {
                     s.plan = items;
                 }
             }
@@ -556,5 +557,13 @@ mod tests {
         let u = st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: None, status: Some("completed".into()) }, 3)).unwrap();
         assert_eq!(u.snapshot.plan.iter().filter(|p| p.status == "completed").count(), 1);
         assert_eq!(u.snapshot.plan.len(), 2);
+    }
+
+    #[test]
+    fn deleting_last_task_clears_plan() {
+        let mut st = SessionStore::default();
+        st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: Some("A".into()), status: Some("pending".into()) }, 1));
+        let u = st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: None, status: Some("deleted".into()) }, 2)).unwrap();
+        assert!(u.snapshot.plan.is_empty());
     }
 }

@@ -17,6 +17,10 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
 
+/// Set only when this process bound the hook socket, so a second instance
+/// (which fails with AddrInUse) never unlinks the running instance's socket.
+static OWNS_SOCKET: AtomicBool = AtomicBool::new(false);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -372,8 +376,9 @@ pub fn run() {
 
             // local IPC from agent-room-hook
             let h = handle.clone();
-            if let Err(e) = runtime::spawn_server(move |env| handle_envelope(&h, env)) {
-                *handle.state::<Shared>().server_error.lock().unwrap() = Some(e.to_string());
+            match runtime::spawn_server(move |env| handle_envelope(&h, env)) {
+                Ok(_) => OWNS_SOCKET.store(true, Ordering::SeqCst),
+                Err(e) => *handle.state::<Shared>().server_error.lock().unwrap() = Some(e.to_string()),
             }
 
             // connection health + agent process detection (no content is read)
@@ -436,7 +441,9 @@ pub fn run() {
         .expect("error while building Agent Room")
         .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
-                runtime::remove_socket();
+                if OWNS_SOCKET.load(Ordering::SeqCst) {
+                    runtime::remove_socket();
+                }
             }
         });
 }
