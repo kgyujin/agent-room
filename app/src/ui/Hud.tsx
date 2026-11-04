@@ -98,7 +98,7 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
   return null;
 }
 
-export function MiniPill({ s, now, onExpand }: { s: Snapshot | null; now: number; onExpand?: () => void }) {
+export function MiniPill({ s, now, onExpand, onConnect }: { s: Snapshot | null; now: number; onExpand?: () => void; onConnect?: () => void }) {
   const prog = s ? progressOf(s) : null;
   return (
     <div className="mini-pill">
@@ -113,7 +113,10 @@ export function MiniPill({ s, now, onExpand }: { s: Snapshot | null; now: number
           </span>
         </>
       ) : (
-        <span className="mini-state">연결된 Agent 없음</span>
+        <>
+          <span className="mini-state">연결된 에이전트 없음</span>
+          {onConnect && <button className="btn small primary" onClick={onConnect}>연결하기</button>}
+        </>
       )}
       {onExpand && (
         <button className="tool" onClick={onExpand} title="창으로 보기" aria-label="창으로 보기">

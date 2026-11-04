@@ -33,6 +33,8 @@ pub struct Settings {
     pub bgm: bool,
     pub notify_complete: bool,
     pub notify_approval: bool,
+    /// notify when a plan usage window has 10% or less left
+    pub notify_limits: bool,
     pub notify_only_when_hidden: bool,
     pub stale_minutes: u32,
     pub panel_open: bool,
@@ -65,6 +67,7 @@ impl Default for Settings {
             bgm: false,
             notify_complete: true,
             notify_approval: true,
+            notify_limits: true,
             notify_only_when_hidden: true,
             stale_minutes: 3,
             panel_open: true,
@@ -91,6 +94,8 @@ struct Shared {
     detected: Mutex<(u32, u32)>,
     server_error: Mutex<Option<String>>,
     demo_stop: Mutex<Option<Arc<AtomicBool>>>,
+    /// (agent, window minutes) -> reset time already warned about (low remaining usage)
+    limit_warned: Mutex<std::collections::HashMap<(String, u32), u64>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -125,7 +130,29 @@ fn publish(app: &AppHandle, u: Update) {
     if let Some(n) = u.notice {
         notify(app, &u.snapshot, n);
     }
+    if let Some(l) = &u.snapshot.limits {
+        notify_low_limits(app, &u.snapshot, l);
+    }
     refresh_tray(app);
+}
+
+/// One notification per usage window and reset period once 10% or less is left.
+fn notify_low_limits(app: &AppHandle, s: &Snapshot, l: &agent_room_core::model::RateLimits) {
+    let shared = app.state::<Shared>();
+    if s.is_demo || !shared.settings.lock().unwrap().notify_limits {
+        return;
+    }
+    let agent = agent_label(s);
+    let low = agent_room_core::limits::newly_low(agent, l, 10.0, &mut shared.limit_warned.lock().unwrap());
+    for w in low {
+        let name = match w.minutes { 300 => "5시간", 10080 => "주간", _ => "사용량" };
+        let left = (100.0 - w.used_pct).max(0.0).round();
+        let reset = w.resets_at.map(|t| {
+            let mins = t.saturating_sub(agent_room_core::model::now_ms()) / 60_000;
+            if mins < 60 { format!(" {mins}분 뒤 초기화돼요.") } else if mins < 1440 { format!(" {}시간 뒤 초기화돼요.", mins / 60) } else { format!(" {}일 뒤 초기화돼요.", mins / 1440) }
+        }).unwrap_or_default();
+        let _ = app.notification().builder().title(format!("{agent} {name} 사용량 {left}% 남음")).body(format!("남은 사용량이 얼마 없어요.{reset}")).show();
+    }
 }
 
 fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {

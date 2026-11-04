@@ -17,7 +17,7 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyOnlyWhenHidden: true,
+  theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
 };

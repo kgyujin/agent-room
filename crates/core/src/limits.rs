@@ -7,6 +7,7 @@
 
 use crate::model::{LimitWindow, RateLimits};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -36,6 +37,27 @@ pub fn from_codex(rl: &Value, at: u64) -> Option<RateLimits> {
         })
         .collect();
     (!windows.is_empty()).then_some(RateLimits { windows, at })
+}
+
+/// Windows with at most `pct_left` percent left that have not been reported yet in their
+/// current reset period. `warned` remembers (agent, window) -> reset time already reported,
+/// so each window warns once per period and again after it resets.
+pub fn newly_low(agent: &str, l: &RateLimits, pct_left: f64, warned: &mut HashMap<(String, u32), u64>) -> Vec<LimitWindow> {
+    let mut out = Vec::new();
+    for w in &l.windows {
+        if 100.0 - w.used_pct > pct_left {
+            continue;
+        }
+        let period = w.resets_at.unwrap_or(0);
+        let key = (agent.to_string(), w.minutes);
+        // a reset time that moves by a minute or two is the same period (Codex derives it from a countdown)
+        if warned.get(&key).is_some_and(|p| p.abs_diff(period) < 10 * 60_000) {
+            continue;
+        }
+        warned.insert(key, period);
+        out.push(w.clone());
+    }
+    out
 }
 
 /// Follows a Codex rollout log and keeps the latest rate-limit numbers.
@@ -89,6 +111,17 @@ mod tests {
         assert_eq!((l.windows[0].minutes, l.windows[0].used_pct, l.windows[0].resets_at), (300, 23.5, Some(1_700_000_000_000)));
         assert_eq!((l.windows[1].minutes, l.windows[1].resets_at), (10080, None));
         assert!(from_claude(&json!({}), 1).is_none());
+    }
+
+    #[test]
+    fn low_warning_fires_once_per_period() {
+        let mut warned = HashMap::new();
+        let l = |used: f64, reset: u64| RateLimits { windows: vec![LimitWindow { minutes: 300, used_pct: used, resets_at: Some(reset) }], at: 0 };
+        assert!(newly_low("claude", &l(85.0, 1_000_000), 10.0, &mut warned).is_empty(), "15% left is fine");
+        assert_eq!(newly_low("claude", &l(90.0, 1_000_000), 10.0, &mut warned).len(), 1, "exactly 10% left warns");
+        assert!(newly_low("claude", &l(95.0, 1_060_000), 10.0, &mut warned).is_empty(), "same period, jittered reset");
+        assert_eq!(newly_low("codex", &l(95.0, 1_000_000), 10.0, &mut warned).len(), 1, "other agent is separate");
+        assert_eq!(newly_low("claude", &l(92.0, 1_000_000 + 5 * 3_600_000), 10.0, &mut warned).len(), 1, "next period warns again");
     }
 
     #[test]

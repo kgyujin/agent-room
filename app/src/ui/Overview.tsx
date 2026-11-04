@@ -27,11 +27,12 @@ function turnMs(s: Snapshot, now: number) {
   return (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt;
 }
 
-/** rough time left: average time per finished plan step x steps left (null until one step is done) */
+/** rough time left: average time per finished plan step x steps left (null until one step is done
+ *  and the turn has run a minute; steps the agent marks done right away would make it meaningless) */
 export function etaMs(s: Snapshot, now: number): number | null {
   const p = progressOf(s);
   const t = turnMs(s, now);
-  if (!p || !t || p.done < 1 || p.done >= p.total || !isActive(s)) return null;
+  if (!p || !t || t < 60_000 || p.done < 1 || p.done >= p.total || !isActive(s)) return null;
   return (t / p.done) * (p.total - p.done);
 }
 
@@ -91,7 +92,7 @@ export function latestLimits(sessions: Snapshot[], agent: Snapshot['agent']): Ra
 
 /** remaining plan usage per agent, as each agent reports it (Claude status line, Codex log) */
 function Limits({ sessions, now }: { sessions: Snapshot[]; now: number }) {
-  const rows = (['claude', 'codex'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
+  const rows = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
   return (
     <>
       <h4>남은 사용량</h4>

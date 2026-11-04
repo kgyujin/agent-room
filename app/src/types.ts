@@ -69,6 +69,7 @@ export interface Settings {
   bgm: boolean;
   notifyComplete: boolean;
   notifyApproval: boolean;
+  notifyLimits: boolean;
   notifyOnlyWhenHidden: boolean;
   staleMinutes: number;
   panelOpen: boolean;

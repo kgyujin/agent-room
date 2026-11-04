@@ -20,7 +20,10 @@ export function Island() {
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
   const done = list.filter((s) => s.state === 'completed');
   // remaining plan usage per agent, one line under the list
-  const limits = (['claude', 'codex'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]);
+  const limits = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]);
+  // lowest remaining share across agents, shown on the collapsed pill once it is 10% or less
+  const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
+  const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
   useEffect(() => {
     const [w, h] = open ? [420, 44 + Math.max(1, Math.min(list.length, 8)) * ROW + 12 + (limits.length ? 30 : 0)] : COLLAPSED;
@@ -43,6 +46,11 @@ export function Island() {
         </div>
         <div className="is-notch" />
         <div className="is-right">
+          {low && low.left <= 10 && (
+            <span className="is-low" title={`${low.name} 남은 사용량이 얼마 없어요`}>
+              <AgentMark agent={low.a} size={11} /> {low.left}%
+            </span>
+          )}
           {todos.length ? (
             <span className="is-alert">! {todos.length}</span>
           ) : working.length ? (

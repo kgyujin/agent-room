@@ -70,7 +70,7 @@ export function SettingsModal(props: {
               </Field>
               <Field label="글꼴">
                 <select value={s.font} onChange={(e) => set('font', e.target.value as Settings['font'])}>
-                  <option value="mixed">기본 (숫자·제목만 도트)</option>
+                  <option value="mixed">기본 (제목만 도트)</option>
                   <option value="system">읽기 쉬운 글꼴만</option>
                   <option value="pixel">전부 도트</option>
                 </select>
@@ -84,6 +84,7 @@ export function SettingsModal(props: {
               </Field>
               <h4>화면 구성</h4>
               <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
+              <Toggle label="남은 사용량 표시 (5시간·주간)" v={s.showLimits} on={(v) => set('showLimits', v)} />
               <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />
               <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
             </>
@@ -94,9 +95,9 @@ export function SettingsModal(props: {
               <Toggle label="배경 음악 (Lo-fi)" v={s.bgm} on={(v) => set('bgm', v)} />
               <Toggle label="작업 완료·오류 알림" v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
               <Toggle label="승인·입력 요청 알림" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
+              <Toggle label="남은 사용량 10% 이하 알림" v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
               <Toggle label="앱을 보고 있을 땐 알림 생략" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
-              <Toggle label="남은 사용량 표시 (5시간·주간)" v={s.showLimits} on={(v) => set('showLimits', v)} />
               <AutostartToggle />
               <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
             </>
@@ -305,7 +306,7 @@ function Agents() {
         <div key={h.agent} className="agent-card">
           <div className="row between">
             <b>{NAMES[h.agent]}</b>
-            <span className={`tag st-${h.installed}`}>{{ full: '연결됨', partial: '일부만 설치', none: '미설치' }[h.installed]}</span>
+            <span className={`tag st-${h.installed}`}>{{ full: '연결됨', partial: '다시 연결 필요', none: '연결 안 됨' }[h.installed]}</span>
           </div>
           <div className="muted small mono">{h.configPath}</div>
           {!h.agentDetected && <div className="muted small">이 컴퓨터에서 {NAMES[h.agent]} 설정 폴더를 찾지 못했어요.</div>}
@@ -313,8 +314,8 @@ function Agents() {
             <div key={n} className="callout wait small">{n}</div>
           ))}
           <div className="row">
-            <button className="btn primary" onClick={() => run(() => backend.hooksInstall(h.agent), `${NAMES[h.agent]} Hook을 설치했어요. 새로 시작하는 세션부터 표시돼요.`)}>
-              {h.installed === 'none' ? 'Hook 설치' : '다시 설치'}
+            <button className="btn primary" onClick={() => run(() => backend.hooksInstall(h.agent), `${NAMES[h.agent]} 연결했어요. 새로 시작하는 세션부터 표시돼요.`)}>
+              {h.installed === 'none' ? '연결하기' : '다시 연결'}
             </button>
             {h.installed !== 'none' && (
               <button className="btn" onClick={() => run(() => backend.hooksUninstall(h.agent), `${NAMES[h.agent]} Hook을 제거했어요.`)}>

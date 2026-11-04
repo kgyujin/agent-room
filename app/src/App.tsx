@@ -386,7 +386,7 @@ export default function App() {
         </div>
       )}
 
-      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} />}
+      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} onConnect={() => setSettingsOpen('agents')} />}
 
       {panelOpen && selected && (
         <DetailPanel
