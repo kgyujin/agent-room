@@ -108,209 +108,217 @@ def ramp(light, base, dark, line):
     return tuple(hexc(c) for c in (light, base, dark, line))
 
 
-EYE = hexc('#1e1420')
-SHINE = hexc('#ffffff')
-BLUSH = hexc('#ff8fa6')
-MOUTH = hexc('#4a1e28')
-TONGUE = hexc('#ff6f86')
+# flat "sticker" style: solid black outline, one flat fill, one darker tone for the
+# bottom edge / stripes / feet, tiny wide-set dot eyes, a little 'ㅅ' mouth and pink cheeks
+INK = hexc('#2a2230')
+BLUSH = hexc('#ff9db0')
+PINK = hexc('#ffb6c6')
 
 
-EYE_MID = hexc('#7a5368')
+def rrect(x0, y0, x1, y1, r):
+    """rounded rectangle on pixel centres, inclusive bounds"""
+    def f(x, y):
+        if not (x0 <= x <= x1 and y0 <= y <= y1):
+            return False
+        cx = min(max(x, x0 + r), x1 - r)
+        cy = min(max(y, y0 + r), y1 - r)
+        return (x - cx) ** 2 + (y - cy) ** 2 <= r * r + 0.5
+    return f
 
 
-EYE_ROWS = ['WE', 'EE', 'EE', 'GE']
+def flat(cv, mask, rp, lid):
+    """flat fill: base colour, darker tone on the bottom row of the shape"""
+    cells = {(x, y) for y in range(H) for x in range(W) if mask(x, y)}
+    for (x, y) in cells:
+        cv.px[y][x] = rp[2] if (x, y + 1) not in cells else rp[1]
+        cv.part[y][x] = lid
+    return cells
 
 
-def face(cv, y, cx=13, nose=None, mouth_=True, blush_dy=4):
-    """clear, front-facing face (reads at a glance, like a handheld-game follower sprite):
-    two round 3x5 eyes with a shine, optional nose, small open smile, pink cheeks"""
-    for x0 in (cx - 5, cx + 4):
-        for dy, row in enumerate(EYE_ROWS):
-            for dx, ch in enumerate(row):
-                if ch != '.':
-                    cv.put(x0 + dx, y + dy, {'E': EYE, 'W': SHINE, 'G': EYE_MID}[ch])
-    if nose is not None:
-        cv.put(cx, y + 4, nose)
-    if mouth_:
-        mouth(cv, cx - 1, y + 5)
-    by = y + blush_dy
-    for x in (cx - 8, cx - 7, cx + 7, cx + 8):
-        cv.put(x, by, BLUSH)
+def face(cv, y, cx=14, gap=4, mouth=True):
+    """dot eyes (1x2), 'ㅅ' mouth between them one row lower, cheeks just outside the eyes"""
+    for x in (cx - gap, cx + gap):
+        cv.put(x, y, INK); cv.put(x, y + 1, INK)
+    if mouth:
+        cv.put(cx, y + 1, INK); cv.put(cx - 1, y + 2, INK); cv.put(cx + 1, y + 2, INK)
+    for x in (cx - gap - 2, cx - gap - 1, cx + gap + 1, cx + gap + 2):
+        cv.put(x, y + 2, BLUSH)
 
 
-def feet(cv, rp, lid, lift=None, y=24):
-    """far foot (left, a touch higher) and near foot (right)"""
-    for side, x, yy in (('L', 9.0, y - 0.4), ('R', 15.5, y)):
-        dy = -1 if lift == side else 0
-        cv.layer(ellipse(x, yy + 0.6 + dy, 2.6, 1.7), rp, lid)
+def stubs(cv, rp, lift, y=24, xs=(6, 10, 15, 19)):
+    """four little legs under the loaf; walking lifts one pair"""
+    for i, x in enumerate(xs):
+        up = 1 if (lift == 'L' and i in (0, 2)) or (lift == 'R' and i in (1, 3)) else 0
+        for yy in range(y, y + 2 - up):
+            cv.px[yy][x] = rp[2]; cv.part[yy][x] = 'legs'
+            cv.px[yy][x + 1] = rp[2]; cv.part[yy][x + 1] = 'legs'
 
 
-def mouth(cv, x, y):
-    """small open smile: corners, a pink tongue and the lower lip"""
-    cv.put(x, y, MOUTH); cv.put(x + 2, y, MOUTH)
-    cv.put(x + 1, y, TONGUE); cv.put(x + 1, y + 1, MOUTH)
+def ears_tri(cv, rp, left, right, lid='ears'):
+    m = union(tri(*left), tri(*right))
+    return flat(cv, m, rp, lid)
+
+
+def stripes(cv, rp, pts):
+    for (x, y) in pts:
+        if cv.px[y][x] is not None and cv.part[y][x] == 'body':
+            cv.px[y][x] = rp[2]
 
 
 # main fur/feather ramp per critter (light, base, dark, line); the app can recolour exactly these
 MAIN_HEX = {
-    'shiba': ('#ffbe73', '#f59a45', '#d47428', '#5e2a0e'),
-    'cat': ('#c9cdd8', '#a6abbb', '#7f8597', '#30344a'),
-    'penguin': ('#6aa6e8', '#3f7fd0', '#2c5fa8', '#14254a'),
-    'hamster': ('#ffd9a0', '#f6b96b', '#d9934a', '#603414'),
-    'rabbit': ('#ffffff', '#f4eef2', '#ddd0da', '#5e4a5c'),
-    'frog': ('#a8e07a', '#7cc45a', '#5a9c40', '#1c401c'),
-    'chick': ('#fff1a0', '#ffd95a', '#f0b832', '#6e4408'),
+    'shiba': ('#ffc27a', '#f6a04d', '#d97a2a', '#a85a1c'),
+    'cat': ('#c3c5cf', '#a7a9b4', '#7f8290', '#5d606c'),
+    'penguin': ('#7fb0ec', '#4f86d6', '#3563ad', '#24477e'),
+    'hamster': ('#ffdcaa', '#f7bd74', '#dc9a52', '#a8702e'),
+    'rabbit': ('#ffffff', '#f6f1f4', '#ddd2da', '#b8a8b6'),
+    'frog': ('#a9e27c', '#80c75c', '#5e9e42', '#3f7a2c'),
+    'chick': ('#fff3a8', '#ffdc5c', '#f0b830', '#c48a14'),
 }
 MAIN = {k: ramp(*v) for k, v in MAIN_HEX.items()}
-CREAM = ramp('#fffaf0', '#fff1dc', '#ecd2b3', '#a8805c')
-WHITE = ramp('#ffffff', '#f7f5f2', '#dcd8d3', '#8a8580')
-PINK = hexc('#ffb3bd')
+WHITE = ramp('#ffffff', '#fffaf4', '#e8ddd2', '#c8b8a8')
+
+# the loaf every critter is built on: a soft rounded block, a little wider than tall
+LOAF = rrect(3, 8, 22, 24, 6)
 
 
-# ---------------------------------------------------------------- species (3/4 view, facing right)
+def finish(cv):
+    cv.outline(lambda lid: INK)
+    return cv.image()
+
+
+# ---------------------------------------------------------------- species (faces turned a little to the right)
+def cat(view, lift):
+    G = MAIN['cat']
+    cv = Canvas()
+    stubs(cv, G, lift)
+    # tail curling up on the left (behind)
+    flat(cv, union(rrect(1, 6, 2, 20, 1), rrect(1, 5, 4, 6, 1)), G, 'tail')       # tail standing up, tip curled
+    ears_tri(cv, G, ((5, 9.5), (6.5, 3.5), (11, 8.5)), ((16, 8.5), (20.5, 3.5), (21.5, 9.5)))
+    flat(cv, LOAF, G, 'body')
+    for (x, y) in [(1, 9), (2, 9), (1, 12), (2, 12)]:
+        cv.px[y][x] = G[2]                                                # tail rings
+    for y in range(H):                                                    # line where the tail meets the body
+        if cv.part[y][2] == 'tail' and cv.part[y][3] == 'body':
+            cv.px[y][3] = INK
+    # tabby marks: three on the forehead, a few on the flank
+    stripes(cv, G, [(13, 9), (13, 10), (11, 9), (15, 9)])
+    if view == 'front':
+        stripes(cv, G, [(4, 15), (5, 15), (4, 18), (5, 18), (21, 15), (21, 18)])
+        face(cv, 13)
+    else:
+        stripes(cv, G, [(x, y) for y in (13, 16, 19) for x in range(9, 17)])
+    return finish(cv)
+
+
 def shiba(view, lift):
     O = MAIN['shiba']
     cv = Canvas()
-    feet(cv, O, 'feet', lift)
-    cv.layer(ellipse(12.2, 20.5, 5.8, 4.4), O, 'body')
+    stubs(cv, O, lift)
+    if view == 'back':
+        flat(cv, rrect(1, 11, 5, 16, 2), O, 'tail')                          # curled tail
+    ears_tri(cv, O, ((5, 9.5), (6, 3.5), (11, 8.5)), ((16, 8.5), (21, 3.5), (21.5, 9.5)))
+    flat(cv, LOAF, O, 'body')
     if view == 'front':
-        cv.paint(ellipse(14.2, 21.6, 2.8, 3.2), CREAM[1], on='body')
-    ears = union(tri((4.2, 9.0), (5.6, 0.8), (11.0, 4.8)), tri((14.6, 4.4), (19.6, 0.4), (21.4, 8.8)))
-    cv.layer(ears, O, 'ears', shade_top=False)
-    cv.layer(ellipse(12.8, 10.5, 10.6, 8.2), O, 'head')
-    if view == 'front':
-        cv.paint(union(tri((6.2, 6.6), (6.6, 3.0), (9.0, 5.2)), tri((16.2, 5.0), (19.0, 2.4), (19.6, 6.8))), PINK, on='ears')
-        cv.paint(union(ellipse(13.5, 15.2, 4.6, 2.6), ellipse(6.6, 14.0, 2.4, 2.0), ellipse(20.4, 14.0, 2.4, 2.0)), CREAM[1], on='head')
-        cv.put(9, 7, CREAM[1]); cv.put(17, 7, CREAM[1])                     # shiba brow dots
-        face(cv, 9, nose=EYE)
+        # cream lower face and chest
+        for y in range(15, 24):
+            for x in range(8, 21):
+                if LOAF(x, y) and ((x - 14) ** 2 / 20 + (y - 20) ** 2 / 12 <= 1):
+                    cv.px[y][x] = WHITE[1]
+        cv.put(9, 11, WHITE[1]); cv.put(19, 11, WHITE[1])                     # brow dots
+        face(cv, 13)
+        for (x, y) in [(7, 5), (19, 5)]:
+            cv.put(x, y, PINK)
     else:
-        cv.layer(ellipse(10.2, 18.6, 3.2, 2.6), CREAM, 'tail')              # curled tail on the back
-        cv.paint(ellipse(10.2, 18.6, 1.4, 1.1), O[1])
-    cv.outline(lambda lid: O[3])
-    return cv.image()
-
-
-def cat(view, lift):
-    G = MAIN['cat']     # silver tabby
-    S = hexc('#6d7386')
-    P = hexc('#ffb3c4')
-    cv = Canvas()
-    feet(cv, G, 'feet', lift)
-    cv.layer(union(ellipse(4.2, 19.5, 2.0, 3.4), ellipse(3.0, 15.5, 1.4, 2.6)), G, 'tail')
-    cv.layer(ellipse(12.2, 20.5, 5.6, 4.4), G, 'body')
-    if view == 'front':
-        cv.paint(ellipse(14.0, 21.6, 2.6, 3.2), WHITE[1], on='body')
-    ears = union(tri((3.8, 8.0), (4.6, 0.4), (10.6, 4.0)), tri((15.0, 3.8), (20.6, 0.2), (21.6, 8.4)))
-    cv.layer(ears, G, 'ears', shade_top=False)
-    cv.layer(ellipse(12.8, 10.5, 10.6, 8.2), G, 'head')
-    cv.paint(union(lambda x, y: x == 13 and 3 <= y <= 5, lambda x, y: x in (11, 15) and 4 <= y <= 5), S, on='head')
-    if view == 'front':
-        cv.paint(union(tri((5.6, 6.0), (5.6, 2.2), (8.4, 4.4)), tri((16.6, 4.4), (19.8, 2.0), (20.2, 6.4))), P, on='ears')
-        cv.paint(ellipse(13.5, 15.2, 4.2, 2.4), WHITE[1], on='head')
-        face(cv, 9, nose=P)
-    else:
-        cv.paint(lambda x, y: y in (17, 19, 21) and 9 <= x <= 16 and cv.part[y][x] == 'body', S)
-    cv.outline(lambda lid: G[3])
-    return cv.image()
+        for y in range(11, 16):
+            for x in range(1, 5):
+                if rrect(2, 12, 4, 15, 1)(x, y):
+                    cv.px[y][x] = WHITE[1]
+    return finish(cv)
 
 
 def penguin(view, lift):
     B = MAIN['penguin']
-    Wt = ramp('#ffffff', '#f4f8ff', '#d4e0f0', '#7a8aa6')
-    Y = ramp('#ffe07a', '#ffc23d', '#e09a1c', '#8a5a10')
+    Y = ramp('#ffe07a', '#ffc23d', '#e09a1c', '#a8700e')
     cv = Canvas()
-    feet(cv, Y, 'feet', lift, y=24)
-    cv.layer(union(ellipse(4.6, 18.5, 1.8, 3.6), ellipse(20.6, 18.8, 1.6, 3.4)), B, 'wing')
-    cv.layer(ellipse(12.5, 18.5, 7.4, 6.2), B, 'body')
+    stubs(cv, Y, lift, xs=(8, 16))
+    flat(cv, union(rrect(1, 14, 4, 20, 2), rrect(20, 14, 23, 20, 2)), B, 'wing')   # flippers
+    flat(cv, rrect(4, 5, 21, 24, 7), B, 'body')
+    cv.put(12, 4, INK); cv.put(13, 3, INK)                                   # tuft (outline colour)
     if view == 'front':
-        cv.paint(ellipse(14.2, 20, 4.6, 4.6), Wt[1], on='body')
-    cv.layer(ellipse(12.8, 10, 9.6, 8), B, 'head')
-    cv.layer(union(lambda x, y: x == 13 and y in (1, 2), lambda x, y: x == 14 and y == 1), B, 'crest')
-    if view == 'front':
-        cv.paint(union(ellipse(9.5, 11.5, 3.6, 4.4), ellipse(17.5, 11.5, 3.6, 4.4), ellipse(13.5, 14.2, 6, 3.2)), Wt[1], on='head')
-        face(cv, 9, mouth_=False)
-        for x, y, c in ((12, 14, Y[1]), (13, 14, Y[1]), (14, 14, Y[1]), (13, 15, Y[2])):
-            cv.put(x, y, c)                                                  # beak
-    cv.outline(lambda lid: (Y if lid == 'feet' else B)[3])
-    return cv.image()
+        for y in range(8, 24):
+            for x in range(6, 21):
+                if (x - 14) ** 2 / 42 + (y - 16) ** 2 / 64 <= 1:
+                    cv.px[y][x] = WHITE[1]
+        face(cv, 12, mouth=False)
+        cv.put(13, 14, Y[1]); cv.put(14, 14, Y[1]); cv.put(15, 14, Y[1]); cv.put(14, 15, Y[2])   # beak
+    return finish(cv)
 
 
 def hamster(view, lift):
     O = MAIN['hamster']
-    Wt = ramp('#ffffff', '#fff6ea', '#ecdcc8', '#9c7c5c')
-    P = hexc('#ffaab8')
     cv = Canvas()
-    feet(cv, ramp('#ffd0d8', '#ffb6c3', '#e48da0', '#9a4a5a'), 'feet', lift, y=24)
-    cv.layer(union(ellipse(5.4, 4.8, 2.2, 2.4), ellipse(18.0, 4.2, 2.6, 2.6)), O, 'ears')
-    cv.layer(ellipse(12.8, 14.5, 10.6, 10.2), O, 'head')
+    stubs(cv, ramp('#ffd0d8', '#ffb6c3', '#e48da0', '#9a4a5a'), lift, xs=(7, 17))
+    flat(cv, union(rrect(4, 6, 8, 10, 2), rrect(17, 6, 21, 10, 2)), O, 'ears')
+    flat(cv, rrect(2, 8, 23, 24, 8), O, 'body')
     if view == 'front':
-        cv.paint(union(ellipse(5.4, 4.8, 1.0, 1.1), ellipse(18.0, 4.2, 1.2, 1.2)), P)
-        cv.paint(ellipse(13.5, 20.5, 5.6, 4.4), Wt[1], on='head')
-        cv.paint(union(ellipse(6.6, 16.4, 2.2, 1.8), ellipse(20.4, 16.4, 2.2, 1.8)), Wt[1], on='head')   # cheek pouches
-        cv.paint(lambda x, y: x == 13 and 4 <= y <= 8, O[2])
-        face(cv, 10, nose=P)
-        cv.put(12, 19, Wt[3]); cv.put(16, 19, Wt[3])                        # tiny paws
-    else:
-        cv.paint(ellipse(10.5, 23, 1.6, 1.2), Wt[1])
-    cv.outline(lambda lid: O[3] if lid != 'feet' else hexc('#9a4a5a'))
-    return cv.image()
+        for (x, y) in [(5, 7), (6, 7), (18, 7), (19, 7)]:
+            cv.put(x, y, PINK)
+        for y in range(16, 24):
+            for x in range(5, 23):
+                if (x - 14) ** 2 / 60 + (y - 21) ** 2 / 16 <= 1:
+                    cv.px[y][x] = WHITE[1]
+        face(cv, 13)
+    return finish(cv)
 
 
 def rabbit(view, lift):
     R = MAIN['rabbit']
-    P = hexc('#ffb6c8')
     cv = Canvas()
-    feet(cv, R, 'feet', lift)
-    cv.layer(ellipse(12.4, 20.5, 5.6, 4.4), R, 'body')
-    # long ears: the far one leans back, the near one stands up
-    ears = union(ellipse(9.0, 3.6, 1.8, 4.6), ellipse(16.0, 3.0, 2.0, 5.0))
-    cv.layer(ears, R, 'ears', shade_top=False)
-    cv.layer(ellipse(12.8, 12.0, 9.6, 7.4), R, 'head')
+    stubs(cv, R, lift)
+    flat(cv, union(rrect(7, 0, 10, 10, 2), rrect(16, 0, 19, 10, 2)), R, 'ears')
+    flat(cv, LOAF, R, 'body')
     if view == 'front':
-        cv.paint(union(ellipse(9.0, 3.4, 0.7, 3.2), ellipse(16.0, 2.8, 0.9, 3.6)), P, on='ears')
-        cv.paint(ellipse(14.6, 21.6, 2.6, 3.0), hexc('#fffdfd'), on='body')
-        face(cv, 10, nose=P)
+        for y in range(2, 8):
+            cv.put(8, y, PINK); cv.put(9, y, PINK); cv.put(17, y, PINK); cv.put(18, y, PINK)
+        face(cv, 14)
     else:
-        cv.layer(ellipse(11.0, 20.0, 2.0, 1.8), WHITE, 'tail')
-    cv.outline(lambda lid: R[3])
-    return cv.image()
+        flat(cv, rrect(12, 19, 15, 22, 1), WHITE, 'tail')
+    return finish(cv)
 
 
 def frog(view, lift):
     F = MAIN['frog']
-    Bl = ramp('#fffbe6', '#fff2c8', '#ead7a0', '#8a7a4a')
     cv = Canvas()
-    feet(cv, F, 'feet', lift)
-    cv.layer(ellipse(12.4, 19.5, 7.0, 5.0), F, 'body')
+    stubs(cv, F, lift)
+    flat(cv, union(rrect(4, 5, 10, 11, 3), rrect(17, 5, 23, 11, 3)), F, 'bumps')    # eye bumps
+    flat(cv, rrect(3, 9, 23, 24, 6), F, 'body')
     if view == 'front':
-        cv.paint(ellipse(14.4, 20.8, 4.2, 3.4), Bl[1], on='body')
-    # wide head with two eye bumps on top
-    cv.layer(union(ellipse(9.0, 6.4, 3.2, 3.2), ellipse(17.0, 6.4, 3.2, 3.2)), F, 'bumps')
-    cv.layer(ellipse(13.0, 11.8, 10.2, 6.4), F, 'head')
-    if view == 'front':
-        face(cv, 4, mouth_=False, blush_dy=8)                                # eyes sit in the bumps
-        for x in range(10, 17):
-            cv.put(x, 13 if x in (10, 16) else 14, MOUTH)                     # wide smile
-        cv.put(13, 15, TONGUE)
-    cv.outline(lambda lid: F[3])
-    return cv.image()
+        for y in range(17, 24):
+            for x in range(7, 21):
+                if (x - 14) ** 2 / 40 + (y - 21) ** 2 / 10 <= 1:
+                    cv.px[y][x] = hexc('#fff2c8')
+        for x in (7, 20):
+            cv.put(x, 7, INK); cv.put(x, 8, INK)                              # eyes in the bumps
+        for x in range(11, 18):
+            cv.put(x, 13 if x in (11, 17) else 14, INK)                       # wide smile
+        for x in (5, 6, 21, 22):
+            cv.put(x, 13, BLUSH)
+    return finish(cv)
 
 
 def chick(view, lift):
     Y = MAIN['chick']
-    O = ramp('#ffc07a', '#ff9f43', '#e07a22', '#8a4a10')
+    O = ramp('#ffc07a', '#ff9f43', '#e07a22', '#a8580e')
     cv = Canvas()
-    feet(cv, O, 'feet', lift, y=24)
-    cv.layer(union(ellipse(4.4, 17.0, 1.6, 2.8), ellipse(20.8, 17.4, 1.4, 2.6)), Y, 'wing')
-    # round fluff ball with a little tuft
-    cv.layer(ellipse(12.8, 14.6, 9.4, 9.2), Y, 'head')
-    cv.layer(union(lambda x, y: x in (12, 13) and y == 4, lambda x, y: x == 14 and y == 3, lambda x, y: x == 12 and y == 3), Y, 'tuft')
+    stubs(cv, O, lift, xs=(8, 16))
+    flat(cv, union(rrect(1, 14, 3, 19, 1), rrect(21, 14, 23, 19, 1)), Y, 'wing')
+    flat(cv, rrect(3, 6, 22, 24, 9), Y, 'body')
+    cv.put(13, 5, INK); cv.put(14, 4, INK); cv.put(12, 4, INK)              # tuft
     if view == 'front':
-        face(cv, 10, mouth_=False)
-        for x, y, c in ((12, 15, O[1]), (13, 15, O[1]), (14, 15, O[1]), (13, 16, O[2])):
-            cv.put(x, y, c)                                                  # beak
-    cv.outline(lambda lid: (O if lid == 'feet' else Y)[3])
-    return cv.image()
+        face(cv, 13, mouth=False)
+        cv.put(13, 15, O[1]); cv.put(14, 15, O[1]); cv.put(15, 15, O[1]); cv.put(14, 16, O[2])   # beak
+    return finish(cv)
 
 
 CRITTERS = {'shiba': shiba, 'cat': cat, 'penguin': penguin, 'hamster': hamster, 'rabbit': rabbit, 'frog': frog, 'chick': chick}
