@@ -2,6 +2,7 @@
 // the current behavior's frame sequence. A future multi-agent mode = several Actors.
 import type { Atlas, Facing, Layout } from './assets';
 import type { Behavior } from './behaviors';
+import type { Skin } from './skin';
 
 const SPEED = 7; // world units per second
 const MIN_DWELL_MS = 1600; // stay at a spot at least this long before a non-urgent move
@@ -173,11 +174,24 @@ export class Actor {
     return ((this.frame.startsWith('walk_b') || BACK.some((p) => this.frame.startsWith(p)) ? 'u' : 'd') + this.lr) as Facing;
   }
 
-  draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number) {
+  draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number, skin?: Skin) {
     const L = atlas.layout;
     const sx = ox + L.scene.ox + 2 * (this.x - this.y);
     const sy = oy + L.scene.oy + (this.x + this.y) - L.scene.floorZ - this.z;
     if (this.z === 0) atlas.draw(ctx, 'shadow', sx - 4, sy - 1);
+    if (skin) {
+      // one still image: hop while walking, 1px bob on each behavior step; source faces left
+      const n = Number(this.frame.slice(-1)) || 0;
+      const lift = this.walking ? [0, 1, 2, 1][n % 4] : this.stepIdx % 2;
+      ctx.save();
+      if (this.lr === 'r') {
+        ctx.translate(Math.round(sx) * 2, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(skin.canvas, Math.round(sx) - (skin.w >> 1), Math.round(sy) - skin.h + 1 - lift);
+      ctx.restore();
+      return { x: sx, y: sy };
+    }
     const name = `ch_${this.agent}_${this.frame}`;
     atlas.draw(ctx, atlas.has(name) ? name : `ch_${this.agent}_stand_f0`, sx - L.char.ax, sy - L.char.ay, this.flip);
     return { x: sx, y: sy };

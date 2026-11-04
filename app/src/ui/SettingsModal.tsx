@@ -3,7 +3,7 @@ import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
 
-type Tab = 'general' | 'agents' | 'dev';
+type Tab = 'general' | 'characters' | 'agents' | 'dev';
 
 export function SettingsModal(props: {
   initialTab: Tab;
@@ -13,6 +13,7 @@ export function SettingsModal(props: {
   demoRunning: boolean;
   onToggleDemo: () => void;
   realCount: number;
+  characters: string[];
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const { settings: s, onChange } = props;
@@ -23,6 +24,7 @@ export function SettingsModal(props: {
         <header>
           <nav>
             <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>일반</button>
+            <button className={tab === 'characters' ? 'on' : ''} onClick={() => setTab('characters')}>캐릭터</button>
             <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agent 연동</button>
             <button className={tab === 'dev' ? 'on' : ''} onClick={() => setTab('dev')}>고급</button>
           </nav>
@@ -49,6 +51,7 @@ export function SettingsModal(props: {
               <AutostartToggle />
             </>
           )}
+          {tab === 'characters' && <Characters settings={s} onChange={onChange} names={props.characters} />}
           {tab === 'agents' && <Agents />}
           {tab === 'dev' && <Dev {...props} />}
         </div>
@@ -82,6 +85,41 @@ function AutostartToggle() {
     autostartEnabled().then(setOn).catch(() => setOn(false));
   }, []);
   return <Toggle label="로그인 시 자동 실행" v={on} disabled={!IN_TAURI} on={(v) => setAutostart(v).then(setOn).catch(() => undefined)} />;
+}
+
+const ROLES: [string, string][] = [['claude', 'Claude Code'], ['codex', 'Codex'], ['generic', '연결 없음·데모']];
+
+function Characters({ settings: s, onChange, names }: { settings: Settings; onChange: (s: Settings) => void; names: string[] }) {
+  const [dir, setDir] = useState('~/.agent-room');
+  useEffect(() => {
+    backend.dataDir().then(setDir).catch(() => undefined);
+  }, []);
+  const pick = (agent: string, name: string) => {
+    const next = { ...s.characters };
+    if (name) next[agent] = name;
+    else delete next[agent];
+    onChange({ ...s, characters: next });
+  };
+  return (
+    <>
+      {ROLES.map(([agent, label]) => (
+        <Field key={agent} label={label}>
+          <select value={s.characters[agent] ?? ''} onChange={(e) => pick(agent, e.target.value)}>
+            <option value="">기본 캐릭터</option>
+            {names.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+            {s.characters[agent] && !names.includes(s.characters[agent]) && <option value={s.characters[agent]} disabled>{s.characters[agent]} (파일 없음)</option>}
+          </select>
+        </Field>
+      ))}
+      <p className="muted small">
+        PNG 한 장을 <span className="mono">{dir}/characters/</span> 폴더에 넣고 설정을 다시 열면 목록에 나타나요. 확대된 도트 이미지도
+        1칸 = 1px 원래 크기로 줄여서 쓰고, 단색 배경은 투명하게 처리해요. 왼쪽을 보는 그림을 기준으로 방향을 뒤집어요. 파일은 이
+        컴퓨터에만 있고 어디에도 올리지 않아요.
+      </p>
+    </>
+  );
 }
 
 const NAMES = { claude: 'Claude Code', codex: 'OpenAI Codex CLI' };

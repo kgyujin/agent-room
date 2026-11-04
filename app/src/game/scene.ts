@@ -5,6 +5,7 @@ import type { Snapshot } from '../types';
 import { Actor } from './actor';
 import type { Atlas } from './assets';
 import { behaviorFor, REST_KEYS, restBehavior, type Behavior } from './behaviors';
+import type { Skin } from './skin';
 
 export type Theme = 'day' | 'sunset' | 'night';
 
@@ -50,6 +51,8 @@ export class Scene {
   insetBottom = 0;
   /** room-only mode: no sky, clouds or petals; transparent around the room */
   roomOnly = false;
+  /** custom characters by agent ('claude', 'codex', 'generic'); demo uses 'generic' */
+  skins: Record<string, Skin> = {};
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
 
@@ -230,12 +233,13 @@ export class Scene {
     ORDER.forEach((name, i) => {
       if (boxes[name] && overlaps(name) && !occludes(boxes[name])) insertAfter = i;
     });
-    if (insertAfter === -1) this.actor.draw(g, A, ox, oy);
+    const skin = this.skins[this.actor.agent === 'demo' ? 'generic' : this.actor.agent];
+    if (insertAfter === -1) this.actor.draw(g, A, ox, oy, skin);
     ORDER.forEach((name, i) => {
       A.placed(g, name, ox, oy);
       if (name === 'monitor') A.placed(g, this.screenFrame(b), ox, oy);
       if (name === 'bench') A.placed(g, this.rigFrame(b), ox, oy);
-      if (i === insertAfter) this.actor.draw(g, A, ox, oy);
+      if (i === insertAfter) this.actor.draw(g, A, ox, oy, skin);
     });
 
     // tea steam

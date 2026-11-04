@@ -3,6 +3,7 @@ import { backend, DEFAULT_SETTINGS, IN_TAURI, win } from './bridge';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Theme } from './game/scene';
+import { loadSkin, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud, MiniPill } from './ui/Hud';
 import { DetailPanel } from './ui/DetailPanel';
@@ -41,6 +42,7 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
   const [vw, setVw] = useState(window.innerWidth);
+  const [skins, setSkins] = useState<Record<string, Skin>>({});
 
   const list = useMemo(() => Object.values(sessions).sort((a, b) => priority(a) - priority(b) || b.lastEventAt - a.lastEventAt), [sessions]);
   const realSessions = list.filter((s) => !s.isDemo);
@@ -151,6 +153,22 @@ export default function App() {
     sc.insetBottom = 0;
     sc.resize();
   }, [panelOpen, ready, mini]);
+
+  // custom characters (local PNGs); reloaded each time the settings window opens
+  const reloadSkins = useCallback(async () => {
+    const files = await backend.listCharacters().catch(() => []);
+    const loaded = await Promise.all(files.map((f) => loadSkin(f.bytes).then((sk) => [f.name, sk] as const).catch(() => null)));
+    setSkins(Object.fromEntries(loaded.filter((x) => x !== null)));
+  }, []);
+  useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
+
+  useEffect(() => {
+    const sc = sceneRef.current;
+    if (!sc) return;
+    sc.skins = Object.fromEntries(
+      Object.entries(settings.characters ?? {}).flatMap(([agent, name]) => (skins[name] ? [[agent, skins[name]]] : [])),
+    );
+  }, [settings.characters, skins, ready]);
 
   useEffect(() => {
     sceneRef.current?.setTheme(themeFor(settings.theme));
@@ -296,6 +314,7 @@ export default function App() {
           demoRunning={demoRunning}
           onToggleDemo={toggleDemo}
           realCount={realSessions.length}
+          characters={Object.keys(skins)}
         />
       )}
     </div>
