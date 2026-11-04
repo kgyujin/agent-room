@@ -42,13 +42,23 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
   const [vw, setVw] = useState(window.innerWidth);
+  // the status dialog sits under the room; the room is laid out above it
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [dockH, setDockH] = useState(0);
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return setDockH(0);
+    const ro = new ResizeObserver(() => setDockH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   const [skins, setSkins] = useState<Record<string, Skin>>({});
 
   const list = useMemo(() => Object.values(sessions).sort((a, b) => priority(a) - priority(b) || b.lastEventAt - a.lastEventAt), [sessions]);
   const realSessions = list.filter((s) => !s.isDemo);
   const selected = (pinned && sessions[pinned]) || list[0] || null;
   const compact = mini || vw < 560;
-  const panelOpen = settings.panelOpen && !mini && vw >= 720;
+  const panelOpen = settings.panelOpen && !mini && vw >= 720 && selected !== null;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -150,9 +160,9 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
-    sc.insetBottom = 0;
+    sc.insetBottom = dockH ? dockH + 24 : 0;
     sc.resize();
-  }, [panelOpen, ready, mini]);
+  }, [panelOpen, ready, mini, dockH]);
 
   // custom characters (local PNGs); reloaded each time the settings window opens
   const reloadSkins = useCallback(async () => {
@@ -264,18 +274,24 @@ export default function App() {
     <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} />
 
-      {!IN_TAURI && !compact && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
-      {(demoRunning || demoShown) && (
-        <div className="banner demo">
-          데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 Agent 아님)
-          {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
-        </div>
-      )}
-      {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
+      <div className="banners" style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 56 }}>
+        {!IN_TAURI && !compact && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
+        {(demoRunning || demoShown) && (
+          <div className="banner demo">
+            {compact ? '데모 · 실제 Agent 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 Agent 아님)'}
+            {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
+          </div>
+        )}
+        {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
+      </div>
 
       {!compact && (
         <div className="topleft">
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
+        </div>
+      )}
+      {!compact && (
+        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} showTokens={settings.showTokens} />
           ) : (

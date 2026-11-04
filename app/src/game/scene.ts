@@ -109,7 +109,7 @@ export class Scene {
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - this.insetBottom * dpr);
     // largest integer scale that fits the room with some sky around it
-    const margin = this.roomOnly ? 6 : 40;
+    const margin = this.roomOnly ? 6 : 16;
     this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);

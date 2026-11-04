@@ -234,3 +234,21 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .banner.demo { background: #f1ebff; }
 .agent-dot { border-radius: 0; }
 .theme-night .card, .theme-night .panel, .theme-night .toolbar { background: var(--box); }
+
+/* ------------------------------------------------ layout: tabs top-left, controls top-right, status dialog under the room */
+.dock { position: absolute; left: 12px; bottom: 12px; z-index: 3; display: flex; justify-content: center; pointer-events: none; }
+.dock > * { pointer-events: auto; }
+.dock .hud { width: min(100%, 720px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
+.dock .hud-grid { margin: 0; padding: 0 0 0 20px; border-top: none; border-left: 2px dashed var(--frame-l); }
+.dock .hud .callout { grid-column: 1 / -1; }
+.dock .hud.empty { display: block; width: min(100%, 560px); }
+.app:not(.mini) .toolbar { top: 12px; bottom: auto; flex-direction: column; }
+/* banners stack at the top centre of the free area (left of the panel) */
+.banners { position: absolute; top: 10px; left: 12px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.banners .banner { position: static; transform: none; pointer-events: auto; }
+.app:not(.mini) .banners { left: 56px; }
+.app.mini .banners { top: 8px; left: 8px; align-items: flex-start; }
+@media (max-width: 760px) {
+  .dock .hud { display: block; }
+  .dock .hud-grid { margin-top: 10px; padding: 10px 0 0; border-left: none; border-top: 2px dashed var(--frame-l); }
+}

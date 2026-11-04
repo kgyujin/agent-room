@@ -16,22 +16,24 @@ export function Hud({ s, now, showTokens }: { s: Snapshot; now: number; showToke
   const turnMs = s.turnStartedAt ? (s.turnEndedAt && !active ? s.turnEndedAt : now) - s.turnStartedAt : null;
   return (
     <div className="card hud">
-      <div className="hud-head">
-        <span className={`agent-dot a-${s.agent}`} />
-        <span className="hud-agent">{AGENT_NAME[s.agent]}</span>
-        {s.isDemo && <span className="tag demo">DEMO</span>}
-        <span className="hud-project" title={s.cwd ?? ''}>{s.project ?? '프로젝트 미확인'}</span>
-      </div>
-      <div className={`hud-state tone-${tone}`}>
-        <span className="pulse" />
-        {stateLabel(s)}
-      </div>
-      {s.tool && s.connection === 'live' && (
-        <div className="hud-tool">
-          <span className="chip">{activityLabel(s.activity)}</span> {s.tool}
-          {s.detail && <b className="detail"> · {s.detail}</b>}
+      <div className="hud-main">
+        <div className="hud-head">
+          <span className={`agent-dot a-${s.agent}`} />
+          <span className="hud-agent">{AGENT_NAME[s.agent]}</span>
+          {s.isDemo && <span className="tag demo">DEMO</span>}
+          <span className="hud-project" title={s.cwd ?? ''}>{s.project ?? '프로젝트 미확인'}</span>
         </div>
-      )}
+        <div className={`hud-state tone-${tone}`}>
+          <span className="pulse" />
+          {stateLabel(s)}
+        </div>
+        {s.tool && s.connection === 'live' && (
+          <div className="hud-tool">
+            <span className="chip">{activityLabel(s.activity)}</span> {s.tool}
+            {s.detail && <b className="detail"> · {s.detail}</b>}
+          </div>
+        )}
+      </div>
       <dl className="hud-grid">
         {turnMs !== null && (
           <>
