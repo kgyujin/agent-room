@@ -13,7 +13,7 @@ const SKY: Record<Theme, string[]> = {
   sunset: ['#8f9fd6', '#d6a6c9', '#f6bfae', '#fbd7b5', '#fde9cf'],
   night: ['#141a3a', '#1f2650', '#2f3466', '#4a3f74', '#6b4f80'],
 };
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const SKY_BANDS = 14;
 
 // furniture static draw order (back to front); overlays drawn right after their host
 const ORDER = ['plant', 'bookshelf', 'desk', 'monitor', 'chair', 'sofa', 'table', 'chair_back', 'sofa_arm', 'bench', 'floor_lamp'];
@@ -111,15 +111,19 @@ export class Scene {
   resize() {
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width * dpr));
-    const h = Math.max(1, Math.floor(rect.height * dpr));
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    // pin the CSS size to the backing store so the browser never resamples:
+    // one art pixel is always exactly scale x scale device pixels of one colour
     this.canvas.width = w;
     this.canvas.height = h;
-    const L = this.atlas.layout.scene;
+    this.canvas.style.width = `${w / dpr}px`;
+    this.canvas.style.height = `${h / dpr}px`;
+    const room = this.atlas.frames.room;
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - this.insetBottom * dpr);
-    // largest integer scale that fits the island (with a little sky around it)
-    this.scale = Math.max(1, Math.floor(Math.min(availW / (L.w * 0.74), availH / (L.h * 0.92))));
+    // largest integer scale that fits the room with some sky around it
+    this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + 40), availH / (room.h + 40))));
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
     this.sky = null;
@@ -140,24 +144,17 @@ export class Scene {
     c.width = this.buf.width;
     c.height = this.buf.height;
     const g = c.getContext('2d')!;
-    const img = g.createImageData(c.width, c.height);
+    // flat horizontal bands (no dithering): each band is one solid colour
     const stops = SKY[this.theme].map(hex);
-    for (let y = 0; y < c.height; y++) {
-      const t = (y / Math.max(1, c.height - 1)) * (stops.length - 1);
+    const bandH = Math.ceil(c.height / SKY_BANDS);
+    for (let b = 0; b < SKY_BANDS; b++) {
+      const t = (b / (SKY_BANDS - 1)) * (stops.length - 1);
       const i = Math.min(stops.length - 2, Math.floor(t));
       const f = t - i;
-      for (let x = 0; x < c.width; x++) {
-        // ordered dithering between the two nearest stops -> visible pixel bands
-        const th = BAYER[(y % 4) * 4 + (x % 4)] / 16;
-        const col = f > th ? stops[i + 1] : stops[i];
-        const o = (y * c.width + x) * 4;
-        img.data[o] = col[0];
-        img.data[o + 1] = col[1];
-        img.data[o + 2] = col[2];
-        img.data[o + 3] = 255;
-      }
+      const col = stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
+      g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+      g.fillRect(0, b * bandH, c.width, bandH);
     }
-    g.putImageData(img, 0, 0);
     if (this.theme === 'night') {
       g.fillStyle = '#fff6d8';
       for (const [sx, sy] of this.stars) g.fillRect(Math.floor(sx * c.width), Math.floor(sy * c.height), 1, 1);
@@ -188,7 +185,6 @@ export class Scene {
 
     // clouds drift slowly
     const dt = 1 / Math.max(1, this.fps);
-    g.globalAlpha = this.theme === 'night' ? 0.35 : 0.95;
     for (const c of this.clouds) {
       c.x -= c.speed * dt;
       const f = A.frames[c.name];
@@ -198,26 +194,18 @@ export class Scene {
       }
       A.draw(g, c.name, c.x, c.y);
     }
-    g.globalAlpha = 1;
 
     // centre the island in the free area; gentle float
     const freeW = W - (this.insetRight * (window.devicePixelRatio || 1)) / this.scale;
     const freeH = H - (this.insetBottom * (window.devicePixelRatio || 1)) / this.scale;
     const bob = Math.round(Math.sin(Date.now() / 2200) * 1.2);
-    const ox = Math.floor((freeW - L.scene.w) / 2);
-    const oy = Math.floor((freeH - L.scene.h) / 2) + 4 + bob;
+    const room = A.frames.room;
+    const ox = Math.floor((freeW - room.w) / 2) - room.dx;
+    const oy = Math.floor((freeH - room.h) / 2) - room.dy + bob;
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);
     const b = this.actor.current;
-    const stale = b?.frozen ?? false;
-
-    // window daylight on the floor
-    if (this.theme !== 'night') {
-      g.globalAlpha = 0.5;
-      A.draw(g, 'glow_window', ox + L.lights.window[0] - 6, oy + L.lights.window[1] + 4);
-      g.globalAlpha = 1;
-    }
 
     // depth-sorted furniture + character: the character goes right after the last
     // furniture piece it overlaps on screen and stands in front of
@@ -234,14 +222,13 @@ export class Scene {
     ORDER.forEach((name, i) => {
       if (boxes[name] && overlaps(name) && !occludes(boxes[name])) insertAfter = i;
     });
-    if (insertAfter === -1) this.actor.draw(g, A, ox, oy, stale);
+    if (insertAfter === -1) this.actor.draw(g, A, ox, oy);
     ORDER.forEach((name, i) => {
       A.placed(g, name, ox, oy);
       if (name === 'monitor') A.placed(g, this.screenFrame(b), ox, oy);
       if (name === 'bench') A.placed(g, this.rigFrame(b), ox, oy);
-      if (i === insertAfter) this.actor.draw(g, A, ox, oy, stale);
+      if (i === insertAfter) this.actor.draw(g, A, ox, oy);
     });
-    A.placed(g, 'tree_front', ox, oy);
 
     // tea steam
     const st = Math.floor(this.tickN / 4) % 2;
@@ -263,9 +250,7 @@ export class Scene {
     }
     if (b?.bubble && !this.actor.walking) {
       const bub = Math.round(Math.sin(this.tickN / 3) * 1);
-      if (stale) g.globalAlpha = 0.6;
       A.draw(g, `bubble_${b.bubble}`, hx - 3, hy - 13 + bub);
-      g.globalAlpha = 1;
     }
 
     // lighting
@@ -276,14 +261,6 @@ export class Scene {
       g.fillRect(0, 0, W, H);
       g.restore();
     }
-    g.save();
-    g.globalCompositeOperation = 'lighter';
-    const lampOn = this.theme !== 'day';
-    if (lampOn) A.draw(g, 'glow_lamp', ox + L.lights.lamp[0] - 26, oy + L.lights.lamp[1] - 20);
-    const working = b && ['type', 'think', 'starting', 'web'].includes(b.key);
-    if (working) A.draw(g, 'glow_screen', ox + L.lights.screen[0] - 14, oy + L.lights.screen[1] - 12);
-    if (lampOn || working) A.draw(g, 'glow_lamp', ox + L.lights.desk_lamp[0] - 26, oy + L.lights.desk_lamp[1] - 16);
-    g.restore();
 
     // blit
     const c = this.ctx;

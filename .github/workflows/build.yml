@@ -47,10 +47,11 @@ jobs:
       - name: Build .app / .dmg (unsigned)
         working-directory: app
         run: npm run app:build
+      - name: Verify ad-hoc signature
+        run: codesign --verify --deep --strict --verbose=2 "target/release/bundle/macos/Agent Room.app"
       - uses: actions/upload-artifact@v4
         with:
           name: agent-room-macos-arm64
-          path: |
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/macos/*.app
+          # dmg only: zipped artifacts drop the executable bit inside a raw .app
+          path: target/release/bundle/dmg/*.dmg
           if-no-files-found: error

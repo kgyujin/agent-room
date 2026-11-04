@@ -173,15 +173,13 @@ export class Actor {
     return ((this.frame.startsWith('walk_b') || BACK.some((p) => this.frame.startsWith(p)) ? 'u' : 'd') + this.lr) as Facing;
   }
 
-  draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number, dim = false) {
+  draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number) {
     const L = atlas.layout;
     const sx = ox + L.scene.ox + 2 * (this.x - this.y);
     const sy = oy + L.scene.oy + (this.x + this.y) - L.scene.floorZ - this.z;
     if (this.z === 0) atlas.draw(ctx, 'shadow', sx - 4, sy - 1);
     const name = `ch_${this.agent}_${this.frame}`;
-    if (dim) ctx.globalAlpha = 0.55;
     atlas.draw(ctx, atlas.has(name) ? name : `ch_${this.agent}_stand_f0`, sx - L.char.ax, sy - L.char.ay, this.flip);
-    ctx.globalAlpha = 1;
     return { x: sx, y: sy };
   }
 

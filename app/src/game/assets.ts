@@ -8,7 +8,6 @@ export interface Layout {
   spots: Record<string, { x: number; y: number; face: Facing; z?: number; sit?: boolean }>;
   nodes: Record<string, [number, number]>;
   edges: [string, string][];
-  lights: Record<string, [number, number]>;
   steam: [number, number];
 }
 export type Facing = 'dr' | 'dl' | 'ur' | 'ul';

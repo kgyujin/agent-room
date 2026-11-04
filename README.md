@@ -62,7 +62,7 @@ Claude Code / Codex ──(공식 Hook: stdin JSON)──▶ agent-room-hook ─
 ## 설치
 
 ### 빌드된 앱 받기 (macOS, Apple Silicon)
-GitHub Actions의 `build` 워크플로가 `.dmg`를 아티팩트로 만듭니다. 아직 코드 서명이 없어서, 처음 실행할 때는 Finder에서 우클릭 → 열기를 하거나 아래 명령을 실행하세요.
+GitHub Actions의 `build` 워크플로가 `.dmg`를 아티팩트로 만듭니다. 앱은 ad-hoc 서명만 되어 있고 Apple 공증은 없습니다. 처음 실행할 때는 Finder에서 우클릭 → 열기를 하거나, 시스템 설정 → 개인정보 보호 및 보안에서 "그래도 열기"를 누르세요. 그래도 열리지 않으면 아래 명령을 실행하세요.
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 ```

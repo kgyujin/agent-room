@@ -69,130 +69,23 @@ def floor_xy(px, py, z=0):
     return (a + b) / 2, (b - a) / 2
 
 
+def plane_y_z(px, py, y):
+    """z of the y=const face at screen pixel"""
+    x = ((px + 0.5) - iso.ox) / 2 + y
+    return iso.oy + x + y - (py + 0.5)
+
+
+def plane_x_z(px, py, x):
+    """z of the x=const face at screen pixel"""
+    y = x - ((px + 0.5) - iso.ox) / 2
+    return iso.oy + x + y - (py + 0.5)
+
+
 def noise(px, py, k=0):
     return (hash((px * 73856093) ^ (py * 19349663) ^ (k * 83492791)) % 1000) / 1000
 
 
 # ---------------------------------------------------------------- scene pieces
-def draw_tree(s, cx, cy, r, seed):
-    """cherry blossom tree: trunk + branches, canopy of shaded puffs (lit from top-left)"""
-    rnd = random.Random(seed)
-    t = Spr(s.w, s.h)
-    # trunk (slightly curved) and two branches
-    th = int(r * 1.5)
-    for i in range(th):
-        x0 = cx + int(math.sin(i / 6 + seed) * 1.5)
-        w = 4 if i > th * 0.6 else 3
-        for dx in range(w):
-            t.put(x0 - w // 2 + dx, cy + i, shade(C['trunk'], 1.25) if dx == 0 else C['trunk'] if dx < w - 1 else shade(C['trunk'], 0.8))
-    for side in (-1, 1):
-        for i in range(int(r * 0.6)):
-            t.put(cx + side * i, cy + int(r * 0.35) - i // 2, C['trunk'])
-            t.put(cx + side * i, cy + int(r * 0.35) - i // 2 + 1, shade(C['trunk'], 0.8))
-    puffs = []
-    for i in range(11):
-        a = rnd.uniform(0, math.pi * 2)
-        d = rnd.uniform(0.2, 0.75) * r
-        pr = rnd.uniform(0.38, 0.55) * r
-        puffs.append((cx + math.cos(a) * d * 1.25, cy - r * 0.15 + math.sin(a) * d * 0.7, pr))
-    puffs.append((cx, cy - r * 0.35, r * 0.6))
-    puffs.sort(key=lambda p: p[1] + p[2] * 0.3)
-    for (px0, py0, pr) in puffs:
-        for y in range(int(py0 - pr) - 1, int(py0 + pr) + 2):
-            for x in range(int(px0 - pr * 1.2) - 1, int(px0 + pr * 1.2) + 2):
-                dx, dy = (x - px0) / 1.15, (y - py0)
-                d = math.hypot(dx, dy)
-                if d > pr:
-                    continue
-                l = (-dx * 0.55 - dy * 0.85) / pr        # +1 lit, -1 shadow
-                n = (noise(x, y, seed) - 0.5) * 0.35
-                if d > pr - 1.2 and dy > -pr * 0.2:
-                    col = C['bloom_dd']                   # puff rim on the shadow side
-                elif l + n > 0.45:
-                    col = C['bloom_l']
-                elif l + n > -0.1:
-                    col = C['bloom']
-                else:
-                    col = C['bloom_d']
-                t.put(x, y, col)
-    # sparse white blossoms / dark speckles
-    pts = [(x, y) for y in range(t.h) for x in range(t.w) if t.px[x, y][3] and t.px[x, y][:3] != C['trunk'][:3]]
-    for _ in range(int(r * 2)):
-        x, y = rnd.choice(pts)
-        if t.get(x, y)[:3] in (C['bloom'][:3], C['bloom_l'][:3]):
-            t.put(x, y, C['white'])
-    t.outline(color=shade(C['bloom_dd'], 0.6))
-    s.paste(t, 0, 0)
-
-
-def draw_island(s):
-    # floating earth chunk: two jagged faces under the grass plateau
-    L, F, R = P(-8, 56, -4), P(56, 56, -4), P(56, -8, -4)
-    tip = (F[0] + 6, F[1] + 52)
-    rnd = random.Random(12)
-
-    def jag(a, b, n, amp):
-        pts = []
-        for i in range(1, n):
-            t = i / n
-            x = a[0] + (b[0] - a[0]) * t + rnd.uniform(-amp, amp)
-            y = a[1] + (b[1] - a[1]) * t + rnd.uniform(-amp, amp) * 0.6
-            pts.append((x, y))
-        return pts
-    left = [L, F, tip] + list(reversed(jag(L, tip, 9, 6)))
-    right = [F, R] + jag(R, tip, 9, 6) + [tip]
-
-    def earth(dark):
-        def tex(px, py):
-            depth = py - (F[1] - 20)
-            band = int((py + math.sin(px / 9) * 2) / 5)
-            col = C['dirt'] if depth < 26 else C['dirt_d'] if depth < 46 else C['dirt_dd']
-            if band % 3 == 0:
-                col = shade(col, 0.92)
-            n = noise(px, py, 11)
-            if n < 0.012:
-                col = C['stone']
-            elif n < 0.02:
-                col = shade(C['stone'], 0.8)
-            return shade(col, 0.82) if dark else col
-        return tex
-    isl = Spr(s.w, s.h)
-    isl.poly(left, earth(False))
-    isl.poly(right, earth(True))
-    # hanging roots
-    for i in range(14):
-        x0 = int(L[0] + (R[0] - L[0]) * rnd.random())
-        top = None
-        for y in range(s.h):
-            if isl.get(x0, y)[3]:
-                top = y
-                break
-        if top is None:
-            continue
-        for k in range(rnd.randint(3, 9)):
-            isl.put(x0 + (k // 4), top + 4 + k, C['dirt_dd'])
-    isl.outline(factor=0.6)
-    s.paste(isl, 0, 0)
-    # grass plateau with a soft lip
-    g0, g1 = -8, N + 8
-    iso.box(s, g0, g0, -4, g1 - g0, g1 - g0, 4,
-            lambda px, py: C['grass_l'] if noise(px, py, 5) < 0.12 else C['grass'] if noise(px, py, 6) < 0.85 else C['grass_d'],
-            lambda px, py: C['grass_d'] if py % 3 or noise(px, py, 7) < 0.5 else C['dirt'],
-            lambda px, py: shade(C['grass_d'], 0.9) if py % 3 or noise(px, py, 8) < 0.5 else C['dirt_d'])
-    # grass tufts + tiny flowers on the plateau
-    rnd = random.Random(4)
-    for _ in range(60):
-        x = rnd.uniform(g0 + 1, g1 - 1)
-        y = rnd.uniform(g0 + 1, g1 - 1)
-        if -1 < x < N + 1 and -1 < y < N + 1:
-            continue
-        px, py = P(x, y, 0)
-        if rnd.random() < 0.25:
-            s.put(px, py - 1, C['white'] if rnd.random() < 0.5 else C['note_y'])
-        else:
-            s.put(px, py - 1, C['grass_d']); s.put(px + 1, py - 2, C['grass_d'])
-
-
 def wall_left_tex(px, py):
     y, z = plane_left(px, py)
     # window (round-top) above the sofa
@@ -245,7 +138,7 @@ def wall_right_tex(px, py):
                 return C[k]
         if abs(x - 8) < 0.5 and 27.5 < z < 29.5:
             return C['led_r']                                # pin
-        return C['cork_d'] if noise(px, py, 2) < 0.3 else C['cork']
+        return C['cork']
     # wall shelf above the desk
     if 22 <= x <= 41 and 38.5 <= z <= 40.5:
         return C['wood_l'] if z > 39.5 else C['wood']
@@ -262,6 +155,10 @@ def wall_right_tex(px, py):
 
 
 def draw_room_base(s):
+    # plinth under the floor: flat cream block with one trim line (no ground, no texture noise)
+    iso.box(s, -3, -3, -6, N + 3, N + 3, 6, C['cap'],
+            lambda px, py: C['wains'] if plane_y_z(px, py, N) > -1.5 else C['cap'],
+            lambda px, py: C['wains_d'] if plane_x_z(px, py, N) > -1.5 else C['wall_s'], rim=False)
     # floor slab (thick wooden beam edge)
     iso.box(s, 0, 0, 0, N, N, 3,
             lambda px, py: plank(px, py),
@@ -308,7 +205,7 @@ def plank(px, py):
         return C['seam']
     k = (row + int((x + off) // 17)) % 3
     base = (C['plank_a'], C['plank_b'], C['plank_c'])[k]
-    return shade(base, 0.96) if noise(px, py, 9) < 0.15 else base
+    return base
 
 
 def shelf_props(s):
@@ -534,19 +431,6 @@ def rig_frames():
     return out
 
 
-def glow_sprite(r, col, alpha):
-    s = Spr(r * 2, r * 2)
-    for y in range(r * 2):
-        for x in range(r * 2):
-            d = math.hypot((x - r + 0.5), (y - r + 0.5) * 1.4) / r
-            if d < 1:
-                a = int(alpha * (1 - d) ** 1.5)
-                a = (a // 12) * 12          # posterised glow bands
-                if a:
-                    s.put(x, y, (col[0], col[1], col[2], a))
-    return s
-
-
 def cloud(w, h, seed):
     rnd = random.Random(seed)
     s = Spr(w, h)
@@ -625,8 +509,8 @@ def small_fx():
     out['sparkle0'] = from_rows(["..x..", ".xyx.", "xyyyx", ".xyx.", "..x.."], {'x': hexc('#fff6b0'), 'y': C['white']})
     out['sparkle1'] = from_rows(["x...x", ".x.x.", "..y..", ".x.x.", "x...x"], {'x': hexc('#fff6b0'), 'y': C['white']})
     out['sweat'] = from_rows([".x.", "xyx", "xyx", ".x."], {'x': hexc('#7cc4e8'), 'y': hexc('#d9f2ff')})
-    out['steam0'] = from_rows([".x.", "x..", ".x.", "..x"], {'x': (255, 255, 255, 170)})
-    out['steam1'] = from_rows(["x..", ".x.", "..x", ".x."], {'x': (255, 255, 255, 170)})
+    out['steam0'] = from_rows([".x.", "x..", ".x.", "..x"], {'x': C['white']})
+    out['steam1'] = from_rows(["x..", ".x.", "..x", ".x."], {'x': C['white']})
     out['petal'] = from_rows(["xy", "y."], {'x': C['bloom_l'], 'y': C['bloom_d']})
     out['petal2'] = from_rows([".x", "xy"], {'x': C['bloom'], 'y': C['bloom_dd']})
     out['shadow'] = from_rows([".xxxxxx.", "xxxxxxxx", ".xxxxxx."], {'x': (58, 40, 50, 60)})
@@ -647,12 +531,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     sprites = {}   # name -> (Spr, dx, dy)   dx,dy = placement in scene coordinates (or 0,0)
 
-    back = new()
-    draw_tree(back, 262, 34, 30, 1)
-    draw_tree(back, 96, 52, 22, 2)
-    draw_island(back)
     base = new()
-    base.paste(back, 0, 0)
     draw_room_base(base)
     # punch window glass so the sky shows through
     for y in range(SH):
@@ -665,12 +544,8 @@ def main():
         yy, zz = plane_left(x, y)
         if wall_left_tex(x, y)[3] == 0:
             base.px[x, y] = (0, 0, 0, 0)
-    front_tree = new()
-    draw_tree(front_tree, 292, 112, 15, 3)
     b, bx, by = base.crop()
     sprites['room'] = (b, bx, by)
-    ft, fx, fy = front_tree.crop()
-    sprites['tree_front'] = (ft, fx, fy)
 
     make_furniture()
     furniture = []
@@ -689,9 +564,6 @@ def main():
         sprites['bubble_' + icon] = (bubble(icon), 0, 0)
     for i, (w, h) in enumerate(((72, 26), (54, 20), (38, 14), (96, 30))):
         sprites[f'cloud{i}'] = (cloud(w, h, 20 + i), 0, 0)
-    sprites['glow_lamp'] = (glow_sprite(26, hexc('#ffe3a0'), 120), 0, 0)
-    sprites['glow_screen'] = (glow_sprite(14, hexc('#a6f0e6'), 110), 0, 0)
-    sprites['glow_window'] = (glow_sprite(22, hexc('#fff3c4'), 70), 0, 0)
     for agent in character.AGENT_LOOKS:
         for fname in character.FRAMES:
             sprites[f'ch_{agent}_{fname}'] = (character.render_frame(fname, agent), 0, 0)
@@ -744,7 +616,6 @@ def main():
                   ['board', 'plantcorner'], ['shelf', 'plantcorner'], ['deskA', 'shelfA'],
                   ['center', 'bench'], ['center', 'sofaA'], ['sofaA', 'sofaB'], ['sofaB', 'sofa'], ['sofaB', 'window'],
                   ['sofaA', 'shelfA'], ['center', 'front'], ['front', 'bench'], ['center', 'east'], ['east', 'bench'], ['east', 'deskA']],
-        'lights': {'lamp': list(P(3.5, 45, 29)), 'screen': list(P(31, 3.5, 26)), 'window': list(P(0, 33.5, 31)), 'desk_lamp': list(P(25, 4, 25))},
         'steam': list(P(21.3, 31.8, 11)),
     }
     with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
