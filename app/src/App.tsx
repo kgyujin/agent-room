@@ -3,7 +3,7 @@ import { backend, DEFAULT_SETTINGS, IN_TAURI, win } from './bridge';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Theme } from './game/scene';
-import { loadSkin, type Skin } from './game/skin';
+import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud, MiniPill } from './ui/Hud';
 import { DetailPanel } from './ui/DetailPanel';
@@ -157,7 +157,10 @@ export default function App() {
   // custom characters (local PNGs); reloaded each time the settings window opens
   const reloadSkins = useCallback(async () => {
     const files = await backend.listCharacters().catch(() => []);
-    const loaded = await Promise.all(files.map((f) => loadSkin(f.bytes).then((sk) => [f.name, sk] as const).catch(() => null)));
+    const loaded = await Promise.all([
+      ...BUILTIN_CRITTERS.map(([id]) => loadBuiltin(id).then((sk) => [`builtin/${id}`, sk] as const).catch(() => null)),
+      ...files.map((f) => loadSkin(f.bytes).then((sk) => [f.name, sk] as const).catch(() => null)),
+    ]);
     setSkins(Object.fromEntries(loaded.filter((x) => x !== null)));
   }, []);
   useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
@@ -314,7 +317,7 @@ export default function App() {
           demoRunning={demoRunning}
           onToggleDemo={toggleDemo}
           realCount={realSessions.length}
-          characters={Object.keys(skins)}
+          characters={Object.keys(skins).filter((k) => !k.startsWith('builtin/'))}
         />
       )}
     </div>

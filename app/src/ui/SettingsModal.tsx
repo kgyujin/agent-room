@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
+import { BUILTIN_CRITTERS } from '../game/skin';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
 
@@ -106,10 +107,17 @@ function Characters({ settings: s, onChange, names }: { settings: Settings; onCh
         <Field key={agent} label={label}>
           <select value={s.characters[agent] ?? ''} onChange={(e) => pick(agent, e.target.value)}>
             <option value="">기본 캐릭터</option>
-            {names.map((n) => (
-              <option key={n} value={n}>{n}</option>
+            {BUILTIN_CRITTERS.map(([id, label]) => (
+              <option key={id} value={`builtin/${id}`}>{label}</option>
             ))}
-            {s.characters[agent] && !names.includes(s.characters[agent]) && <option value={s.characters[agent]} disabled>{s.characters[agent]} (파일 없음)</option>}
+            {names.length > 0 && (
+              <optgroup label="내 캐릭터">
+                {names.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </optgroup>
+            )}
+            {s.characters[agent] && !s.characters[agent].startsWith('builtin/') && !names.includes(s.characters[agent]) && <option value={s.characters[agent]} disabled>{s.characters[agent]} (파일 없음)</option>}
           </select>
         </Field>
       ))}

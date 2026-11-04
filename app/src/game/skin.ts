@@ -123,12 +123,27 @@ export function reduce(img: HTMLImageElement): Skin {
   return { canvas, w: tw, h: th };
 }
 
-export function loadSkin(bytes: number[]): Promise<Skin> {
-  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+/** built-in original critters (tools/art/gen_critters.py); stored in settings as 'builtin/<id>' */
+export const BUILTIN_CRITTERS: [string, string][] = [
+  ['hamster', '햄스터'], ['chipmunk', '다람쥐'], ['rabbit', '토끼'], ['kitten', '회색 고양이'],
+];
+
+function loadUrl(url: string): Promise<Skin> {
   return new Promise<Skin>((res, rej) => {
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); res(reduce(img)); };
-    img.onerror = (e) => { URL.revokeObjectURL(url); rej(e); };
+    img.onload = () => res(reduce(img));
+    img.onerror = rej;
     img.src = url;
   });
+}
+
+export const loadBuiltin = (id: string) => loadUrl(`/assets/critters/${id}.png`);
+
+export async function loadSkin(bytes: number[]): Promise<Skin> {
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+  try {
+    return await loadUrl(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
