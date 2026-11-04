@@ -178,7 +178,8 @@ export class Actor {
     const sy = oy + this.y - this.z;
     if (this.z === 0) atlas.draw(ctx, 'shadow', sx - 4, sy - 1);
     if (skin) {
-      // one still image: hop while walking, 1px bob on each behavior step; source faces left
+      // hop while walking, 1px bob on each behavior step; source faces left.
+      // Built-in critters also have back views and walk frames.
       const n = Number(this.frame.slice(-1)) || 0;
       const lift = this.walking ? [0, 1, 2, 1][n % 4] : this.stepIdx % 2;
       ctx.save();
@@ -186,7 +187,10 @@ export class Actor {
         ctx.translate(Math.round(sx) * 2, 0);
         ctx.scale(-1, 1);
       }
-      ctx.drawImage(skin.canvas, Math.round(sx) - (skin.w >> 1), Math.round(sy) - skin.h + 1 - lift);
+      const back = this.facing().startsWith('u');
+      const still = (back && skin.back) || skin.canvas;
+      const img = (this.walking && (back ? skin.walkB : skin.walkF)?.[n % 2]) || still;
+      ctx.drawImage(img, Math.round(sx) - (skin.w >> 1), Math.round(sy) - skin.h + 1 - lift);
       ctx.restore();
       return { x: sx, y: sy };
     }

@@ -1,13 +1,13 @@
 """App icon + menu bar icon (pixel art, generated; run `python3 gen_icon.py`, then `npx tauri icon`).
 
-App icon: drawn on a 64x64 pixel grid (one colour per pixel) and scaled x16 to 1024 with
+App icon: a small house drawn on a 64x64 pixel grid (one colour per pixel) and scaled x16 to 1024 with
 nearest-neighbour, so every art pixel stays a solid 16x16 block. Layout follows the macOS
 icon grid (rounded tile ~52/64 wide, centred).
 Menu bar icon: 18x18 monochrome template (black + alpha), exported at @2x.
 """
 import os
 from PIL import Image
-from pix import Spr, Iso, hexc, shade
+from pix import Spr, hexc
 
 OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'app', 'src-tauri', 'icons')
 
@@ -26,37 +26,46 @@ def tile(s, x0, y0, size, r):
             s.put(x0 + x, y0 + y, hexc(SKY[min(len(SKY) - 1, int(y / band))]))
 
 
-def room(s, ox, oy):
-    iso = Iso(ox, oy)
-    P = iso.p
-    n, wh = 9, 13
-    wall, wall_r, cap = hexc('#f4d9cf'), hexc('#e9c2b8'), hexc('#fbe9df')
-    wood, wood_d, plank = hexc('#a8693f'), hexc('#7a4b35'), hexc('#c99467')
-    plinth, plinth_d = hexc('#fbe9df'), hexc('#e8c9ae')
-    iso.box(s, -1, -1, -2, n + 1, n + 1, 2, cap, plinth, plinth_d, rim=False)
-    iso.box(s, 0, 0, 0, n, n, 1, plank, wood, wood_d, rim=False)
-    iso.box(s, -1, -1, 0, 1, n + 1, wh, cap, wood, wall, rim=False)          # left wall
-    iso.box(s, -1, -1, 0, n + 1, 1, wh, cap, wall_r, wood_d, rim=False)      # right wall
-    # window on the left wall (sky)
-    s.poly([P(0, 4, 11), P(0, 7, 11), P(0, 7, 6), P(0, 4, 6)], hexc('#bfe5f2'))
-    s.poly([P(0, 5.5, 11), P(0, 6, 11), P(0, 6, 6), P(0, 5.5, 6)], cap)
-    # desk + glowing monitor against the right wall
-    iso.box(s, 4, 0, 1, 5, 2, 4, hexc('#e2b07a'), hexc('#c98d58'), wood)
-    iso.box(s, 5, 0, 5, 3, 1, 4, hexc('#c3c9d8'), hexc('#9aa1b5'), hexc('#757b91'), rim=False)
-    s.poly([P(5.5, 1, 8.5), P(7.5, 1, 8.5), P(7.5, 1, 5.5), P(5.5, 1, 5.5)], hexc('#9fe0d8'))
-    # rug + pink armchair
-    s.poly([P(3, 4, 1), P(8, 4, 1), P(8, 8, 1), P(3, 8, 1)], hexc('#f6c8c0'))
-    iso.box(s, 1, 5, 1, 3, 3, 3, hexc('#f7a8bf'), hexc('#e8889f'), hexc('#c86d85'), rim=False)
-    iso.box(s, 1, 5, 4, 1, 3, 3, hexc('#f7a8bf'), hexc('#e8889f'), hexc('#c86d85'), rim=False)
+def house(s):
+    """small handheld-RPG style house: red hip roof, cream walls, door and window, on grass"""
+    roof, roof_d, roof_l = hexc('#e2574c'), hexc('#b8433b'), hexc('#f58a7a')
+    wall, wall_d = hexc('#fff3dc'), hexc('#e8d3b2')
+    wood, wood_d = hexc('#b8794a'), hexc('#8a5a3a')
+    glass, glass_l = hexc('#8fd0ee'), hexc('#d8f0f8')
+    grass, grass_d = hexc('#8ccf6e'), hexc('#6db25a')
+    # grass strip
+    s.rect(10, 46, 44, 10, grass)
+    for x in range(12, 52, 5):
+        s.put(x, 47 + (x % 3), grass_d)
+    # walls
+    s.rect(16, 30, 32, 18, wall)
+    s.rect(16, 46, 32, 2, wall_d)
+    s.rect(46, 30, 2, 18, wall_d)
+    # roof (trapezoid with eave) and shingle rows
+    for i, y in enumerate(range(16, 31)):
+        x0 = 20 - i // 2 - 2
+        x1 = 44 + i // 2 + 2
+        s.rect(x0, y, x1 - x0, 1, roof_l if i < 2 else (roof_d if y % 4 == 3 else roof))
+    s.rect(11, 31, 42, 1, roof_d)
+    # chimney
+    s.rect(38, 11, 5, 7, hexc('#c9a27a')); s.rect(38, 11, 5, 1, hexc('#e2c39c'))
+    # door
+    s.rect(28, 37, 8, 11, wood); s.rect(28, 37, 8, 1, wood_d); s.put(34, 43, hexc('#f6d06a'))
+    s.rect(26, 48, 12, 2, hexc('#c9b9a0'))
+    # windows
+    for wx in (19, 39):
+        s.rect(wx, 35, 6, 6, glass); s.rect(wx, 35, 3, 2, glass_l)
+        s.rect(wx + 2, 35, 1, 6, wall); s.rect(wx, 37, 6, 1, wall)
+        s.rect(wx - 1, 41, 8, 1, wood)
 
 
 def app_icon():
     s = Spr(64, 64)
     tile(s, 6, 6, 52, 12)
     r = Spr(64, 64)
-    room(r, 32, 20)
-    r.outline(color=hexc('#5a3a40'))
-    s.paste(r, 0, 6)
+    house(r)
+    r.outline(color=hexc('#3b2a2e'))
+    s.paste(r, 0, 2)
     return s
 
 

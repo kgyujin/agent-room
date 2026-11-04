@@ -1,7 +1,15 @@
 // Custom character ("skin") from a single local PNG in ~/.agent-room/characters/.
 // The image may be an enlarged pixel sprite (even at a non-integer scale, on a solid
 // background); it is reduced back to 1 art pixel = 1 px so it fits the room's pixel grid.
-export interface Skin { canvas: HTMLCanvasElement; w: number; h: number }
+export interface Skin {
+  canvas: HTMLCanvasElement;
+  w: number;
+  h: number;
+  /** built-in critters only: back view and two-frame walk cycles (same size as canvas) */
+  back?: HTMLCanvasElement;
+  walkF?: HTMLCanvasElement[];
+  walkB?: HTMLCanvasElement[];
+}
 
 const EDGE = 48; // per-channel difference that counts as a colour edge
 const BG_TOL = 40; // background flood-fill tolerance
@@ -128,21 +136,34 @@ export const BUILTIN_CRITTERS: [string, string][] = [
   ['shiba', '시바견'], ['cat', '고등어 고양이'],
 ];
 
-function loadUrl(url: string): Promise<Skin> {
-  return new Promise<Skin>((res, rej) => {
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
     const img = new Image();
-    img.onload = () => res(reduce(img));
+    img.onload = () => res(img);
     img.onerror = rej;
     img.src = url;
   });
 }
 
-export const loadBuiltin = (id: string) => loadUrl(`/assets/critters/${id}.png`);
+/** Built-in strip: front, walk front x2, back, walk back x2 (equal-width frames, already 1px art). */
+export async function loadBuiltin(id: string): Promise<Skin> {
+  const img = await loadImage(`/assets/critters/${id}.png`);
+  const w = img.naturalWidth / 6;
+  const h = img.naturalHeight;
+  const f = [0, 1, 2, 3, 4, 5].map((i) => {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    c.getContext('2d')!.drawImage(img, i * w, 0, w, h, 0, 0, w, h);
+    return c;
+  });
+  return { canvas: f[0], w, h, walkF: [f[1], f[2]], back: f[3], walkB: [f[4], f[5]] };
+}
 
 export async function loadSkin(bytes: number[]): Promise<Skin> {
   const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
   try {
-    return await loadUrl(url);
+    return reduce(await loadImage(url));
   } finally {
     URL.revokeObjectURL(url);
   }

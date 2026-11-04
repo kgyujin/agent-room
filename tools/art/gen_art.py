@@ -89,14 +89,20 @@ def draw_room(s):
             else:
                 c = C['base']
             s.put(x, y, c)
-    # floor: horizontal planks, staggered joints; a soft shadow row under the wall
+    # floor: 16px tiles with a lit top-left edge and a dark seam (handheld RPG interior look)
     for y in range(FLOOR_Y0, FLOOR_Y1):
-        r = (y - FLOOR_Y0) // 8
+        ty, v = divmod(y - FLOOR_Y0, 16)
         for x in range(IN_X0, IN_X1):
-            if (y - FLOOR_Y0) % 8 == 7 or (x + r * 13) % 32 == 0:
+            tx, u = divmod(x - IN_X0, 16)
+            base = C['fl_a'] if (tx + ty) % 2 == 0 else C['fl_b']
+            if u == 15 or v == 15:
                 c = C['fl_seam']
+            elif u == 0 or v == 0:
+                c = C['fl_c']
+            elif v == 8 and 2 <= u <= 13:
+                c = shade(base, 0.96)
             else:
-                c = (C['fl_a'], C['fl_b'], C['fl_c'])[r % 3]
+                c = base
             if y < FLOOR_Y0 + 2:
                 c = C['fl_sh']
             s.put(x, y, c)
