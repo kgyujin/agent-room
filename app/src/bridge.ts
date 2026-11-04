@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { CharacterFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update } from './types';
+import type { CharacterFile, SoundFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -18,7 +18,7 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'day', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true, characters: {},
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true, characters: {}, critterColors: {},
 };
 
 export interface Backend {
@@ -40,6 +40,9 @@ export interface Backend {
   dataDir(): Promise<string>;
   listCharacters(): Promise<CharacterFile[]>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
+  listSounds(): Promise<SoundFile[]>;
+  saveSound(event: string, name: string, bytes: number[]): Promise<void>;
+  removeSound(event: string): Promise<void>;
 }
 
 const tauriBackend: Backend = {
@@ -61,6 +64,9 @@ const tauriBackend: Backend = {
   dataDir: () => tauriInvoke('data_dir'),
   listCharacters: () => tauriInvoke('list_characters'),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
+  listSounds: () => tauriInvoke('list_sounds'),
+  saveSound: (event, name, bytes) => tauriInvoke('save_sound', { event, name, bytes }),
+  removeSound: (event) => tauriInvoke('remove_sound', { event }),
 };
 
 // ---------------------------------------------------------------- browser preview (design only)
@@ -95,6 +101,8 @@ function previewSnapshot(state: string): Snapshot {
   return s;
 }
 
+let previewSounds: SoundFile[] = [];
+
 function previewBackend(): Backend {
   const params = new URLSearchParams(location.search);
   const state = params.get('preview') ?? 'cycle';
@@ -108,7 +116,13 @@ function previewBackend(): Backend {
       listeners.forEach((l) => l({ snapshot: snap, appended: [], removed: false }));
     }, 9000);
   }
-  const first = state === 'none' ? [] : [previewSnapshot(state === 'cycle' ? order[0] : state)];
+  // 'multi': several agents at once (browser design preview only)
+  const multi = (): Snapshot[] => [
+    { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app' },
+    { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', isDemo: false, project: 'api-server' },
+    { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs' },
+  ];
+  const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   let settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day' };
   const now = Date.now();
   const tl: TimelineEntry[] = [
@@ -147,6 +161,10 @@ function previewBackend(): Backend {
       (w.__previewCharacters ??= []).push({ name: stem, bytes });
       return stem;
     },
+    // sounds live in memory only in the browser preview
+    listSounds: async () => previewSounds,
+    saveSound: async (event, _name, bytes) => { previewSounds = [...previewSounds.filter((x) => x.event !== event), { event, bytes }]; },
+    removeSound: async (event) => { previewSounds = previewSounds.filter((x) => x.event !== event); },
   };
 }
 
@@ -171,4 +189,35 @@ export async function autostartEnabled(): Promise<boolean> {
   if (!IN_TAURI) return false;
   const m = await import('@tauri-apps/plugin-autostart');
   return m.isEnabled();
+}
+
+// ---------------------------------------------------------------- in-app updates (GitHub Releases, signed)
+export interface AppUpdate { version: string; install: (onProgress: (pct: number) => void) => Promise<void> }
+
+/** null when up to date, in the browser preview, or when the check fails (offline etc.) */
+export async function checkUpdate(): Promise<AppUpdate | null> {
+  if (!IN_TAURI) return null;
+  const { check } = await import('@tauri-apps/plugin-updater');
+  const u = await check().catch(() => null);
+  if (!u) return null;
+  return {
+    version: u.version,
+    install: async (onProgress) => {
+      let total = 0;
+      let got = 0;
+      await u.downloadAndInstall((e) => {
+        if (e.event === 'Started') total = e.data.contentLength ?? 0;
+        if (e.event === 'Progress') got += e.data.chunkLength;
+        if (total) onProgress(Math.min(100, Math.round((got / total) * 100)));
+      });
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    },
+  };
+}
+
+export async function appVersion(): Promise<string> {
+  if (!IN_TAURI) return 'preview';
+  const { getVersion } = await import('@tauri-apps/api/app');
+  return getVersion();
 }

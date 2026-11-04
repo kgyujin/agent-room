@@ -1,0 +1,41 @@
+name: release
+
+# Push a tag like v0.2.0 (matching app/src-tauri/tauri.conf.json "version") to publish a
+# GitHub Release with the .dmg plus the signed update bundle and latest.json that the
+# app's built-in updater reads. Needs the repository secret TAURI_SIGNING_PRIVATE_KEY.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - name: Build hook sidecar
+        working-directory: app
+        run: node scripts/build-hook.mjs --release
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: Agent Room ${{ github.ref_name }}
+          releaseBody: 'macOS(Apple Silicon)용 .dmg 를 받거나, 이미 설치된 앱에서 업데이트를 누르세요.'
+          releaseDraft: false
+          includeUpdaterJson: true

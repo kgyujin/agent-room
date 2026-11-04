@@ -2,7 +2,7 @@ import type { Snapshot } from '../types';
 import { AGENT_NAME, stateTone } from '../labels';
 
 export function SessionTabs({ sessions, selected, pinned, onSelect }: { sessions: Snapshot[]; selected: string | null; pinned: string | null; onSelect: (k: string | null) => void }) {
-  if (sessions.length < 2 && !pinned) return null;
+  if (!sessions.length) return null;
   return (
     <div className="tabs" role="tablist">
       <button className={`tab ${pinned === null ? 'on' : ''}`} onClick={() => onSelect(null)} title="가장 주의가 필요한 세션을 자동으로 보여줘요">

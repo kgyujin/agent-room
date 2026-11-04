@@ -1,6 +1,7 @@
 // Tiny synthesized sound: soft SFX for state changes and an optional lo-fi pad loop.
-// Everything is generated locally with WebAudio; no audio files, no network.
-type Sfx = 'start' | 'done' | 'alert' | 'error' | 'blip';
+// Generated locally with WebAudio; the user can replace any effect with their own
+// file (~/.agent-room/sounds). No network.
+export type Sfx = 'start' | 'done' | 'alert' | 'error' | 'blip';
 
 export class Sound {
   private ctx: AudioContext | null = null;
@@ -8,6 +9,32 @@ export class Sound {
   private bgmTimer: number | null = null;
   sfxOn = true;
   bgmOn = false;
+  private custom = new Map<string, ArrayBuffer>();
+  private decoded = new Map<string, AudioBuffer>();
+
+  /** replaces the user's effect files (event -> encoded audio bytes) */
+  setCustom(files: { event: string; bytes: number[] }[]) {
+    this.custom = new Map(files.map((f) => [f.event, new Uint8Array(f.bytes).buffer]));
+    this.decoded.clear();
+  }
+
+  private async playCustom(s: Sfx): Promise<boolean> {
+    const raw = this.custom.get(s);
+    if (!raw || !this.ctx) return false;
+    let buf = this.decoded.get(s);
+    if (!buf) {
+      buf = await this.ctx.decodeAudioData(raw.slice(0)).catch(() => undefined);
+      if (!buf) return false;
+      this.decoded.set(s, buf);
+    }
+    const src = this.ctx.createBufferSource();
+    const g = this.ctx.createGain();
+    g.gain.value = 3; // master is quiet for the synth; files are usually mastered louder
+    src.buffer = buf;
+    src.connect(g).connect(this.master!);
+    src.start();
+    return true;
+  }
 
   /** must be called from a user gesture at least once (autoplay policy) */
   unlock() {
@@ -35,8 +62,12 @@ export class Sound {
     o.stop(at + dur + 0.05);
   }
 
-  play(s: Sfx) {
-    if (!this.sfxOn || !this.ctx || this.ctx.state !== 'running') return;
+  play(s: Sfx, force = false) {
+    if ((!this.sfxOn && !force) || !this.ctx || this.ctx.state !== 'running') return;
+    if (this.custom.has(s)) {
+      void this.playCustom(s);
+      return;
+    }
     const t = this.ctx.currentTime;
     switch (s) {
       case 'start': this.tone(523, t, 0.15); this.tone(784, t + 0.08, 0.2); break;

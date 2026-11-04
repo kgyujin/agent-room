@@ -36,6 +36,8 @@ pub struct Settings {
     pub show_tokens: bool,
     /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
     pub characters: std::collections::BTreeMap<String, String>,
+    /// built-in critter id -> fur colour ("#rrggbb")
+    pub critter_colors: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -52,6 +54,7 @@ impl Default for Settings {
             always_on_top: false,
             show_tokens: true,
             characters: Default::default(),
+            critter_colors: Default::default(),
         }
     }
 }
@@ -379,6 +382,60 @@ fn list_characters() -> Vec<CharacterFile> {
     out
 }
 
+const SOUND_EVENTS: [&str; 4] = ["start", "done", "alert", "error"];
+const SOUND_EXTS: [&str; 4] = ["mp3", "wav", "ogg", "m4a"];
+
+#[derive(Serialize)]
+struct SoundFile {
+    event: String,
+    bytes: Vec<u8>,
+}
+
+fn sounds_dir() -> std::path::PathBuf {
+    agent_room_core::paths::data_dir().join("sounds")
+}
+
+/// The user's own effect sounds (~/.agent-room/sounds/<event>.<ext>); missing = built-in synth.
+#[tauri::command]
+fn list_sounds() -> Vec<SoundFile> {
+    let mut out = vec![];
+    for ev in SOUND_EVENTS {
+        for ext in SOUND_EXTS {
+            let p = sounds_dir().join(format!("{ev}.{ext}"));
+            if p.metadata().is_ok_and(|m| m.is_file() && m.len() <= 2 << 20) {
+                if let Ok(bytes) = std::fs::read(&p) {
+                    out.push(SoundFile { event: ev.into(), bytes });
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Stores a sound file the user picked for one event (replaces the previous one).
+#[tauri::command]
+fn save_sound(event: String, name: String, bytes: Vec<u8>) -> Result<(), String> {
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    if !SOUND_EVENTS.contains(&event.as_str()) || !SOUND_EXTS.contains(&ext.as_str()) || bytes.len() > 2 << 20 {
+        return Err("2MB 이하의 mp3·wav·ogg·m4a 파일만 쓸 수 있어요".into());
+    }
+    remove_sound(event.clone())?;
+    std::fs::create_dir_all(sounds_dir()).map_err(|e| e.to_string())?;
+    std::fs::write(sounds_dir().join(format!("{event}.{ext}")), &bytes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_sound(event: String) -> Result<(), String> {
+    if !SOUND_EVENTS.contains(&event.as_str()) {
+        return Err("unknown sound event".into());
+    }
+    for ext in SOUND_EXTS {
+        let _ = std::fs::remove_file(sounds_dir().join(format!("{event}.{ext}")));
+    }
+    Ok(())
+}
+
 /// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
 #[tauri::command]
 fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
@@ -417,11 +474,13 @@ fn quit_app(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, quit_app
+            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app
         ])
         .setup(|app| {
             let handle = app.handle().clone();
