@@ -221,6 +221,8 @@ export default function App() {
         windowSize.current = [sz.width, sz.height];
       }
       await w.setDecorations(!next);
+      // macOS: keep the grey title bar hidden (traffic lights float over the app) when decorations return
+      if (!next && IS_MAC) await w.setTitleBarStyle('overlay').catch(() => undefined);
       await w.setShadow(!next);
       await w.setSize(next ? new LogicalSize(440, 360) : new LogicalSize(...windowSize.current));
     }
@@ -266,8 +268,10 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} />
+      {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
+      {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 56 }}>
         {!IN_TAURI && !compact && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
@@ -363,6 +367,8 @@ function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected
 }
 
 /** offsetHeight of the referenced element, kept current with a ResizeObserver (0 when unmounted) */
+const IS_MAC = /Mac/.test(navigator.userAgent);
+
 function useHeight(): [React.RefObject<HTMLDivElement | null>, number] {
   const ref = useRef<HTMLDivElement>(null);
   const [h, setH] = useState(0);

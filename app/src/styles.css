@@ -324,3 +324,9 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .char-add { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-top: 14px; padding: 12px; border: 2px dashed var(--frame-l); border-radius: 12px; background: #fff3f1; }
 .char-add p { margin: 4px 0 0; }
 .char-add .btn { flex: none; }
+
+/* macOS overlay title bar: no grey bar; leave room for the traffic lights */
+.titlebar { position: absolute; top: 0; left: 0; right: 0; height: 44px; z-index: 2; }
+.app.mac:not(.mini) .topleft { left: 84px; top: 12px; }
+.app.mac:not(.mini) .banners { top: 14px; }
+.app.mac.mini:not(.room-only) .banners { left: 84px; }

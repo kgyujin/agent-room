@@ -18,6 +18,8 @@
     "core:window:allow-is-focused",
     "core:window:allow-start-dragging",
     "core:window:allow-set-decorations",
+    "core:window:allow-set-title-bar-style",
+    "core:window:allow-toggle-maximize",
     "core:window:allow-set-shadow",
     "core:window:allow-inner-size",
     "core:window:allow-scale-factor",
