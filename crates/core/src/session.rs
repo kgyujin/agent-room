@@ -177,6 +177,13 @@ impl SessionStore {
 
     pub fn apply(&mut self, ev: NormEvent) -> Option<Update> {
         let key = format!("{}:{}", ev.agent.as_str(), ev.session_id);
+        // Claude's status line repeats the same numbers several times a second while it streams;
+        // unchanged numbers are not news (and would redraw the UI and the tray menu each time)
+        if let (EvKind::Limits { limits }, Some(sess)) = (&ev.kind, self.sessions.get(&key)) {
+            if sess.snap.limits.as_ref().is_some_and(|l| l.windows == limits.windows) {
+                return None;
+            }
+        }
         let is_start = matches!(ev.kind, EvKind::SessionStart { .. });
         let sess = self.sessions.entry(key.clone()).or_insert_with(|| Session {
             snap: Snapshot {
@@ -566,5 +573,15 @@ mod tests {
         st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: Some("A".into()), status: Some("pending".into()) }, 1));
         let u = st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: None, status: Some("deleted".into()) }, 2)).unwrap();
         assert!(u.snapshot.plan.is_empty());
+    }
+
+    #[test]
+    fn repeated_limits_are_not_an_update() {
+        let mut st = SessionStore::default();
+        let l = |used: f64| EvKind::Limits { limits: RateLimits { windows: vec![LimitWindow { minutes: 300, used_pct: used, resets_at: Some(9) }], at: 1 } };
+        assert!(st.apply(ev(l(10.0), 1)).is_some(), "first report creates/updates the session");
+        assert!(st.apply(ev(l(10.0), 2)).is_none(), "same numbers: no update");
+        let u = st.apply(ev(l(11.0), 3)).unwrap();
+        assert_eq!(u.snapshot.limits.unwrap().windows[0].used_pct, 11.0);
     }
 }
