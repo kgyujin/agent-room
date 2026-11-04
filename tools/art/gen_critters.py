@@ -127,10 +127,11 @@ def rrect(x0, y0, x1, y1, r):
 
 
 def flat(cv, mask, rp, lid):
-    """flat fill: base colour, darker tone on the bottom row of the shape"""
+    """flat fill: base colour, darker tone along the bottom and the right (shadow) edge"""
     cells = {(x, y) for y in range(H) for x in range(W) if mask(x, y)}
     for (x, y) in cells:
-        cv.px[y][x] = rp[2] if (x, y + 1) not in cells else rp[1]
+        edge = (x, y + 1) not in cells or ((x + 1, y) not in cells and (x, y - 2) in cells)
+        cv.px[y][x] = rp[2] if edge else rp[1]
         cv.part[y][x] = lid
     return cells
 
@@ -179,7 +180,7 @@ MAIN = {k: ramp(*v) for k, v in MAIN_HEX.items()}
 WHITE = ramp('#ffffff', '#fffaf4', '#e8ddd2', '#c8b8a8')
 
 # the loaf every critter is built on: a soft rounded block, a little wider than tall
-LOAF = rrect(3, 8, 22, 24, 6)
+LOAF = rrect(3, 9, 22, 24, 6)
 
 
 def finish(cv):
