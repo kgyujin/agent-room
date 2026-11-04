@@ -12,6 +12,7 @@ export function DetailPanel(props: {
   s: Snapshot;
   sessions: Snapshot[];
   onSelect: (k: string) => void;
+  showTokens: boolean;
   timeline: TimelineEntry[];
   tab: Tab;
   setTab: (t: Tab) => void;
@@ -35,7 +36,7 @@ export function DetailPanel(props: {
         </button>
       </header>
       <div className="panel-body">
-        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} />}
+        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} showTokens={props.showTokens} />}
         {tab === 'timeline' && <Timeline entries={props.timeline} />}
         {tab === 'tasks' && <Tasks s={s} />}
         {tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}

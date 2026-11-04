@@ -2,7 +2,7 @@
 // Everything shown comes from hook events; the only derived number is the remaining-time
 // estimate, which is labelled as one and only appears once a plan step has finished.
 import type { Snapshot } from '../types';
-import { activityLabel, fmtAgo, fmtDuration, stateLabel, stateTone } from '../labels';
+import { activityLabel, fmtAgo, fmtDuration, fmtTokens, stateLabel, stateTone } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 
@@ -35,7 +35,7 @@ export function etaMs(s: Snapshot, now: number): number | null {
   return (t / p.done) * (p.total - p.done);
 }
 
-export function Overview({ sessions, now, selected, onSelect }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void }) {
+export function Overview({ sessions, now, selected, onSelect, showTokens = true }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; showTokens?: boolean }) {
   const live = sessions.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
   const todos = live.map((s) => [s, userTodo(s, now)] as const).filter((x): x is [Snapshot, { text: string; since: number }] => x[1] !== null);
   const working = live.filter((s) => isActive(s) && s.state !== 'waiting' && s.state !== 'error').length;
@@ -68,6 +68,8 @@ export function Overview({ sessions, now, selected, onSelect }: { sessions: Snap
         <p className="muted small ov-none">지금은 기다리는 에이전트가 없어요.</p>
       )}
 
+      {showTokens && <Tokens sessions={sessions} onSelect={onSelect} />}
+
       <h4>에이전트 {live.length}</h4>
       <ul className="ov-list">
         {live.map((s) => (
@@ -77,6 +79,46 @@ export function Overview({ sessions, now, selected, onSelect }: { sessions: Snap
         ))}
       </ul>
     </div>
+  );
+}
+
+/** token use read from each agent's local logs: total, then each session's share */
+function Tokens({ sessions, onSelect }: { sessions: Snapshot[]; onSelect: (k: string) => void }) {
+  const withT = sessions.filter((s) => s.tokens && s.tokens.input + s.tokens.output > 0);
+  if (!withT.length) return null;
+  const sum = (f: (s: Snapshot) => number) => withT.reduce((n, s) => n + f(s), 0);
+  const inp = sum((s) => s.tokens!.input);
+  const out = sum((s) => s.tokens!.output);
+  const cache = sum((s) => s.tokens!.cacheRead + s.tokens!.cacheWrite);
+  const max = Math.max(...withT.map((s) => s.tokens!.input + s.tokens!.output));
+  return (
+    <>
+      <h4>토큰 사용량</h4>
+      <div className="ov-tok">
+        <div className="ov-tok-sum">
+          <div><b>{fmtTokens(inp + out)}</b><span>입력+출력</span></div>
+          <div><b>{fmtTokens(inp)}</b><span>입력</span></div>
+          <div><b>{fmtTokens(out)}</b><span>출력</span></div>
+          <div title="캐시에서 읽거나 쓴 토큰 (보통 더 싸게 계산돼요)"><b>{fmtTokens(cache)}</b><span>캐시</span></div>
+        </div>
+        <ul className="ov-tok-list">
+          {[...withT].sort((a, b) => b.tokens!.input + b.tokens!.output - (a.tokens!.input + a.tokens!.output)).map((s) => {
+            const t = s.tokens!.input + s.tokens!.output;
+            return (
+              <li key={s.key}>
+                <button onClick={() => onSelect(s.key)} title={`입력 ${fmtTokens(s.tokens!.input)} · 출력 ${fmtTokens(s.tokens!.output)} · 출처: ${s.tokens!.source}`}>
+                  <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
+                  <span className="ov-proj">{s.project ?? '프로젝트'}</span>
+                  <span className="ov-tok-bar"><i className={`a-${s.isDemo ? 'demo' : s.agent}`} style={{ width: `${(t / max) * 100}%` }} /></span>
+                  <span className="ov-tok-n">{fmtTokens(t)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="muted small">에이전트의 로컬 로그에서 읽은 값이에요. 이 앱이 켜진 뒤 받은 세션만 합쳐요.</p>
+      </div>
+    </>
   );
 }
 

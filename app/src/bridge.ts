@@ -124,13 +124,15 @@ function previewBackend(): Backend {
     }, 9000);
   }
   // 'multi': several agents at once (browser design preview only)
+  // preview token counts differ per session so the token bars are readable
+  const tok = (k: number): Snapshot['tokens'] => ({ input: 18240 * k, output: 6310 * k, cacheRead: 152000 * k, cacheWrite: 9800 * k, source: 'demo' });
   const multi = (): Snapshot[] => [
-    { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app' },
-    { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', isDemo: false, project: 'api-server' },
-    { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs' },
-    { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra' },
-    { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', isDemo: false, project: 'mobile' },
-    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', isDemo: false, project: 'data-pipeline', plan: [] },
+    { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app', tokens: tok(3.1) },
+    { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', isDemo: false, project: 'api-server', tokens: tok(1.8) },
+    { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs', tokens: tok(0.6) },
+    { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra', tokens: tok(1.2) },
+    { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', isDemo: false, project: 'mobile', tokens: tok(2.4) },
+    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', isDemo: false, project: 'data-pipeline', plan: [], tokens: tok(0.3) },
   ];
   const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   let settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day' };

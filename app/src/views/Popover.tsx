@@ -5,7 +5,7 @@ import { Icon } from '../ui/icons';
 import { useLive } from './useLive';
 
 export function Popover() {
-  const { list, now } = useLive();
+  const { list, now, settings } = useLive();
   const act = (a: string, key?: string) => void backend.trayAction(a, key);
   return (
     <div className="pop">
@@ -15,7 +15,7 @@ export function Popover() {
       </header>
       <div className="pop-body">
         {list.length ? (
-          <Overview sessions={list} now={now} selected={null} onSelect={(k) => act('select', k)} />
+          <Overview sessions={list} now={now} selected={null} onSelect={(k) => act('select', k)} showTokens={settings?.showTokens ?? true} />
         ) : (
           <p className="muted pad">Claude Code나 Codex가 작업을 시작하면 여기에 바로 나타나요.</p>
         )}

@@ -9,6 +9,7 @@ import { Hud, MiniPill } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
+import { Welcome } from './ui/Welcome';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, stateTone } from './labels';
@@ -379,7 +380,7 @@ export default function App() {
           {selected ? (
             <Hud s={selected} now={now} showTokens={settings.showTokens} />
           ) : (
-            <EmptyCard detected={detected} onSetup={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
+            <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
         </div>
       )}
@@ -392,6 +393,7 @@ export default function App() {
           s={selected}
           sessions={list}
           onSelect={setPinned}
+          showTokens={settings.showTokens}
           timeline={timelines[selected.key] ?? []}
           tab={detailTab}
           setTab={setDetailTab}
@@ -402,7 +404,7 @@ export default function App() {
       )}
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
-        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
+        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
@@ -432,27 +434,9 @@ export default function App() {
 
 function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0]['name']; label: string; on?: boolean; onClick: () => void }) {
   return (
-    <button className={`tool ${on ? 'on' : ''}`} onClick={onClick} title={label} aria-label={label}>
+    <button className={`tool ${on ? 'on' : ''}`} onClick={onClick} data-tip={label} aria-label={label}>
       <Icon name={icon} size={16} />
     </button>
-  );
-}
-
-function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected']; onSetup: () => void; onDemo: () => void }) {
-  const running = [detected.claude ? `${AGENT_NAME.claude} ${detected.claude}개` : '', detected.codex ? `${AGENT_NAME.codex} ${detected.codex}개` : ''].filter(Boolean).join(', ');
-  return (
-    <div className="card hud empty">
-      <div className="hud-title">연결된 Agent 없음</div>
-      <p className="muted">
-        {running
-          ? `실행 중인 ${running} 프로세스가 보여요. 다음 Hook 이벤트가 들어오면 방에 나타납니다. 계속 안 보이면 Hook 설치 상태를 확인하세요.`
-          : 'Claude Code나 Codex가 작업을 시작하면 자동으로 연결돼요. 처음이라면 Hook을 먼저 설치해 주세요.'}
-      </p>
-      <div className="row">
-        <button className="btn primary" onClick={onSetup}>Agent 연동 설정</button>
-        {IN_TAURI && <button className="btn" onClick={onDemo}>데모 보기</button>}
-      </div>
-    </div>
   );
 }
 
@@ -461,18 +445,22 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const fullRef = useRef(full);
   fullRef.current = full;
+  const selRef = useRef(selected);
+  selRef.current = selected;
   useEffect(() => {
     let raf = 0;
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
       // nudge tags up so neighbours never cover each other (compact tags are ~60 x 22 css px)
+      // the selected tag also shows the project name, so it is about as wide as a full tag
+      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current ? 120 : 60);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < (fullRef.current ? 120 : 60) && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
         placed.push(p);
       }
-      const sig = a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
+      const sig = selRef.current + '|' + a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
       if (sig !== last) {
         last = sig;
         setAnchors(a);
