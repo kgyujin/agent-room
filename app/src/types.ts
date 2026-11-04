@@ -7,7 +7,9 @@ export type Activity = 'think' | 'plan' | 'search' | 'read' | 'web' | 'edit' | '
 export type Connection = 'live' | 'stale' | 'ended' | 'lost';
 
 export interface PlanItem { text: string; status: string }
-export interface TokenUsage { input: number; output: number; cacheRead: number; cacheWrite: number; source: string }
+/** one plan usage window as the agent reports it (minutes: 300 = 5 hours, 10080 = 7 days) */
+export interface LimitWindow { minutes: number; usedPct: number; resetsAt: number | null }
+export interface RateLimits { windows: LimitWindow[]; at: number }
 
 export interface Snapshot {
   key: string;
@@ -32,7 +34,7 @@ export interface Snapshot {
   error: { message: string; tool: string | null; at: number; fatal: boolean } | null;
   lastTest: { ok: boolean | null; at: number; detail: string | null } | null;
   plan: PlanItem[];
-  tokens: TokenUsage | null;
+  limits: RateLimits | null;
   completedTurns: number;
   toolCount: number;
   filesEdited: string[];
@@ -71,7 +73,7 @@ export interface Settings {
   staleMinutes: number;
   panelOpen: boolean;
   alwaysOnTop: boolean;
-  showTokens: boolean;
+  showLimits: boolean;
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
   characters: Record<string, string>;
   /** built-in critter id -> fur colour (hex) */

@@ -15,7 +15,7 @@ export function Popover() {
       </header>
       <div className="pop-body">
         {list.length ? (
-          <Overview sessions={list} now={now} selected={null} onSelect={(k) => act('select', k)} showTokens={settings?.showTokens ?? true} />
+          <Overview sessions={list} now={now} selected={null} onSelect={(k) => act('select', k)} showLimits={settings?.showLimits ?? true} />
         ) : (
           <p className="muted pad">Claude Code나 Codex가 작업을 시작하면 여기에 바로 나타나요.</p>
         )}

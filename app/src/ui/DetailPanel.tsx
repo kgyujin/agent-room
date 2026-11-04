@@ -1,5 +1,5 @@
 import type { Snapshot, TimelineEntry } from '../types';
-import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, fmtTokens, timelineText } from '../labels';
+import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, timelineText } from '../labels';
 import { Icon } from './icons';
 import { progressOf } from './Hud';
 import { Overview } from './Overview';
@@ -12,7 +12,7 @@ export function DetailPanel(props: {
   s: Snapshot;
   sessions: Snapshot[];
   onSelect: (k: string) => void;
-  showTokens: boolean;
+  showLimits: boolean;
   timeline: TimelineEntry[];
   tab: Tab;
   setTab: (t: Tab) => void;
@@ -36,7 +36,7 @@ export function DetailPanel(props: {
         </button>
       </header>
       <div className="panel-body">
-        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} showTokens={props.showTokens} />}
+        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} showLimits={props.showLimits} />}
         {tab === 'timeline' && <Timeline entries={props.timeline} />}
         {tab === 'tasks' && <Tasks s={s} />}
         {tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
@@ -113,10 +113,6 @@ function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?
     ['도구 호출', `${s.toolCount}회`],
     ['세션 ID', s.sessionId],
   ];
-  if (s.tokens) {
-    rows.push(['토큰 입력/출력', `${fmtTokens(s.tokens.input)} / ${fmtTokens(s.tokens.output)}`]);
-    rows.push(['캐시 읽기/쓰기', `${fmtTokens(s.tokens.cacheRead)} / ${fmtTokens(s.tokens.cacheWrite)}`]);
-  }
   return (
     <div className="pad">
       <dl className="info">
@@ -127,7 +123,6 @@ function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?
           </div>
         ))}
       </dl>
-      {s.tokens && <p className="muted small">토큰 수는 Agent의 로컬 로그({s.tokens.source})에서 읽은 값이에요. 추가 API 호출은 없어요.</p>}
       {onForget && (
         <button className="btn" onClick={onForget}>
           목록에서 지우기

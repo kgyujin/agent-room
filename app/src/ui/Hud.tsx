@@ -1,5 +1,5 @@
-import type { Snapshot } from '../types';
-import { activityLabel, AGENT_NAME, fmtAgo, fmtClock, fmtDuration, fmtTokens, stateLabel, stateTone } from '../labels';
+import type { RateLimits, Snapshot } from '../types';
+import { activityLabel, AGENT_NAME, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon } from './icons';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
@@ -9,7 +9,7 @@ export function progressOf(s: Snapshot): { done: number; total: number } | null 
 
 const ACTIVE = ['starting', 'planning', 'reading', 'editing', 'running', 'testing', 'waiting', 'error'];
 
-export function Hud({ s, now, showTokens }: { s: Snapshot; now: number; showTokens: boolean }) {
+export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: RateLimits | null }) {
   const tone = stateTone(s);
   const prog = progressOf(s);
   const active = ACTIVE.includes(s.state) && s.connection === 'live';
@@ -58,12 +58,10 @@ export function Hud({ s, now, showTokens }: { s: Snapshot; now: number; showToke
             </span>
           ) : active ? '진행 중' : s.completedTurns > 0 ? `완료 ${s.completedTurns}회` : '—'}
         </dd>
-        {showTokens && s.tokens && (
+        {limits && (
           <>
-            <dt>토큰</dt>
-            <dd title={`캐시 읽기 ${fmtTokens(s.tokens.cacheRead)} · 캐시 쓰기 ${fmtTokens(s.tokens.cacheWrite)} · 출처: ${s.tokens.source} (로컬 로그)`}>
-              입력 {fmtTokens(s.tokens.input)} · 출력 {fmtTokens(s.tokens.output)}
-            </dd>
+            <dt>남은 사용량</dt>
+            <dd title="에이전트가 알려준 요금제 한도 기준이에요">{limits.windows.map((w) => `${windowLabel(w.minutes)} ${Math.max(0, Math.round(100 - w.usedPct))}%`).join(' · ')}</dd>
           </>
         )}
       </dl>

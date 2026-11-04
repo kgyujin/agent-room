@@ -41,3 +41,8 @@ pub fn codex_home() -> PathBuf {
 pub fn codex_hooks() -> PathBuf {
     codex_home().join("hooks.json")
 }
+
+/// the user's own Claude `statusLine` setting, kept while Agent Room's status line wraps it
+pub fn claude_prev_statusline() -> PathBuf {
+    data_dir().join("claude-statusline.json")
+}

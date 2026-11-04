@@ -10,6 +10,7 @@ import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
+import { latestLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, stateTone } from './labels';
@@ -378,7 +379,7 @@ export default function App() {
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
-            <Hud s={selected} now={now} showTokens={settings.showTokens} />
+            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} />
           ) : (
             <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
@@ -393,7 +394,7 @@ export default function App() {
           s={selected}
           sessions={list}
           onSelect={setPinned}
-          showTokens={settings.showTokens}
+          showLimits={settings.showLimits}
           timeline={timelines[selected.key] ?? []}
           tab={detailTab}
           setTab={setDetailTab}
@@ -447,14 +448,16 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
   fullRef.current = full;
   const selRef = useRef(selected);
   selRef.current = selected;
+  const sessRef = useRef(sessions);
+  sessRef.current = sessions;
   useEffect(() => {
     let raf = 0;
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
       // nudge tags up so neighbours never cover each other (compact tags are ~60 x 22 css px)
-      // the selected tag also shows the project name, so it is about as wide as a full tag
-      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current ? 120 : 60);
+      // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
+      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 60);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
@@ -478,10 +481,11 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
         if (!s) return null;
         const prog = progressOf(s);
         const tone = stateTone(s);
+        const urgent = needsYou(s);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {(full || selected === a.key) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            {(full || selected === a.key || urgent) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
             <i className={`dot tone-${tone}`} />
             {prog && <small>{prog.done}/{prog.total}</small>}
           </button>
@@ -492,6 +496,9 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
+
+/** the session is waiting on the user (approval, answer, or an error to look at) */
+const needsYou = (s: Snapshot | undefined) => !!s && userTodo(s, 0) !== null;
 
 /** soft radial backdrop around the room (window mode); the canvas leaves it clear */
 function backdropStyle(s: Settings): React.CSSProperties {

@@ -18,7 +18,7 @@ Claude Code / Codex ──(공식 Hook: stdin JSON)──▶ agent-room-hook ─
 
 | 구성 | 위치 | 역할 |
 |---|---|---|
-| `crates/core` | Rust 라이브러리 | 공통 이벤트 모델, Agent 어댑터(`adapters/claude.rs`, `adapters/codex.rs`), 민감정보 필터(`sanitize.rs`), 세션 상태 머신(`session.rs`), Hook 설치/제거(`install.rs`), 로컬 로그 토큰 리더(`tokens.rs`), 소켓 서버(`runtime.rs`) |
+| `crates/core` | Rust 라이브러리 | 공통 이벤트 모델, Agent 어댑터(`adapters/claude.rs`, `adapters/codex.rs`), 민감정보 필터(`sanitize.rs`), 세션 상태 머신(`session.rs`), Hook 설치/제거(`install.rs`), 남은 사용량 리더(`limits.rs`), 소켓 서버(`runtime.rs`) |
 | `crates/hook` | `agent-room-hook` 바이너리 | Agent 설정에 등록되는 Hook 명령. 정리된 이벤트를 `~/.agent-room/run/agent-room.sock` 으로 전달 |
 | `app/src-tauri` | Tauri 2 셸 | IPC 서버 실행, 메뉴 막대(트레이) 상태, 시스템 알림, 데모 모드, 설정 저장 |
 | `app/src` | React + TypeScript | Canvas 2D 픽셀 렌더러(`game/`), HUD·타임라인·설정 UI(`ui/`) |
@@ -57,7 +57,8 @@ Claude Code / Codex ──(공식 Hook: stdin JSON)──▶ agent-room-hook ─
 * 앱과 core 크레이트에는 HTTP 클라이언트가 없습니다 (`cargo tree`에 reqwest/hyper/ureq 없음). WebView CSP도 `connect-src ipc:`로 막혀 있습니다.
 * 프롬프트, Agent 응답, 파일 내용, 명령 출력은 Hook 프로세스 안에서 버리고 앱으로 보내지 않습니다. 명령어는 `*_TOKEN=`, `Bearer …`, `sk-…` 같은 값을 가린 뒤 잘라서 보냅니다.
 * 이벤트는 메모리에만 있습니다(세션당 최근 300개). 디스크에 저장하는 것은 설정 파일과 Agent 설정 백업뿐입니다.
-* 토큰 사용량은 Agent가 이미 쓰고 있는 로컬 로그에서 `usage` 숫자만 읽습니다 (Claude transcript JSONL, Codex rollout `token_count`).
+* 남은 사용량(5시간·주간 한도)은 Agent가 이미 내놓는 숫자만 읽습니다. Claude Code는 상태줄 명령에 넘겨주는 `rate_limits`(Pro·Max 요금제), Codex는 rollout 로그의 `rate_limits`입니다.
+* Claude의 상태줄은 `agent-room-hook statusline`이 감쌉니다. 쓰던 상태줄 명령은 `~/.agent-room/claude-statusline.json`에 보관해 그대로 실행하고 출력도 그대로 보여주며, 연동 해제 시 원래 설정으로 돌려놓습니다.
 
 ## 설치
 

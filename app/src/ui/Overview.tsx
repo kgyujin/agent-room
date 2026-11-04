@@ -1,8 +1,8 @@
 // "현황" tab: every session at a glance, sorted by what needs the user first.
 // Everything shown comes from hook events; the only derived number is the remaining-time
 // estimate, which is labelled as one and only appears once a plan step has finished.
-import type { Snapshot } from '../types';
-import { activityLabel, fmtAgo, fmtDuration, fmtTokens, stateLabel, stateTone } from '../labels';
+import type { LimitWindow, RateLimits, Snapshot } from '../types';
+import { activityLabel, fmtAgo, fmtDuration, fmtUntil, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 
@@ -35,7 +35,7 @@ export function etaMs(s: Snapshot, now: number): number | null {
   return (t / p.done) * (p.total - p.done);
 }
 
-export function Overview({ sessions, now, selected, onSelect, showTokens = true }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; showTokens?: boolean }) {
+export function Overview({ sessions, now, selected, onSelect, showLimits = true }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; showLimits?: boolean }) {
   const live = sessions.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
   const todos = live.map((s) => [s, userTodo(s, now)] as const).filter((x): x is [Snapshot, { text: string; since: number }] => x[1] !== null);
   const working = live.filter((s) => isActive(s) && s.state !== 'waiting' && s.state !== 'error').length;
@@ -68,7 +68,7 @@ export function Overview({ sessions, now, selected, onSelect, showTokens = true 
         <p className="muted small ov-none">지금은 기다리는 에이전트가 없어요.</p>
       )}
 
-      {showTokens && <Tokens sessions={sessions} onSelect={onSelect} />}
+      {showLimits && <Limits sessions={sessions} now={now} />}
 
       <h4>에이전트 {live.length}</h4>
       <ul className="ov-list">
@@ -82,43 +82,48 @@ export function Overview({ sessions, now, selected, onSelect, showTokens = true 
   );
 }
 
-/** token use read from each agent's local logs: total, then each session's share */
-function Tokens({ sessions, onSelect }: { sessions: Snapshot[]; onSelect: (k: string) => void }) {
-  const withT = sessions.filter((s) => s.tokens && s.tokens.input + s.tokens.output > 0);
-  if (!withT.length) return null;
-  const sum = (f: (s: Snapshot) => number) => withT.reduce((n, s) => n + f(s), 0);
-  const inp = sum((s) => s.tokens!.input);
-  const out = sum((s) => s.tokens!.output);
-  const cache = sum((s) => s.tokens!.cacheRead + s.tokens!.cacheWrite);
-  const max = Math.max(...withT.map((s) => s.tokens!.input + s.tokens!.output));
+/** newest remaining-usage report among this agent's sessions (limits are per account, not per session) */
+export function latestLimits(sessions: Snapshot[], agent: Snapshot['agent']): RateLimits | null {
+  let best: RateLimits | null = null;
+  for (const s of sessions) if (s.agent === agent && s.limits && (!best || s.limits.at > best.at)) best = s.limits;
+  return best;
+}
+
+/** remaining plan usage per agent, as each agent reports it (Claude status line, Codex log) */
+function Limits({ sessions, now }: { sessions: Snapshot[]; now: number }) {
+  const rows = (['claude', 'codex'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
   return (
     <>
-      <h4>토큰 사용량</h4>
-      <div className="ov-tok">
-        <div className="ov-tok-sum">
-          <div><b>{fmtTokens(inp + out)}</b><span>입력+출력</span></div>
-          <div><b>{fmtTokens(inp)}</b><span>입력</span></div>
-          <div><b>{fmtTokens(out)}</b><span>출력</span></div>
-          <div title="캐시에서 읽거나 쓴 토큰 (보통 더 싸게 계산돼요)"><b>{fmtTokens(cache)}</b><span>캐시</span></div>
+      <h4>남은 사용량</h4>
+      {rows.length ? (
+        <div className="ov-lim">
+          {rows.map(([a, l]) => (
+            <div key={a} className="ov-lim-agent">
+              <AgentMark agent={a} size={16} />
+              <div className="ov-lim-rows">
+                {l!.windows.map((w) => <LimitBar key={w.minutes} w={w} now={now} />)}
+              </div>
+            </div>
+          ))}
         </div>
-        <ul className="ov-tok-list">
-          {[...withT].sort((a, b) => b.tokens!.input + b.tokens!.output - (a.tokens!.input + a.tokens!.output)).map((s) => {
-            const t = s.tokens!.input + s.tokens!.output;
-            return (
-              <li key={s.key}>
-                <button onClick={() => onSelect(s.key)} title={`입력 ${fmtTokens(s.tokens!.input)} · 출력 ${fmtTokens(s.tokens!.output)} · 출처: ${s.tokens!.source}`}>
-                  <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-                  <span className="ov-proj">{s.project ?? '프로젝트'}</span>
-                  <span className="ov-tok-bar"><i className={`a-${s.isDemo ? 'demo' : s.agent}`} style={{ width: `${(t / max) * 100}%` }} /></span>
-                  <span className="ov-tok-n">{fmtTokens(t)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <p className="muted small">에이전트의 로컬 로그에서 읽은 값이에요. 이 앱이 켜진 뒤 받은 세션만 합쳐요.</p>
-      </div>
+      ) : (
+        <p className="muted small ov-none">에이전트가 다음 응답을 받으면 5시간·주간 남은 양이 보여요. (Claude는 Pro·Max 요금제만)</p>
+      )}
     </>
+  );
+}
+
+export function LimitBar({ w, now }: { w: LimitWindow; now: number }) {
+  const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
+  const reset = w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : '';
+  const resetShort = w.resetsAt && w.resetsAt > now ? `↻ ${fmtUntil(w.resetsAt - now).replace(' 후', '')}` : '';
+  return (
+    <div className={`ov-lim-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={`사용 ${Math.round(w.usedPct)}%${reset ? ` · ${reset}` : ''}`}>
+      <span className="ov-lim-name">{windowLabel(w.minutes)}</span>
+      <span className="ov-lim-bar"><i style={{ width: `${left}%` }} /></span>
+      <b>{left}%</b>
+      <span className="ov-lim-reset">{resetShort}</span>
+    </div>
   );
 }
 
@@ -153,13 +158,11 @@ function AgentRow({ s, now, on, onClick }: { s: Snapshot; now: number; on: boole
         </div>
       )}
       <div className="ov-meta">
-        {prog ? (
+        {prog && (
           <span className="prog">
             <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
             {prog.done}/{prog.total}
           </span>
-        ) : (
-          <span className="muted">단계 정보 없음</span>
         )}
         {t !== null && <span className="muted">{isActive(s) ? '진행' : '소요'} {fmtDuration(t)}</span>}
         {eta !== null && <span className="ov-eta" title="끝난 단계의 평균 시간으로 계산한 추정치예요">약 {Math.max(1, Math.round(eta / 60000))}분 남음</span>}

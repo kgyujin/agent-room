@@ -88,8 +88,20 @@ export function fmtAgo(ms: number): string {
   return `${Math.floor(m / 60)}시간 전`;
 }
 
-export function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
+/** "5시간" / "주간" for the usage windows the agents report */
+export function windowLabel(minutes: number): string {
+  if (minutes === 300) return '5시간';
+  if (minutes === 10080) return '주간';
+  if (minutes >= 1440) return `${Math.round(minutes / 1440)}일`;
+  if (minutes > 0) return `${Math.round(minutes / 60)}시간`;
+  return '한도';
+}
+
+/** time until a limit resets: "40분 후", "3시간 10분 후", "2일 5시간 후" */
+export function fmtUntil(ms: number): string {
+  const m = Math.max(0, Math.round(ms / 60000));
+  if (m < 60) return `${m}분 후`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간${m % 60 ? ` ${m % 60}분` : ''} 후`;
+  return `${Math.floor(h / 24)}일${h % 24 ? ` ${h % 24}시간` : ''} 후`;
 }

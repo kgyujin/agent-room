@@ -51,6 +51,12 @@ pub fn normalize(ts: u64, ev: &Value) -> Vec<NormEvent> {
         "SessionStart" => out.push(mk(EvKind::SessionStart { source: s(ev, "source").map(String::from) })),
         "SessionEnd" => out.push(mk(EvKind::SessionEnd { reason: s(ev, "reason").map(String::from) })),
         "UserPromptSubmit" => out.push(mk(EvKind::PromptSubmitted)),
+        // sent by `agent-room-hook statusline`, not a real hook: only the remaining plan usage
+        "StatusLine" => {
+            if let Some(limits) = ev.get("rate_limits").and_then(|rl| crate::limits::from_claude(rl, ts)) {
+                out.push(mk(EvKind::Limits { limits }));
+            }
+        }
         "PreToolUse" => {
             let (activity, detail) = tool_activity(&tool, input);
             out.push(mk(EvKind::ToolStart { tool: tool.clone(), activity, detail }));

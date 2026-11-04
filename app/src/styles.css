@@ -516,20 +516,19 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .swatch.pick { position: relative; overflow: hidden; background: conic-gradient(#ff8f9c, #f2bf3c, #5cc3a3, #6f9df0, #b394ec, #ff8f9c); }
 .swatch.pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-/* ------------------------------------------------ token use */
-.ov-tok { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); padding: 10px 12px; }
-.ov-tok-sum { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 6px; }
-.ov-tok-sum div { display: flex; flex-direction: column; gap: 1px; }
-.ov-tok-sum b { font-family: var(--font-display); font-size: 16px; }
-.ov-tok-sum div:first-child b { font-size: 18px; color: var(--accent-ink); }
-.ov-tok-sum span { font-size: 11px; color: var(--ink-soft); }
-.ov-tok-list { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line-soft); display: flex; flex-direction: column; gap: 4px; }
-.ov-tok-list button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 0.9fr) 1fr auto; align-items: center; gap: 8px; border: none; background: transparent; padding: 2px 0; text-align: left; }
-.ov-tok-list .ov-proj { font-size: 12px; font-weight: 600; }
-.ov-tok-bar { height: 6px; border-radius: 999px; background: var(--tint-2); overflow: hidden; }
-.ov-tok-bar i { display: block; height: 100%; border-radius: 999px; }
-.ov-tok-n { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--ink-soft); min-width: 42px; text-align: right; }
-.ov-tok p { margin: 8px 0 0; }
+/* ------------------------------------------------ remaining plan usage */
+.ov-lim { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ov-lim-agent { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+.ov-lim-agent + .ov-lim-agent { border-top: 1px dashed var(--line-soft); padding-top: 8px; }
+.ov-lim-rows { display: flex; flex-direction: column; gap: 4px; }
+.ov-lim-row { display: grid; grid-template-columns: 36px minmax(36px, 1fr) 34px 74px; align-items: center; gap: 8px; font-size: 12px; }
+.ov-lim-name { color: var(--ink-soft); white-space: nowrap; min-width: 30px; }
+.ov-lim-bar { height: 7px; border-radius: 999px; background: var(--tint-2); overflow: hidden; }
+.ov-lim-bar i { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.ov-lim-row.mid .ov-lim-bar i { background: var(--wait); }
+.ov-lim-row.low .ov-lim-bar i { background: var(--bad, #d9534f); }
+.ov-lim-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.ov-lim-reset { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 
 /* ------------------------------------------------ first run */
 .dock .welcome { width: min(100%, 620px); padding: 16px 18px; display: block; }
@@ -561,3 +560,12 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .wl-agent { flex-wrap: wrap; }
 .wl-agent .btn, .wl-ok { white-space: nowrap; }
 .wl-agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+/* tags waiting on the user stand out: name shown, warm fill, gentle bob */
+.nametag.urgent { background: #fff1d6; border-color: var(--wait); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wait) 35%, transparent); z-index: 1; animation: tag-bob 1.6s ease-in-out infinite; }
+.nametag.urgent span { color: var(--ink); font-weight: 700; }
+@keyframes tag-bob { 0%, 100% { margin-top: 0; } 50% { margin-top: -3px; } }
+@media (prefers-reduced-motion: reduce) { .nametag.urgent { animation: none; } }
+.is-lim { display: flex; gap: 14px; padding: 6px 14px 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11.5px; color: #b9b3ad; }
+.is-lim span { display: inline-flex; align-items: center; gap: 6px; }
+.is-lim em { font-style: normal; font-variant-numeric: tabular-nums; }
+.is-lim em.mid { color: #f2b45a; } .is-lim em.low { color: #ff7a6b; }

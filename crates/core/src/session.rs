@@ -4,7 +4,7 @@
 //! so the UI receives changed sessions only.
 
 use crate::model::*;
-use crate::tokens::UsageReader;
+use crate::limits::CodexLogReader;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 
@@ -82,7 +82,8 @@ pub struct Snapshot {
     pub last_test: Option<TestResult>,
     /// explicit task list reported by the agent; empty = progress unknown
     pub plan: Vec<PlanItem>,
-    pub tokens: Option<TokenUsage>,
+    /// remaining plan usage last reported in this session (account-wide, so the newest one wins)
+    pub limits: Option<RateLimits>,
     pub completed_turns: u32,
     pub tool_count: u32,
     pub files_edited: Vec<String>,
@@ -128,7 +129,7 @@ struct Session {
     tasks: Vec<(String, PlanItem)>,
     pid: Option<u32>,
     transcript: Option<String>,
-    usage: UsageReader,
+    usage: CodexLogReader,
     last_usage_poll: u64,
     ended_at: Option<u64>,
 }
@@ -201,7 +202,7 @@ impl SessionStore {
                 error: None,
                 last_test: None,
                 plan: vec![],
-                tokens: None,
+                limits: None,
                 completed_turns: 0,
                 tool_count: 0,
                 files_edited: vec![],
@@ -211,7 +212,7 @@ impl SessionStore {
             tasks: vec![],
             pid: None,
             transcript: None,
-            usage: UsageReader::default(),
+            usage: CodexLogReader::default(),
             last_usage_poll: 0,
             ended_at: None,
         });
@@ -415,8 +416,8 @@ impl SessionStore {
                     s.plan = items;
                 }
             }
-            EvKind::Tokens { usage } => {
-                s.tokens = Some(usage);
+            EvKind::Limits { limits } => {
+                s.limits = Some(limits);
             }
         }
 
@@ -431,13 +432,13 @@ impl SessionStore {
             sess.timeline.pop_front();
         }
 
-        // token usage from the agent's own local log (throttled)
-        if let Some(path) = sess.transcript.clone() {
+        // Codex: remaining usage from its own rollout log (throttled)
+        if let (Some(path), AgentKind::Codex) = (sess.transcript.clone(), ev.agent) {
             let due = matches!(ev.kind, EvKind::TurnComplete | EvKind::ToolEnd { .. } | EvKind::SessionStart { .. }) && ev.ts.saturating_sub(sess.last_usage_poll) > 1500;
             if due {
                 sess.last_usage_poll = ev.ts;
-                if let Some(u) = sess.usage.poll(&path, ev.agent == AgentKind::Codex) {
-                    sess.snap.tokens = Some(u);
+                if let Some(l) = sess.usage.poll(&path, ev.ts) {
+                    sess.snap.limits = Some(l);
                 }
             }
         }
