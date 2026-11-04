@@ -24,6 +24,12 @@ export function SettingsModal(props: {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const { settings: s, onChange } = props;
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...s, [k]: v });
+  const { onClose } = props;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
     <div className="modal-bg" onClick={props.onClose}>
       <div className="modal card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="설정">
