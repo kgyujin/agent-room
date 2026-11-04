@@ -238,7 +238,8 @@ export class Scene {
     const dpr = window.devicePixelRatio || 1;
     const k = this.scale / dpr;
     return this.mates.filter((m) => m.session).map((m) => {
-      const f = m.actor.feet();
+      // the floor point, not the hop height: tags stay still while a critter bounces at its desk
+      const f = { x: m.actor.x, y: m.actor.y };
       const sk = this.skins[m.skin];
       const h = sk ? sk.h - (sk.top ?? 0) : 24;
       // leave room for a thought bubble above the head when there is one

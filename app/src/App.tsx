@@ -369,7 +369,7 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini || settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} />
+      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini || settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact} />
 
       {!compact && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
@@ -442,7 +442,7 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean }) {
+function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const fullRef = useRef(full);
   fullRef.current = full;
@@ -450,11 +450,13 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
   selRef.current = selected;
   const sessRef = useRef(sessions);
   sessRef.current = sessions;
+  // narrow windows: only the tags that matter (selected, or waiting on the user), so the small room is not buried
+  const fewRef = useRef(few);
+  fewRef.current = few;
   useEffect(() => {
-    let raf = 0;
     let last = '';
     const loop = () => {
-      const a = scene.current?.anchors() ?? [];
+      const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
       const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 40);
@@ -468,10 +470,10 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
         last = sig;
         setAnchors(a);
       }
-      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    // the room only redraws at 12 fps, so following it faster is wasted work
+    const id = window.setInterval(() => !document.hidden && loop(), 1000 / 12);
+    return () => window.clearInterval(id);
   }, [scene]);
   if (hidden) return null;
   return (
