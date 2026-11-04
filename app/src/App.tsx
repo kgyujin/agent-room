@@ -99,7 +99,8 @@ export default function App() {
         }),
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
-        await backend.onTrayEvent('select-session', (k) => setPinned(String(k))),
+        await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
+        await backend.onTrayEvent('open-settings', () => setSettingsOpen('general')),
       );
     })();
     return () => unsub.forEach((u) => u());

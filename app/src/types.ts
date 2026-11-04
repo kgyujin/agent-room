@@ -78,6 +78,8 @@ export interface Settings {
   critterColors: Record<string, string>;
   /** UI colour theme id (see themes.ts) */
   uiTheme: string;
+  /** status pill at the top centre of the screen */
+  island: boolean;
 }
 
 export interface CharacterFile { name: string; bytes: number[] }

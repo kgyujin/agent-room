@@ -61,6 +61,7 @@ export function SettingsModal(props: {
               <Toggle label="승인·입력 요청 알림" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
               <Toggle label="앱을 보고 있을 땐 알림 생략" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
+              <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
               <Toggle label="토큰 사용량 표시 (로컬 로그 기준)" v={s.showTokens} on={(v) => set('showTokens', v)} />
               <AutostartToggle />
               <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />

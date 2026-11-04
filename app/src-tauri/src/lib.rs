@@ -9,17 +9,21 @@ use agent_room_core::model::{now_ms, AgentState, NormEvent};
 use agent_room_core::runtime::{self, ProcWatch};
 use agent_room_core::session::{Notice, SessionStore, Snapshot, TimelineEntry, Update};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
 
 /// Set only when this process bound the hook socket, so a second instance
 /// (which fails with AddrInUse) never unlinks the running instance's socket.
 static OWNS_SOCKET: AtomicBool = AtomicBool::new(false);
+
+/// When the popover last closed by losing focus; a click on the menu bar icon right after
+/// that is the same click that closed it, so it must not reopen it.
+static POPOVER_HIDDEN_AT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -40,6 +44,8 @@ pub struct Settings {
     pub critter_colors: std::collections::BTreeMap<String, String>,
     /// UI colour theme id ("peach", "mint", ...)
     pub ui_theme: String,
+    /// status pill at the top centre of the screen (around the MacBook notch)
+    pub island: bool,
 }
 
 impl Default for Settings {
@@ -58,6 +64,7 @@ impl Default for Settings {
             characters: Default::default(),
             critter_colors: Default::default(),
             ui_theme: "peach".into(),
+            island: true,
         }
     }
 }
@@ -350,7 +357,132 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     *shared.settings.lock().unwrap() = settings.clone();
     let path = settings_path(&app).ok_or("no config dir")?;
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())
+    std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())?;
+    show_island(&app, settings.island);
+    Ok(())
+}
+
+// ------------------------------------------------------------------ menu bar popover + island
+
+/// Window for the menu bar popover ("tray") and the top-centre status pill ("island").
+/// Both load the same page; the UI picks its view from the window label.
+fn extra_window(app: &AppHandle, label: &str, w: f64, h: f64, resizable: bool) -> tauri::Result<WebviewWindow> {
+    let win = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
+        .title("Agent Room")
+        .inner_size(w, h)
+        .decorations(false)
+        .transparent(true)
+        // the island resizes itself; some platforms ignore set_size on fixed-size windows
+        .resizable(resizable)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .focused(false)
+        .visible(false)
+        .visible_on_all_workspaces(true)
+        .accept_first_mouse(true)
+        .build()?;
+    #[cfg(target_os = "macos")]
+    float_over_menu_bar(&win);
+    Ok(win)
+}
+
+/// Raises the window above the menu bar (status window level) and keeps it on every Space,
+/// including next to full-screen apps, so the island can sit in the notch row.
+#[cfg(target_os = "macos")]
+fn float_over_menu_bar(win: &WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    let Ok(ptr) = win.ns_window() else { return };
+    let ns = ptr as *mut AnyObject;
+    if ns.is_null() {
+        return;
+    }
+    // NSStatusWindowLevel = 25; canJoinAllSpaces (1) | stationary (16) | fullScreenAuxiliary (256)
+    unsafe {
+        let _: () = msg_send![ns, setLevel: 25isize];
+        let _: () = msg_send![ns, setCollectionBehavior: (1usize | 16 | 256)];
+    }
+}
+
+/// Shows or hides the island at the top centre of the primary screen.
+fn show_island(app: &AppHandle, on: bool) {
+    let Some(w) = app.get_webview_window("island") else { return };
+    if on {
+        let size = w.inner_size().ok().map(|s| s.to_logical::<f64>(w.scale_factor().unwrap_or(1.0)));
+        if let Some(s) = size {
+            place_island(app, &w, s.width, s.height);
+        }
+        let _ = w.show();
+    } else {
+        let _ = w.hide();
+    }
+}
+
+fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
+    let Ok(Some(mon)) = app.primary_monitor() else { return };
+    let k = mon.scale_factor();
+    let x = mon.position().x as f64 / k + (mon.size().width as f64 / k - width) / 2.0;
+    let y = mon.position().y as f64 / k;
+    let _ = w.set_size(tauri::LogicalSize::new(width, height));
+    let _ = w.set_position(tauri::LogicalPosition::new(x.round(), y));
+}
+
+/// The island grows when hovered/clicked and shrinks back; it stays centred at the top.
+#[tauri::command]
+fn island_layout(app: AppHandle, width: f64, height: f64) {
+    if let Some(w) = app.get_webview_window("island") {
+        place_island(&app, &w, width.clamp(120.0, 640.0), height.clamp(24.0, 640.0));
+    }
+}
+
+/// Opens the popover under the menu bar icon (or closes it when it is already open).
+fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
+    let Some(w) = app.get_webview_window("tray") else { return };
+    if w.is_visible().unwrap_or(false) {
+        let _ = w.hide();
+        return;
+    }
+    if now_ms().saturating_sub(POPOVER_HIDDEN_AT.load(Ordering::SeqCst)) < 400 {
+        return;
+    }
+    let k = w.scale_factor().unwrap_or(1.0);
+    let pos = rect.position.to_physical::<f64>(k);
+    let size = rect.size.to_physical::<f64>(k);
+    let ww = w.outer_size().map(|s| s.width as f64).unwrap_or(360.0 * k);
+    let x = pos.x + size.width / 2.0 - ww / 2.0;
+    let y = pos.y + size.height + 4.0 * k;
+    let _ = w.set_position(tauri::PhysicalPosition::new(x.max(0.0), y));
+    let _ = w.show();
+    let _ = w.set_focus();
+    let _ = w.emit("popover-shown", ());
+}
+
+/// Buttons in the popover and the island.
+#[tauri::command]
+fn tray_action(app: AppHandle, action: String, key: Option<String>) {
+    if let Some(w) = app.get_webview_window("tray") {
+        let _ = w.hide();
+    }
+    match action.as_str() {
+        "open" => show_main(&app),
+        "mini" => {
+            show_main(&app);
+            let _ = app.emit("set-mini", true);
+        }
+        "settings" => {
+            show_main(&app);
+            let _ = app.emit("open-settings", ());
+        }
+        "select" => {
+            show_main(&app);
+            if let Some(k) = key {
+                let _ = app.emit("select-session", k);
+            }
+        }
+        "quit" => app.exit(0),
+        _ => {}
+    }
 }
 
 #[derive(Serialize)]
@@ -483,11 +615,13 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app
+            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app,
+            tray_action, island_layout
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             let settings = load_settings(&handle);
+            let island_on = settings.island;
             {
                 let shared = handle.state::<Shared>();
                 shared.store.lock().unwrap().stale_after_ms = settings.stale_minutes.max(1) as u64 * 60_000;
@@ -534,6 +668,13 @@ pub fn run() {
                 .icon_as_template(true)
                 .tooltip("Agent Room")
                 .menu(&menu)
+                // left click opens the popover; right click still shows the menu
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, ev| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, rect, .. } = ev {
+                        toggle_popover(tray.app_handle(), rect);
+                    }
+                })
                 .on_menu_event(|app, ev| match ev.id().as_ref() {
                     "open" => show_main(app),
                     "mini" => {
@@ -548,14 +689,24 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+
+            extra_window(&handle, "tray", 360.0, 480.0, false)?;
+            extra_window(&handle, "island", 340.0, 34.0, true)?;
+            show_island(&handle, island_on);
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|window, event| match event {
             // closing the window keeps Agent Room in the menu bar
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            // the popover closes as soon as the user clicks elsewhere
+            WindowEvent::Focused(false) if window.label() == "tray" => {
+                POPOVER_HIDDEN_AT.store(now_ms(), Ordering::SeqCst);
+                let _ = window.hide();
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building Agent Room")
