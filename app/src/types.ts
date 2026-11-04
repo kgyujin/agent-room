@@ -72,7 +72,11 @@ export interface Settings {
   panelOpen: boolean;
   alwaysOnTop: boolean;
   showTokens: boolean;
+  /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
+  characters: Record<string, string>;
 }
+
+export interface CharacterFile { name: string; bytes: number[] }
 
 export interface Overview {
   sessions: Snapshot[];

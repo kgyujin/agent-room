@@ -1,14 +1,14 @@
 // Loads the generated sprite atlas (tools/art/gen_art.py) and draws frames.
 export interface Frame { x: number; y: number; w: number; h: number; dx: number; dy: number }
-export interface Box { name: string; box: [number, number, number, number] }
+export interface Piece { name: string; base: number }
 export interface Layout {
-  scene: { w: number; h: number; ox: number; oy: number; room: number; floorZ: number };
-  furniture: Box[];
+  scene: { w: number; h: number };
+  /** furniture sprites in draw order; `base` = screen y of the piece's front edge (for depth sorting) */
+  furniture: Piece[];
   char: { w: number; h: number; ax: number; ay: number; agents: string[]; frames: string[] };
   spots: Record<string, { x: number; y: number; face: Facing; z?: number; sit?: boolean }>;
   nodes: Record<string, [number, number]>;
   edges: [string, string][];
-  lights: Record<string, [number, number]>;
   steam: [number, number];
 }
 export type Facing = 'dr' | 'dl' | 'ur' | 'ul';
