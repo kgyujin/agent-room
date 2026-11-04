@@ -330,3 +330,25 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .app.mac:not(.mini) .topleft { left: 84px; top: 12px; }
 .app.mac:not(.mini) .banners { top: 14px; }
 .app.mac.mini:not(.room-only) .banners { left: 84px; }
+
+/* ------------------------------------------------ office: name tags over critters, faded toolbar in office view */
+.nametags { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.nametag { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; display: flex; gap: 4px; align-items: center; white-space: nowrap;
+  padding: 1px 7px; font-size: 11px; border-radius: 999px; border: 2px solid var(--tag, var(--frame)); background: var(--box); color: var(--ink); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18); }
+.nametag b { color: var(--tag); }
+.nametag span { color: var(--ink-soft); max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.nametag.on { background: #fff3d6; }
+.nametag.a-claude { --tag: #d9773f; }
+.nametag.a-codex { --tag: #3f78c9; }
+.nametag.a-demo { --tag: #8a6fd0; }
+.toolbar.faded { opacity: 0.25; transition: opacity 0.15s; }
+.toolbar.faded:hover { opacity: 1; }
+.tool { width: 34px; height: 34px; }
+.app:not(.mini) .banners { top: 50px; }
+.swatches { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--box); box-shadow: 0 0 0 1px var(--frame-l); padding: 0; }
+.swatch.on { box-shadow: 0 0 0 2px var(--ink); }
+.swatch.orig { background: linear-gradient(135deg, #fff 45%, #d9606f 45% 55%, #fff 55%); }
+.row.tight { margin-top: 0; gap: 4px; flex-wrap: nowrap; }
+.btn.small { padding: 3px 8px; font-size: 11px; }
+.banner.update { background: #eaf7ee; color: #2f7d4a; border-color: #6fbf88; }

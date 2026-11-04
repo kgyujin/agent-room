@@ -1,12 +1,11 @@
 // One character in the room: walks between spots on a waypoint graph and plays
-// the current behavior's frame sequence. A future multi-agent mode = several Actors.
+// the current behavior's frame sequence. The scene runs one Actor per session.
 import type { Atlas, Facing, Layout } from './assets';
 import type { Behavior } from './behaviors';
 import type { Skin } from './skin';
 
 const SPEED = 36; // world units (= scene px) per second
 const MIN_DWELL_MS = 1600; // stay at a spot at least this long before a non-urgent move
-const SIT_APPROACH: Record<string, string> = { desk: 'deskA', sofa: 'sofaB' };
 
 export class Actor {
   x: number;
@@ -56,11 +55,7 @@ export class Actor {
     this.stepIdx = 0;
     this.stepTick = 0;
     if (b.frozen) return; // keep pose & position
-    let target = b.spot;
-    if (target === '') {
-      // act in place, but get off a chair/sofa first
-      target = SIT_APPROACH[this.spot] ?? '';
-    }
+    const target = b.spot; // '' = act in place
     if (target && target !== this.spot) {
       this.path = this.route(target);
       this.spot = target;

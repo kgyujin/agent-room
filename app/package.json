@@ -17,6 +17,8 @@
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-autostart": "^2.5.0",
     "@tauri-apps/plugin-notification": "^2.3.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "galmuri": "^2.40.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

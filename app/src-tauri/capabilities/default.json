@@ -24,6 +24,8 @@
     "core:window:allow-inner-size",
     "core:window:allow-scale-factor",
     "notification:default",
+    "updater:default",
+    "process:allow-restart",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled"

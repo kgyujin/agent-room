@@ -5,7 +5,8 @@ export interface Layout {
   scene: { w: number; h: number };
   /** furniture sprites in draw order; `base` = screen y of the piece's front edge (for depth sorting) */
   furniture: Piece[];
-  char: { w: number; h: number; ax: number; ay: number; agents: string[]; frames: string[] };
+  /** number of workstations (desk0..), one critter each */
+  desks: number;
   spots: Record<string, { x: number; y: number; face: Facing; z?: number; sit?: boolean }>;
   nodes: Record<string, [number, number]>;
   edges: [string, string][];
