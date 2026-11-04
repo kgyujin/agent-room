@@ -43,7 +43,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNjc3RDgyMEI5M0IwNUMKUldSY3NKTUxnbjFucWxXTE1kdFlmVCtrcmhPMi8wREEwSi96aFlYbW5xQzh1a3dVeDJ4K3BBa2sK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlEMTM4QzgwREU1MDhFN0MKUldSOGpsRGVnSXdUblhKWDJSY0RmN0Jjck40NGZWNmF4ZkQyZmFUaDQrVU54TG0zMEtRdWY1SngK",
       "endpoints": ["https://github.com/kgyujin/agent-room/releases/latest/download/latest.json"]
     }
   }
