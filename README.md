@@ -123,3 +123,5 @@ cargo run -p agent-room-core --example monitor            # 앱 대신 이벤트
 
 ## 라이선스
 MIT
+
+UI 글꼴: [갈무리(Galmuri)](https://github.com/quiple/galmuri), SIL Open Font License 1.1.

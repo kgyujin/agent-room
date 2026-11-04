@@ -36,7 +36,7 @@ C = {k: hexc(v) for k, v in {
 BOOK_COLS = [hexc(h) for h in ('#d06a5f', '#5f8fc9', '#e3b85c', '#7fb07a', '#a77cc2', '#e98aa8', '#6b9fa0', '#c98d58')]
 
 C.update({k: hexc(v) for k, v in {
-    'outline': '#3b2a2e', 'frame': '#4b3a3e', 'frame_l': '#6f5a5c',
+    'outline': '#3b2a2e', 'frame': '#101018', 'walltop': '#4a4262', 'walltop_l': '#6c6488',
     'wp': '#cfeae0', 'wp_s': '#bfe1d5', 'wp_d': '#a8d2c4', 'crown': '#fff6ea',
     'wains': '#ebc18d', 'wains_d': '#c99a66', 'wains_l': '#f6d8ae', 'base': '#8a5a40',
     'fl_a': '#efc48e', 'fl_b': '#e6b87f', 'fl_c': '#f3cd9c', 'fl_seam': '#c99764', 'fl_sh': '#cf9d68',
@@ -70,7 +70,9 @@ def block(s, x, y, w, top_h, front_h, top, front):
 
 def draw_room(s):
     s.rect(0, 0, SW, SH, C['frame'])
-    s.rect(IN_X0 - 1, WALL_Y0 - 1, IN_X1 - IN_X0 + 2, FLOOR_Y1 - WALL_Y0 + 2, C['frame_l'])
+    # top of the back wall seen from above
+    s.rect(IN_X0, 1, IN_X1 - IN_X0, WALL_Y0 - 1, C['walltop'])
+    s.rect(IN_X0, 1, IN_X1 - IN_X0, 1, C['walltop_l'])
     # wall: crown, striped wallpaper with a dot motif, chair rail, wainscot panels, baseboard
     for y in range(WALL_Y0, FLOOR_Y0):
         for x in range(IN_X0, IN_X1):
@@ -89,20 +91,19 @@ def draw_room(s):
             else:
                 c = C['base']
             s.put(x, y, c)
-    # floor: 16px tiles with a lit top-left edge and a dark seam (handheld RPG interior look)
+    # floor: two 8px planks per 16px tile, joints staggered by half a tile, lit top edge
     for y in range(FLOOR_Y0, FLOOR_Y1):
-        ty, v = divmod(y - FLOOR_Y0, 16)
+        r, v = divmod(y - FLOOR_Y0, 8)
+        off = 8 if r % 2 else 0
         for x in range(IN_X0, IN_X1):
-            tx, u = divmod(x - IN_X0, 16)
-            base = C['fl_a'] if (tx + ty) % 2 == 0 else C['fl_b']
-            if u == 15 or v == 15:
+            u = (x - IN_X0 + off) % 16
+            k = ((x - IN_X0 + off) // 16 + r) % 3
+            if v == 7 or u == 15:
                 c = C['fl_seam']
-            elif u == 0 or v == 0:
+            elif v == 0:
                 c = C['fl_c']
-            elif v == 8 and 2 <= u <= 13:
-                c = shade(base, 0.96)
             else:
-                c = base
+                c = (C['fl_a'], C['fl_b'], C['fl_a'])[k]
             if y < FLOOR_Y0 + 2:
                 c = C['fl_sh']
             s.put(x, y, c)

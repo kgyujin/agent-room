@@ -9,13 +9,13 @@ from pix import Spr, hexc, shade
 W, H = 20, 24
 PAD = 2
 
-HEAD_FRONT = [
-    "................",
-    ".....hhhhhh.....",
-    "...hhHHHHhhhh...",
-    "..hhHHhhhhhhhh..",
-    ".hhHhhhhhhhhhkh.",
-    ".hhhhhhhhhhhhkh.",
+HEAD_FRONT = [  # cap (r/R, white front panel w, brim q) over hair
+    ".....rrrrrr.....",
+    "...rrrwwwwrrR...",
+    "..rrrwwwwwwrRR..",
+    ".rrrrwwwwwwrrRR.",
+    ".rrrrrrrrrrrrRR.",
+    ".qqqqqqqqqqqqqqq",
     ".hkhhhhhhhhhhkh.",
     ".hkhshhhhhhshkh.",
     ".hksssshsshsskh.",
@@ -25,11 +25,11 @@ HEAD_FRONT = [
     "...SssssssssS...",
 ]
 HEAD_BACK = [
-    "................",
-    ".....hhhhhh.....",
-    "...hhHHHHhhhh...",
-    "..hhHHhhhhhhhh..",
-    ".hhHhhhhhhhhhkh.",
+    ".....rrrrrr.....",
+    "...rrrrrrrrrR...",
+    "..rrrrrrrrrrRR..",
+    ".rrrrrrrrrrrrRR.",
+    ".rrrrrkkkrrrRRh.",
     ".hhhhhhhhhhhhkh.",
     ".hhhhhhhhhhhhkh.",
     ".hhhhhhhhhhhkkh.",
@@ -225,12 +225,12 @@ BASE_PAL = {
     'B': '#c65a5a', 'W': '#fff8ea', 'K': '#8e3c47', 'M': '#fffaf0', 'T': '#c98e5a',
 }
 
-# per-agent look: hoodie + hair. Extend this table to add agents (multi-character mode).
+# per-agent look: hoodie + hair + cap. Extend this table to add agents (multi-character mode).
 AGENT_LOOKS = {
-    'claude': {'c': '#d9825f', 'h': '#5b3b33'},
-    'codex': {'c': '#5b97b5', 'h': '#2f2a3d'},
-    'generic': {'c': '#8fb37a', 'h': '#6a4a3a'},
-    'demo': {'c': '#a993d6', 'h': '#7a4f45'},
+    'claude': {'c': '#d9825f', 'h': '#5b3b33', 'cap': '#e0574c'},
+    'codex': {'c': '#5b97b5', 'h': '#2f2a3d', 'cap': '#3f7fd0'},
+    'generic': {'c': '#8fb37a', 'h': '#6a4a3a', 'cap': '#4fae62'},
+    'demo': {'c': '#a993d6', 'h': '#7a4f45', 'cap': '#9a7fd6'},
 }
 
 
@@ -239,7 +239,9 @@ def palette(agent):
     pal = {k: hexc(v) for k, v in BASE_PAL.items()}
     c = hexc(look['c'])
     h = hexc(look['h'])
-    pal.update({'c': c, 'C': shade(c, 0.82), 'd': shade(c, 1.22), 'h': h, 'H': shade(h, 1.35), 'k': shade(h, 0.75)})
+    cap = hexc(look['cap'])
+    pal.update({'c': c, 'C': shade(c, 0.82), 'd': shade(c, 1.22), 'h': h, 'H': shade(h, 1.35), 'k': shade(h, 0.75),
+                'r': cap, 'R': shade(cap, 0.8), 'q': shade(cap, 0.62)})
     return pal
 
 

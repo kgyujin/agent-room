@@ -9,13 +9,8 @@ import type { Skin } from './skin';
 
 export type Theme = 'day' | 'sunset' | 'night';
 
-// backdrop around the room: two-tone 16px checker (flat colours)
-const BACKDROP: Record<Theme, [string, string]> = {
-  day: ['#bfe6f0', '#b2dfeb'],
-  sunset: ['#f6cdb8', '#f1c0a9'],
-  night: ['#2b3058', '#272b50'],
-};
-const CHECK = 16;
+// outside the room: the black void of a handheld RPG interior map
+const VOID = '#101018';
 
 interface Spark { x: number; y: number; t: number }
 
@@ -29,7 +24,6 @@ export class Scene {
   private ctx: CanvasRenderingContext2D;
   private buf = document.createElement('canvas');
   private bctx: CanvasRenderingContext2D;
-  private backdrop: HTMLCanvasElement | null = null;
   private scale = 3;
   private theme: Theme = 'day';
   private actor: Actor;
@@ -58,10 +52,7 @@ export class Scene {
   }
 
   setTheme(t: Theme) {
-    if (t !== this.theme) {
-      this.theme = t;
-      this.backdrop = null;
-    }
+    this.theme = t;
   }
 
   setView(v: SceneView) {
@@ -122,7 +113,6 @@ export class Scene {
     this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
-    this.backdrop = null;
     this.draw();
   }
 
@@ -135,20 +125,6 @@ export class Scene {
     return bx > f.x - 9 && bx < f.x + 9 && by > f.y - 24 && by < f.y + 2;
   }
 
-  private buildBackdrop() {
-    const c = document.createElement('canvas');
-    c.width = this.buf.width;
-    c.height = this.buf.height;
-    const g = c.getContext('2d')!;
-    const [a, b] = BACKDROP[this.theme];
-    for (let y = 0; y < c.height; y += CHECK) {
-      for (let x = 0; x < c.width; x += CHECK) {
-        g.fillStyle = (x / CHECK + y / CHECK) % 2 ? b : a;
-        g.fillRect(x, y, CHECK, CHECK);
-      }
-    }
-    this.backdrop = c;
-  }
 
   private burst() {
     for (let i = 0; i < 6; i++) this.sparks.push({ x: (Math.random() - 0.5) * 26, y: -10 - Math.random() * 18, t: 0 });
@@ -171,8 +147,8 @@ export class Scene {
     if (this.roomOnly) {
       g.clearRect(0, 0, W, H);
     } else {
-      if (!this.backdrop) this.buildBackdrop();
-      g.drawImage(this.backdrop!, 0, 0);
+      g.fillStyle = VOID;
+      g.fillRect(0, 0, W, H);
     }
 
     // centre the room in the free area
