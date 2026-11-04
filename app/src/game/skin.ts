@@ -134,6 +134,7 @@ export function reduce(img: HTMLImageElement): Skin {
 /** built-in original critters (tools/art/gen_critters.py); stored in settings as 'builtin/<id>' */
 export const BUILTIN_CRITTERS: [string, string][] = [
   ['shiba', '아기 시바'], ['penguin', '아기 펭귄'], ['hamster', '햄찌'], ['cat', '은빛 고양이'],
+  ['rabbit', '솜토끼'], ['frog', '개굴이'], ['chick', '삐약이'],
 ];
 
 /** critter each role uses until the user picks another one */

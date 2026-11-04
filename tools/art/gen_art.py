@@ -246,6 +246,7 @@ def main():
         'nodes': nodes,
         'edges': edges,
         'steam': list(tea),
+        'windows': office.window_boxes(),
     }
     with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
         json.dump({'frames': frames, 'layout': layout}, f, separators=(',', ':'))

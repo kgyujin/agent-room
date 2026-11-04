@@ -4,6 +4,7 @@ import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_CHARACTERS } from '../game/sk
 import type { Sfx, Sound } from '../game/audio';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
+import { UI_THEMES } from '../themes';
 
 type Tab = 'general' | 'characters' | 'agents' | 'dev';
 
@@ -38,12 +39,20 @@ export function SettingsModal(props: {
         <div className="modal-body">
           {tab === 'general' && (
             <>
-              <Field label="배경 테마">
+              <Field label="색 테마">
+                <div className="swatches">
+                  {UI_THEMES.map((th) => (
+                    <button key={th.id} className={`swatch theme ${(s.uiTheme || 'peach') === th.id ? 'on' : ''}`} title={th.name} aria-label={th.name}
+                      style={{ background: `linear-gradient(135deg, ${th.vars['--accent']} 50%, ${th.vars['--frame-l']} 50%)` }} onClick={() => set('uiTheme', th.id)} />
+                  ))}
+                </div>
+              </Field>
+              <Field label="방 조명">
                 <select value={s.theme} onChange={(e) => set('theme', e.target.value as Settings['theme'])}>
-                  <option value="day">봄날 낮</option>
-                  <option value="sunset">노을</option>
-                  <option value="night">밤</option>
-                  <option value="auto">시간에 맞춰 자동</option>
+                  <option value="auto">실제 시간에 맞춰</option>
+                  <option value="day">늘 낮</option>
+                  <option value="sunset">늘 노을</option>
+                  <option value="night">늘 밤</option>
                 </select>
               </Field>
               <Toggle label="효과음" v={s.sfx} on={(v) => set('sfx', v)} />
@@ -158,7 +167,7 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
       }
     }
     await onAdded();
-    if (added.length) setNote(`추가했어요: ${added.join(', ')} · 위 목록에서 고르면 바로 바뀌어요`);
+    if (added.length) setNote(`추가했어요: ${added.join(', ')} · 아래 목록에서 고르면 바로 바뀌어요`);
   };
   useEffect(() => {
     backend.dataDir().then(setDir).catch(() => undefined);
@@ -171,6 +180,16 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
   };
   return (
     <>
+      <div className="char-add">
+        <div>
+          <b>포켓몬 도트도 넣을 수 있어요</b>
+          <p className="muted small">좋아하는 포켓몬 도트 PNG를 추가하면 아래 목록의 "내 캐릭터"에 바로 나타나요. 확대된 이미지도 괜찮아요.</p>
+        </div>
+        <label className="btn primary">
+          PNG 추가
+          <input type="file" accept="image/png" multiple hidden onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
+        </label>
+      </div>
       {ROLES.map(([agent, label]) => (
         <Field key={agent} label={label}>
           <select value={s.characters[agent] ?? DEFAULT_CHARACTERS[agent]} onChange={(e) => pick(agent, e.target.value)}>
@@ -199,7 +218,7 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
         };
         return (
           <div key={id} className="field">
-            <span>{label}</span>
+            <span className="pet-name"><i className="pet-thumb" style={{ backgroundImage: `url(/assets/critters/${id}.png)` }} />{label}</span>
             <div className="swatches">
               <button className={`swatch orig ${!cur ? 'on' : ''}`} onClick={() => setColor()} title="원래 색" aria-label={`${label} 원래 색`} />
               {CRITTER_COLORS.map((c) => (
@@ -209,16 +228,6 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
           </div>
         );
       })}
-      <div className="char-add">
-        <div>
-          <b>포켓몬 도트도 넣을 수 있어요</b>
-          <p className="muted small">좋아하는 포켓몬 도트 PNG를 추가하면 위 목록의 "내 캐릭터"에 바로 나타나요. 확대된 이미지도 괜찮아요.</p>
-        </div>
-        <label className="btn primary">
-          PNG 추가
-          <input type="file" accept="image/png" multiple hidden onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
-        </label>
-      </div>
       {note && <p className="small">{note}</p>}
       <p className="muted small">
         추가한 PNG는 <span className="mono">{dir}/characters/</span> 폴더에 저장되고, 이 폴더에 직접 넣어도 돼요. 확대된 도트는 1칸 = 1px
