@@ -1,6 +1,6 @@
 import type { Snapshot } from '../types';
 import { activityLabel, AGENT_NAME, fmtAgo, fmtClock, fmtDuration, fmtTokens, stateLabel, stateTone } from '../labels';
-import { Icon } from './icons';
+import { AgentMark, Icon } from './icons';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
   if (!s.plan.length) return null;
@@ -18,7 +18,7 @@ export function Hud({ s, now, showTokens }: { s: Snapshot; now: number; showToke
     <div className="card hud">
       <div className="hud-main">
         <div className="hud-head">
-          <span className={`agent-dot a-${s.agent}`} />
+          <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
           <span className="hud-agent">{AGENT_NAME[s.agent]}</span>
           {s.isDemo && <span className="tag demo">DEMO</span>}
           <span className="hud-project" title={s.cwd ?? ''}>{s.project ?? '프로젝트 미확인'}</span>
@@ -106,7 +106,7 @@ export function MiniPill({ s, now, onExpand }: { s: Snapshot | null; now: number
     <div className="mini-pill">
       {s ? (
         <>
-          <span className={`agent-dot a-${s.agent}`} />
+          <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
           <span className={`tone-${stateTone(s)} mini-state`}>{stateLabel(s)}</span>
           {s.detail && s.connection === 'live' && <span className="mini-detail">{s.detail}</span>}
           <span className="mini-time">

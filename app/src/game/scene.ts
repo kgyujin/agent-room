@@ -46,7 +46,8 @@ export class Scene {
   insetBottom = 0;
   insetTop = 0;
   /** colour painted around the room (follows the UI theme) */
-  backdrop = '#2f4a3e';
+  /** solid colour behind the room in window mode; null leaves it clear for the page background */
+  backdrop: string | null = null;
   /** room-only mode: transparent around the room */
   roomOnly = false;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
@@ -95,7 +96,8 @@ export class Scene {
       let m = this.mates.find((x) => x.key === k);
       if (!m) {
         const used = new Set(this.mates.map((x) => x.slot));
-        const slot = [...Array(this.desks).keys()].find((i) => !used.has(i)) ?? 0;
+        const order = this.atlas.layout.deskOrder ?? [...Array(this.desks).keys()];
+        const slot = order.find((i) => !used.has(i)) ?? 0;
         const agent = s ? (s.agent === 'demo' ? 'generic' : s.agent) : 'generic';
         const actor = new Actor(agent, this.atlas.layout, `sofa${slot}`);
         m = { key: k, agent, slot, actor, session: s, skin: '', sparks: [], restVariant: REST_KEYS[slot % REST_KEYS.length], restSince: Date.now() };
@@ -122,7 +124,10 @@ export class Scene {
   }
 
   private spotFor(m: Mate, spot: string): string {
-    if (spot === 'desk' || spot === 'sofa' || spot === 'front') return `${spot}${m.slot}`;
+    if (spot === 'desk' || spot === 'sofa' || spot === 'front') {
+      const own = `${spot}${m.slot}`;
+      return own in this.atlas.layout.spots ? own : `desk${m.slot}`;
+    }
     if (SHARED.has(spot) && this.mates.some((o) => o !== m && o.actor.spot === spot)) return `desk${m.slot}`;
     return spot;
   }
@@ -234,8 +239,11 @@ export class Scene {
     const k = this.scale / dpr;
     return this.mates.filter((m) => m.session).map((m) => {
       const f = m.actor.feet();
-      const h = this.skins[m.skin]?.h ?? 24;
-      return { key: m.key, agent: m.session!.agent, x: (this.off.x + f.x) * k, y: (this.off.y + f.y - h - 13) * k };
+      const sk = this.skins[m.skin];
+      const h = sk ? sk.h - (sk.top ?? 0) : 24;
+      // leave room for a thought bubble above the head when there is one
+      const gap = m.actor.current?.bubble && !m.actor.walking ? 13 : 3;
+      return { key: m.key, agent: m.session!.agent, x: (this.off.x + f.x) * k, y: (this.off.y + f.y - h - gap) * k };
     });
   }
 
@@ -292,7 +300,7 @@ export class Scene {
       },
     }));
     for (const m of this.mates) {
-      items.push({ y: m.actor.y + 0.5, draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
+      items.push({ y: m.actor.depth(), draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
     }
     items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 
@@ -306,7 +314,7 @@ export class Scene {
       const feet = m.actor.feet();
       const skin = this.skins[m.skin];
       const hx = ox + feet.x;
-      const hy = oy + feet.y - (skin ? skin.h : 24);
+      const hy = oy + feet.y - (skin ? skin.h - (skin.top ?? 0) : 24);
       if (b?.fx === 'sweat' && Math.floor(this.tickN / 3) % 2 === 0) A.draw(g, 'sweat', hx + 6, hy + 4);
       if (b?.fx === 'sparkle' && this.tickN % 18 === 0) this.burst(m);
       m.sparks = m.sparks.filter((s) => s.t < 14);
@@ -347,7 +355,7 @@ export class Scene {
     g.globalCompositeOperation = 'destination-over';
     this.paintSkyCache();
     g.drawImage(this.sky, ox + this.span[0], oy + this.span[1]);
-    if (!this.roomOnly) {
+    if (!this.roomOnly && this.backdrop) {
       g.fillStyle = this.backdrop;
       g.fillRect(0, 0, W, H);
     }

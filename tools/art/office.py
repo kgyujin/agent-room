@@ -11,7 +11,7 @@ import random
 
 from pix import Spr, Iso, hexc, shade
 
-X, Y, Z = 72, 60, 46
+X, Y, Z = 92, 66, 46
 CAP = 3                       # wall thickness (world units)
 OX = 2 * Y + 2 * CAP + 6      # screen x of the back corner
 OY = Z + CAP + 8              # screen y of the back corner at floor level
@@ -156,7 +156,7 @@ def window_color(u, z, u0, w, z0, h):
 def wall_pixel(u, z, wall, at=None):
     lit = wall == 'L'
     # window positions (wall-local u along the wall from the back corner)
-    wins = [(34, 11, 14, 26)] if wall == 'L' else [(16, 10, 12, 24), (38, 10, 12, 24)]
+    wins = [(34, 11, 14, 26)] if wall == 'L' else [(16, 10, 12, 24), (38, 10, 12, 24), (60, 10, 12, 24)]
     for i, (u0, w, z0, h) in enumerate(wins):
         c = window_color(u, z, u0, w, z0, h)
         if c is HOLE:
@@ -358,15 +358,15 @@ def rig(y0):
 
 def board():
     """notice board on the right wall (drawn as part of the wall)"""
-    s = piece('board', (66, 1))
-    u0, u1, z0, z1 = 52, 66, 14, 30
+    s = piece('board', (90, 1))
+    u0, u1, z0, z1 = 76, 90, 14, 30
     for u in range(u0 * 2, u1 * 2):
         for z in range(z0, z1):
             px, py = P(u / 2, 0.3, z)
             edge = u < u0 * 2 + 2 or u >= u1 * 2 - 2 or z < z0 + 1 or z >= z1 - 1
             c = C['w_d'] if edge else C['cork'] if (u + z) % 5 else C['cork_d']
             s.put(px, py, c)
-    for (uu, zz, col) in ((54, 24, 'note_y'), (58, 26, 'paper'), (62, 23, 'note_p'), (55, 18, 'note_b'), (60, 17, 'note_y')):
+    for (uu, zz, col) in ((78, 24, 'note_y'), (82, 26, 'paper'), (86, 23, 'note_p'), (79, 18, 'note_b'), (84, 17, 'note_y')):
         for du in range(6):
             for dz in range(4):
                 px, py = P(uu + du / 2, 0.3, zz - dz)
@@ -464,25 +464,26 @@ def rug(s, cx, cy, rx, ry):
 
 
 # ---------------------------------------------------------------- build
-DESKS = [(16, 4), (38, 4), (16, 25), (38, 25)]
+DESKS = [(14, 4), (36, 4), (58, 4), (14, 30), (36, 30), (58, 30)]
+DESK_ORDER = [1, 4, 2, 5, 0, 3]   # who sits where first: middle and right before the crowded left corner
 SHELF_Y = 6
 RIG_Y = 24
-LOUNGE = (50, 36)
+LOUNGE = (68, 44)
 
 
 def build():
     room = Spr(SW, SH)
     draw_floor(room)
     draw_walls(room)
-    rug(room, 59, 46, 10, 11)
+    rug(room, 77, 54, 10, 11)
     # wall decor painted into the background
     banner(room, 'L', 26, 40)
     banner(room, 'L', 50, 40)
     banner(room, 'R', 4, 40)
-    banner(room, 'R', 48, 40)
+    banner(room, 'R', 52, 40)
     # ivy draping over the wall caps
     ivy(room, [P(-1, y, Z + 1) for y in range(2, Y, 4)][:3] + [P(-1, y, Z + 1) for y in range(44, Y, 3)], seed=3)
-    ivy(room, [P(x, -1, Z + 1) for x in range(0, 9, 3)] + [P(x, -1, Z + 1) for x in range(64, X, 3)], seed=8)
+    ivy(room, [P(x, -1, Z + 1) for x in range(0, 9, 3)] + [P(x, -1, Z + 1) for x in range(X - 8, X, 3)], seed=8)
 
     screens = [desk(i, x, y) for i, (x, y) in enumerate(DESKS)]
     bookshelf(0, SHELF_Y)
@@ -520,6 +521,7 @@ def walk_graph(screens):
     blocked = []
     for (x, y) in DESKS:
         blocked.append((x - 2, y - 2, x + 16, y + 9))
+        blocked.append((x + 4, y + 9, x + 11, y + 15))       # stool + the critter sitting on it
     blocked += [(0, SHELF_Y - 1, 6, SHELF_Y + 15), (0, RIG_Y - 1, 7, RIG_Y + 11), (LOUNGE[0] - 1, LOUNGE[1] - 1, LOUNGE[0] + 9, LOUNGE[1] + 17),
                 (LOUNGE[0] + 10, LOUNGE[1] + 4, LOUNGE[0] + 18, LOUNGE[1] + 12), (X - 10, 1, X, 10), (0, Y - 9, 9, Y),
                 (X - 8, 35, X, 42), (0, 37, 7, 44), (X - 9, Y - 9, X, Y), (21, Y - 7, 28, Y), (X - 6, 24, X, 30), (24, 14, 30, 20)]
@@ -545,29 +547,32 @@ def walk_graph(screens):
 
     spots = {}
 
-    def spot(name, wx, wy, face, z=0, sit=False):
+    def spot(name, wx, wy, face, z=0, sit=False, depth=None):
         sx, sy = P(wx, wy)
-        spots[name] = {'x': sx, 'y': sy, 'face': face, **({'z': z, 'sit': True} if sit else {})}
+        spots[name] = {'x': sx, 'y': sy, 'face': face, **({'z': z, 'sit': True} if sit else {}), **({'depth': depth} if depth else {})}
         wpos[name] = (wx, wy)
         best = sorted((k for k in wpos if k.startswith('g')), key=lambda k: (wpos[k][0] - wx) ** 2 + (wpos[k][1] - wy) ** 2)[:2]
         for b in best:
             edges.append([name, b])
 
     for i, (x, y) in enumerate(DESKS):
-        spot(f'desk{i}', x + 7, y + 12, 'ur', z=4, sit=True)
+        # drawn after its own desk and stool (it sits on the stool, in front of the desk)
+        spot(f'desk{i}', x + 7, y + 12, 'ur', z=4, sit=True, depth=P(x + 16, y + 14)[1])
     # waiting / calling spots out in the open, facing the viewer
-    for i, (fx, fy) in enumerate(((26, 44), (34, 48), (20, 51), (42, 53))):
+    for i, (fx, fy) in enumerate(((26, 50), (36, 54), (18, 56), (46, 58), (54, 51), (30, 60))):
         spot(f'front{i}', fx, fy, 'dr')
-    spot('shelf', 8, SHELF_Y + 7, 'ul')
-    spot("bench", 9, RIG_Y + 6, "ul")
-    spot('board', 59, 7, 'ur')
+    spot('shelf', 11, SHELF_Y + 7, 'ul')
+    spot("bench", 12, RIG_Y + 5, "ul")
+    spot('board', 82, 8, 'ur')
     for k, dy in enumerate((4, 11)):
         spot(f'sofa{k}', LOUNGE[0] + 5, LOUNGE[1] + dy + 1, 'dr', z=4, sit=True)
     spot('sofa2', LOUNGE[0] + 4, LOUNGE[1] + 20, 'dr')
     spot('sofa3', LOUNGE[0] + 13, LOUNGE[1] + 18, 'dl')
+    spot('sofa4', LOUNGE[0] - 2, LOUNGE[1] + 8, 'dr')
+    spot('sofa5', LOUNGE[0] + 12, LOUNGE[1] + 1, 'dl')
     spot('window', 8, 40, 'ul')
-    spot('plantcorner', 44, 50, 'dr')
-    spot('center', 26, 40, 'dr')
+    spot('plantcorner', 44, 56, 'dr')
+    spot('center', 26, 46, 'dr')
     for k, (x, y) in wpos.items():
         nodes[k] = list(P(x, y))
     return nodes, edges, spots

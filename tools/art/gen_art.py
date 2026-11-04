@@ -242,6 +242,7 @@ def main():
         'scene': {'w': office.SW, 'h': office.SH},
         'furniture': furniture,
         'desks': len(screens),
+        'deskOrder': office.DESK_ORDER,
         'spots': spots,
         'nodes': nodes,
         'edges': edges,

@@ -9,6 +9,15 @@ export interface Skin {
   back?: HTMLCanvasElement;
   walkF?: HTMLCanvasElement[];
   walkB?: HTMLCanvasElement[];
+  /** first row with any opaque pixel (name tags sit just above it) */
+  top?: number;
+}
+
+/** first non-transparent row of a canvas */
+function topRow(c: HTMLCanvasElement): number {
+  const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 0) return y;
+  return 0;
 }
 
 const EDGE = 48; // per-channel difference that counts as a colour edge
@@ -229,13 +238,14 @@ export async function loadBuiltin(id: string, color?: string): Promise<Skin> {
     c.getContext('2d')!.drawImage(src, i * w, 0, w, h, 0, 0, w, h);
     return c;
   });
-  return { canvas: f[0], w, h, walkF: [f[1], f[2]], back: f[3], walkB: [f[4], f[5]] };
+  return { canvas: f[0], w, h, walkF: [f[1], f[2]], back: f[3], walkB: [f[4], f[5]], top: Math.min(topRow(f[0]), topRow(f[3])) };
 }
 
 export async function loadSkin(bytes: number[]): Promise<Skin> {
   const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
   try {
-    return reduce(await loadImage(url));
+    const sk = reduce(await loadImage(url));
+    return { ...sk, top: topRow(sk.canvas) };
   } finally {
     URL.revokeObjectURL(url);
   }
