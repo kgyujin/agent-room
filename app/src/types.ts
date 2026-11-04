@@ -76,6 +76,8 @@ export interface Settings {
   characters: Record<string, string>;
   /** built-in critter id -> fur colour (hex) */
   critterColors: Record<string, string>;
+  /** UI colour theme id (see themes.ts) */
+  uiTheme: string;
 }
 
 export interface CharacterFile { name: string; bytes: number[] }
