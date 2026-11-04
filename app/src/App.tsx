@@ -451,7 +451,6 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
   const sessRef = useRef(sessions);
   sessRef.current = sessions;
   useEffect(() => {
-    let raf = 0;
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
@@ -468,10 +467,10 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
         last = sig;
         setAnchors(a);
       }
-      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    // the room only redraws at 12 fps, so following it faster is wasted work
+    const id = window.setInterval(() => !document.hidden && loop(), 1000 / 12);
+    return () => window.clearInterval(id);
   }, [scene]);
   if (hidden) return null;
   return (
