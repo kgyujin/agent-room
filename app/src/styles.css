@@ -366,3 +366,6 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
   .dock .hud { display: block; }
   .dock .hud-grid { display: none; }
 }
+.pet-name { display: flex; align-items: center; gap: 8px; }
+.pet-thumb { width: 50px; height: 54px; flex: none; background-size: 300px 54px; background-position: 0 0; image-rendering: pixelated; }
+.char-add { margin: 4px 0 10px; }

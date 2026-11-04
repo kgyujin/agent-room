@@ -167,7 +167,7 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
       }
     }
     await onAdded();
-    if (added.length) setNote(`추가했어요: ${added.join(', ')} · 위 목록에서 고르면 바로 바뀌어요`);
+    if (added.length) setNote(`추가했어요: ${added.join(', ')} · 아래 목록에서 고르면 바로 바뀌어요`);
   };
   useEffect(() => {
     backend.dataDir().then(setDir).catch(() => undefined);
@@ -180,6 +180,16 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
   };
   return (
     <>
+      <div className="char-add">
+        <div>
+          <b>포켓몬 도트도 넣을 수 있어요</b>
+          <p className="muted small">좋아하는 포켓몬 도트 PNG를 추가하면 아래 목록의 "내 캐릭터"에 바로 나타나요. 확대된 이미지도 괜찮아요.</p>
+        </div>
+        <label className="btn primary">
+          PNG 추가
+          <input type="file" accept="image/png" multiple hidden onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
+        </label>
+      </div>
       {ROLES.map(([agent, label]) => (
         <Field key={agent} label={label}>
           <select value={s.characters[agent] ?? DEFAULT_CHARACTERS[agent]} onChange={(e) => pick(agent, e.target.value)}>
@@ -208,7 +218,7 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
         };
         return (
           <div key={id} className="field">
-            <span>{label}</span>
+            <span className="pet-name"><i className="pet-thumb" style={{ backgroundImage: `url(/assets/critters/${id}.png)` }} />{label}</span>
             <div className="swatches">
               <button className={`swatch orig ${!cur ? 'on' : ''}`} onClick={() => setColor()} title="원래 색" aria-label={`${label} 원래 색`} />
               {CRITTER_COLORS.map((c) => (
@@ -218,16 +228,6 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
           </div>
         );
       })}
-      <div className="char-add">
-        <div>
-          <b>포켓몬 도트도 넣을 수 있어요</b>
-          <p className="muted small">좋아하는 포켓몬 도트 PNG를 추가하면 위 목록의 "내 캐릭터"에 바로 나타나요. 확대된 이미지도 괜찮아요.</p>
-        </div>
-        <label className="btn primary">
-          PNG 추가
-          <input type="file" accept="image/png" multiple hidden onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
-        </label>
-      </div>
       {note && <p className="small">{note}</p>}
       <p className="muted small">
         추가한 PNG는 <span className="mono">{dir}/characters/</span> 폴더에 저장되고, 이 폴더에 직접 넣어도 돼요. 확대된 도트는 1칸 = 1px
