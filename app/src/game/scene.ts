@@ -16,7 +16,7 @@ const SKY: Record<Theme, string[]> = {
 const SKY_BANDS = 14;
 
 // furniture static draw order (back to front); overlays drawn right after their host
-const ORDER = ['plant', 'bookshelf', 'desk', 'monitor', 'chair', 'sofa', 'table', 'chair_back', 'sofa_arm', 'bench', 'floor_lamp'];
+const ORDER = ['plant', 'bookshelf', 'bench', 'desk', 'monitor', 'chair', 'sofa', 'table', 'chair_back', 'sofa_arm', 'pouf', 'floor_lamp', 'pot2'];
 
 interface Cloud { name: string; x: number; y: number; speed: number }
 interface Petal { x: number; y: number; vx: number; vy: number; t: number; kind: string }
@@ -305,8 +305,8 @@ export class Scene {
     if (this.petals.length < 9 && Math.random() < 0.08) {
       const fromRight = Math.random() < 0.6;
       this.petals.push({
-        x: fromRight ? 240 + Math.random() * 70 : 80 + Math.random() * 40,
-        y: fromRight ? 10 + Math.random() * 40 : 30 + Math.random() * 30,
+        x: fromRight ? 160 + Math.random() * 50 : 40 + Math.random() * 40,
+        y: fromRight ? 15 + Math.random() * 30 : 25 + Math.random() * 25,
         vx: -0.25 - Math.random() * 0.35,
         vy: 0.35 + Math.random() * 0.3,
         t: 0,

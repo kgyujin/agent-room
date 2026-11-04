@@ -209,8 +209,6 @@ FRAMES = {
     'read_0': ('front', 'hold', 'stand', 'focus', ('book',), 0),
     'read_1': ('front', 'hold', 'stand', 'focus', ('book2',), 0),
     'carry': ('front', 'down', 'stand', 'normal', ('heldbook',), 0),
-    'op_0': ('front', 'hold', 'stand', 'focus', (), 0),
-    'op_1': ('front', 'hold', 'stand', 'normal', (), 0),
     'wave_0': ('front', 'wave1', 'stand', 'normal', (), 0),
     'wave_1': ('front', 'wave2', 'stand', 'normal', (), 0),
     'stretch_0': ('front', 'up', 'stand', 'happy', (), 0),
