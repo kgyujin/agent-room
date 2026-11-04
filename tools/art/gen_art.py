@@ -36,7 +36,7 @@ C = {k: hexc(v) for k, v in {
 BOOK_COLS = [hexc(h) for h in ('#d06a5f', '#5f8fc9', '#e3b85c', '#7fb07a', '#a77cc2', '#e98aa8', '#6b9fa0', '#c98d58')]
 
 C.update({k: hexc(v) for k, v in {
-    'frame': '#4b3a3e', 'frame_l': '#6f5a5c',
+    'outline': '#3b2a2e', 'frame': '#4b3a3e', 'frame_l': '#6f5a5c',
     'wp': '#cfeae0', 'wp_s': '#bfe1d5', 'wp_d': '#a8d2c4', 'crown': '#fff6ea',
     'wains': '#ebc18d', 'wains_d': '#c99a66', 'wains_l': '#f6d8ae', 'base': '#8a5a40',
     'fl_a': '#efc48e', 'fl_b': '#e6b87f', 'fl_c': '#f3cd9c', 'fl_seam': '#c99764', 'fl_sh': '#cf9d68',
@@ -46,6 +46,7 @@ C.update({k: hexc(v) for k, v in {
     'chair': '#e0675c', 'chair_d': '#b84f47', 'chair_l': '#f08e83',
     'teal': '#6cbcb0', 'teal_d': '#4f9a90', 'teal_l': '#9ad8cc',
     'bean': '#f7d06a', 'bean_d': '#e0ae45', 'bean_l': '#fde39c',
+    'blanket': '#5b8fe0', 'blanket_d': '#4371c0', 'blanket_l': '#7eaaf0', 'tv': '#5c6072',
     'bezel': '#f2ede4', 'bezel_d': '#cfc6b8', 'mach': '#b9c3d6', 'mach_d': '#8f9ab0', 'mach_l': '#d9e0ec',
 }.items()})
 
@@ -230,19 +231,21 @@ def make_furniture():
     s.rect(184, 34, 4, 6, C['glass']); s.rect(184, 37, 4, 3, C['code1']); s.rect(185, 32, 2, 2, C['glass'])
     s.rect(190, 37, 3, 3, C['led_a'])
 
-    # armchair facing the viewer
-    s = furn('sofa', 138)
-    s.rect(12, 108, 32, 12, C['teal'])
-    s.rect(12, 108, 32, 1, C['teal_l'])
-    s.rect(18, 118, 20, 12, C['teal_l'])
-    s.rect(18, 118, 20, 1, shade(C['teal_l'], 1.15))
-    for ax in (12, 38):
-        s.rect(ax, 114, 6, 18, C['teal'])
-        s.rect(ax, 114, 6, 1, C['teal_l'])
-    s.rect(17, 118, 1, 12, C['teal_d']); s.rect(38, 118, 1, 12, C['teal_d'])
-    s.rect(12, 130, 32, 8, C['teal_d'])
-    s.rect(12, 137, 32, 1, shade(C['teal_d'], 0.85))
-    s.rect(14, 138, 2, 1, C['wood_d']); s.rect(40, 138, 2, 1, C['wood_d'])
+    # bed against the left side (rest spot: the character sits on its edge)
+    s = furn('sofa', 148)
+    block(s, 10, 96, 32, 3, 7, C['wood_h'], C['wood_l'])
+    s.rect(11, 106, 30, 40, C['white'])
+    s.rect(15, 107, 22, 8, C['white'])
+    s.rect(15, 114, 22, 1, C['bezel_d'])
+    s.rect(25, 108, 1, 5, C['bezel_d'])
+    s.rect(11, 117, 30, 3, C['crown'])
+    s.rect(11, 119, 30, 1, C['bezel_d'])
+    s.rect(11, 120, 30, 22, C['blanket'])
+    for y in (127, 134):
+        s.rect(11, y, 30, 2, C['blanket_l'])
+    s.rect(40, 117, 1, 25, C['blanket_d'])
+    s.rect(11, 142, 30, 4, C['blanket_d'])
+    s.rect(11, 146, 2, 2, C['wood_d']); s.rect(39, 146, 2, 2, C['wood_d'])
 
     # side table with a mug
     s = furn('table', 138)
@@ -250,14 +253,19 @@ def make_furniture():
     s.rect(50, 131, 2, 7, C['wood']); s.rect(58, 131, 2, 7, C['wood'])
     s.rect(52, 118, 5, 5, C['cream']); s.rect(52, 118, 5, 1, C['lamp_d']); s.put(57, 120, C['cream'])
 
-    # bean bag
-    s = furn('pouf', 154)
-    for y in range(140, 154):
-        for x in range(148, 170):
-            dx, dy = (x - 158.5) / 11, (y - 147.5) / 7.5
-            d = dx * dx + dy * dy
-            if d <= 1:
-                s.put(x, y, C['bean_l'] if dy < -0.45 and dx < 0.2 else C['bean_d'] if dy > 0.5 or dx > 0.7 else C['bean'])
+    # CRT TV on a low stand with a game console on the shelf
+    s = furn('tv', 154)
+    block(s, 142, 140, 24, 4, 10, C['wood_h'], C['wood_l'])
+    s.rect(146, 146, 16, 6, shade(C['wood_d'], 0.8))
+    s.rect(148, 148, 10, 4, C['mach_l']); s.rect(148, 151, 10, 1, C['mach'])
+    s.put(156, 149, C['led_r']); s.rect(150, 149, 3, 1, C['mach_d'])
+    s.rect(145, 123, 18, 18, C['tv']); s.rect(145, 123, 18, 1, shade(C['tv'], 1.3))
+    s.rect(147, 125, 14, 11, C['sky2'])
+    for i in range(4):
+        s.put(149 + i, 126 + i, C['white'])
+    s.rect(147, 135, 14, 1, C['sky1'])
+    s.rect(158, 137, 2, 2, C['led_g'])
+    s.rect(150, 119, 1, 4, C['tv']); s.rect(158, 120, 1, 3, C['tv'])
 
     # big plant in the corner
     s = furn('plant', 162)
@@ -410,7 +418,7 @@ def main():
     make_furniture()
     furniture = []
     for (name, s, base_y) in sorted(FURN, key=lambda f: f[2]):
-        s.outline(factor=0.5)
+        s.outline(color=C['outline'])
         c, x, y = s.crop()
         sprites[name] = (c, x, y)
         furniture.append({'name': name, 'base': base_y})
@@ -458,7 +466,7 @@ def main():
             'shelf': {'x': 24, 'y': 90, 'face': 'ul'},
             'board': {'x': 111, 'y': 72, 'face': 'ur'},
             'bench': {'x': 187, 'y': 90, 'face': 'ur'},
-            'sofa': {'x': 28, 'y': 139, 'face': 'dr', 'z': 13, 'sit': True},
+            'sofa': {'x': 26, 'y': 149, 'face': 'dr', 'z': 9, 'sit': True},
             'center': {'x': 100, 'y': 120, 'face': 'dr'},
             'front': {'x': 112, 'y': 152, 'face': 'dr'},
             'window': {'x': 74, 'y': 72, 'face': 'ul'},
@@ -466,8 +474,8 @@ def main():
         },
         'nodes': {
             'center': [100, 120], 'deskA': [145, 112], 'desk': [145, 99], 'shelfA': [32, 98], 'shelf': [24, 90],
-            'board': [111, 72], 'bench': [187, 90], 'benchA': [180, 110], 'sofaA': [62, 150], 'sofaB': [28, 150],
-            'sofa': [28, 139], 'front': [112, 152], 'window': [74, 72], 'plantcorner': [166, 164],
+            'board': [111, 72], 'bench': [187, 90], 'benchA': [180, 110], 'sofaA': [62, 158], 'sofaB': [26, 158],
+            'sofa': [26, 149], 'front': [112, 152], 'window': [74, 72], 'plantcorner': [166, 164],
         },
         'edges': [['center', 'deskA'], ['deskA', 'desk'], ['center', 'shelfA'], ['shelfA', 'shelf'], ['shelfA', 'window'],
                   ['window', 'board'], ['window', 'center'], ['board', 'center'], ['center', 'benchA'], ['deskA', 'benchA'],

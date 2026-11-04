@@ -125,7 +125,7 @@ export function reduce(img: HTMLImageElement): Skin {
 
 /** built-in original critters (tools/art/gen_critters.py); stored in settings as 'builtin/<id>' */
 export const BUILTIN_CRITTERS: [string, string][] = [
-  ['hamster', '햄스터'], ['rabbit', '토끼'], ['kitten', '회색 고양이'], ['chick', '병아리'],
+  ['shiba', '시바견'], ['cat', '고등어 고양이'],
 ];
 
 function loadUrl(url: string): Promise<Skin> {
