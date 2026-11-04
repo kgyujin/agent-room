@@ -292,11 +292,11 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
   --frame-l: #f7d3cf;
   --box: #fffaf6;
   --ink: #5a3b44;
-  --ink-soft: #94737b;
+  --ink-soft: #7a5c64;
   --line-soft: #f3d9d2;
   --accent: #ff8f9c;
   --accent-soft: #ffe4e6;
-  --accent-ink: #c94f60;
+  --accent-ink: #a83a4b;
   --accent-strong: #d8606f;
   --tint: #fdeeea;
   --tint-2: #f6e3df;
@@ -417,7 +417,7 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .ov-doing { font-size: 11.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
 .ov-meta .bar { width: 70px; }
-.ov-eta { color: var(--work); font-weight: 700; }
+.ov-eta { color: var(--work-ink, var(--work)); font-weight: 700; }
 .ov-step { font-size: 11px; color: var(--ink); background: var(--tint); border-radius: 6px; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel nav button { white-space: nowrap; padding: 4px 8px; }
 .nametag.on { z-index: 1; }
@@ -586,3 +586,11 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* ------------------------------------------------ readable text: status words use darker tones than dots and bars (WCAG AA 4.5:1) */
+:root { --work-ink: #2e6c8c; --wait-ink: #9e5f0b; --ok-ink: #2a7a40; --bad-ink: #b03a35; }
+.tone-work { color: var(--work-ink); }
+.tone-wait { color: var(--wait-ink); }
+.tone-ok { color: var(--ok-ink); }
+.tone-bad { color: var(--bad-ink); }
+.btn.primary, .wl-steps li.now .wl-n { color: color-mix(in srgb, var(--ink) 80%, #000); }
