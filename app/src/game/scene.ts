@@ -36,6 +36,7 @@ export class Scene {
   private restSince = 0;
   insetRight = 0;
   insetBottom = 0;
+  insetTop = 0;
   /** room-only mode: transparent around the room */
   roomOnly = false;
   /** custom characters by agent ('claude', 'codex', 'generic'); demo uses 'generic' */
@@ -107,7 +108,7 @@ export class Scene {
     this.canvas.style.height = `${h / dpr}px`;
     const room = this.atlas.frames.room;
     const availW = Math.max(1, w - this.insetRight * dpr);
-    const availH = Math.max(1, h - this.insetBottom * dpr);
+    const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
     // largest integer scale that fits the room with some sky around it
     const margin = this.roomOnly ? 6 : 16;
     this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
@@ -153,10 +154,11 @@ export class Scene {
 
     // centre the room in the free area
     const freeW = W - (this.insetRight * (window.devicePixelRatio || 1)) / this.scale;
-    const freeH = H - (this.insetBottom * (window.devicePixelRatio || 1)) / this.scale;
+    const top = (this.insetTop * (window.devicePixelRatio || 1)) / this.scale;
+    const freeH = H - top - (this.insetBottom * (window.devicePixelRatio || 1)) / this.scale;
     const room = A.frames.room;
     const ox = Math.floor((freeW - room.w) / 2) - room.dx;
-    const oy = Math.floor((freeH - room.h) / 2) - room.dy;
+    const oy = Math.floor(top + (freeH - room.h) / 2) - room.dy;
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);

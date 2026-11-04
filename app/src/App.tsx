@@ -43,15 +43,9 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [vw, setVw] = useState(window.innerWidth);
   // the status dialog sits under the room; the room is laid out above it
-  const dockRef = useRef<HTMLDivElement>(null);
-  const [dockH, setDockH] = useState(0);
-  useEffect(() => {
-    const el = dockRef.current;
-    if (!el) return setDockH(0);
-    const ro = new ResizeObserver(() => setDockH(el.offsetHeight));
-    ro.observe(el);
-    return () => ro.disconnect();
-  });
+  const [dockRef, dockH] = useHeight();
+  // banners stack above the room so they never cover its wall
+  const [bannersRef, bannersH] = useHeight();
   const [skins, setSkins] = useState<Record<string, Skin>>({});
 
   const list = useMemo(() => Object.values(sessions).sort((a, b) => priority(a) - priority(b) || b.lastEventAt - a.lastEventAt), [sessions]);
@@ -161,8 +155,9 @@ export default function App() {
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
     sc.insetBottom = dockH ? dockH + 24 : 0;
+    sc.insetTop = bannersH && !mini ? bannersH + 10 : 0;
     sc.resize();
-  }, [panelOpen, ready, mini, dockH]);
+  }, [panelOpen, ready, mini, dockH, bannersH]);
 
   // custom characters (local PNGs); reloaded each time the settings window opens
   const reloadSkins = useCallback(async () => {
@@ -274,7 +269,7 @@ export default function App() {
     <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} />
 
-      <div className="banners" style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 56 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 56 }}>
         {!IN_TAURI && !compact && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -364,4 +359,18 @@ function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected
       </div>
     </div>
   );
+}
+
+/** offsetHeight of the referenced element, kept current with a ResizeObserver (0 when unmounted) */
+function useHeight(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return setH(0);
+    const ro = new ResizeObserver(() => setH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return [ref, h];
 }

@@ -252,3 +252,30 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
   .dock .hud { display: block; }
   .dock .hud-grid { margin-top: 10px; padding: 10px 0 0; border-left: none; border-top: 2px dashed var(--frame-l); }
 }
+
+/* ------------------------------------------------ pixel controls: log rail, square checkboxes, step toggles */
+.timeline { padding: 8px 12px 16px 14px; }
+.timeline li { position: relative; grid-template-columns: 56px 1fr; padding: 7px 0 7px 18px; border-bottom: 1px dashed var(--line-soft); --mk: var(--frame-l); }
+.timeline li::before { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 2px; background: var(--frame-l); }
+.timeline li::after { content: ''; position: absolute; left: 0; top: 10px; width: 8px; height: 8px; background: var(--mk); box-shadow: 0 0 0 2px var(--box); }
+.timeline li:first-child::before { top: 10px; }
+.timeline li:last-child::before { bottom: auto; height: 10px; }
+.timeline li.k-turn_start, .timeline li.k-turn_complete { --mk: var(--frame); }
+.timeline li.ok { --mk: var(--ok); }
+.timeline li.bad, .timeline li.k-tool_fail, .timeline li.k-turn_failed { --mk: var(--bad); }
+.timeline li.k-approval, .timeline li.k-input { --mk: var(--wait); }
+.tasks li { gap: 10px; }
+.tasks .box { width: 12px; height: 12px; border: 2px solid var(--frame); border-radius: 0; background: var(--box); margin-top: 1px; }
+.tasks .st-completed { text-decoration: none; }
+.tasks .st-completed .box { background: var(--ok); border-color: #2a6b3b; box-shadow: inset 0 0 0 2px var(--box); }
+.tasks .st-in_progress .box { border-color: #a5661a; background: var(--wait); box-shadow: inset 0 0 0 2px var(--box); }
+.toggle i { width: 32px; height: 18px; border: 2px solid var(--frame); background: #d8dde8; transition: none; }
+.toggle i::after { top: 2px; left: 2px; width: 10px; height: 10px; background: var(--frame); box-shadow: none; transition: none; }
+.toggle input:checked + i { background: var(--ok); }
+.toggle input:checked + i::after { left: 16px; background: var(--box); }
+.field select { appearance: none; -webkit-appearance: none; padding-right: 22px; background: var(--box) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h8v1H0zM1 1h6v1H1zM2 2h4v1H2zM3 3h2v1H3z' fill='%234b5a86'/%3E%3C/svg%3E") no-repeat right 8px center; cursor: pointer; }
+.tool.on { background: #e8ecf6; color: var(--frame); }
+.tool:hover { background: #e8ecf6; }
+.tab.on { background: #e8ecf6; border-color: #2c3554; }
+.tab .dot { border-radius: 0; }
+.tasks + p, .pad > p.muted.small { margin-top: 12px; }
