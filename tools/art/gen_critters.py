@@ -8,151 +8,79 @@ import os
 from pix import Spr, from_map, hexc
 
 OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'app', 'public', 'assets', 'critters')
-INK = hexc('#3a2e38')
+INK = hexc('#3b2a2a')
 
-COMMON = {'k': INK, 'e': hexc('#2b2230'), 'h': hexc('#ffffff'), 'p': hexc('#f59fae'), 'n': hexc('#c95f73'), 's': hexc('#f7c9c0')}
-
-def layered(back, front, dx):
-    """front map over back map shifted right by dx (same height)"""
-    w = max(len(front[0]), dx + len(back[0]))
-    out = []
-    for b, f in zip(back, front):
-        row = list(('.' * dx + b).ljust(w, '.'))
-        for x, ch in enumerate(f):
-            if ch != '.':
-                row[x] = ch
-        out.append(''.join(row))
-    return out
-
-
-CHIPMUNK_TAIL = [
-    "......TTT..",
-    "....TTtttT.",
-    "...TttttttT",
-    "..TttSSSttT",
-    "..TtSttttTT",
-    "..TtSttT...",
-    "..TtStT....",
-    "..TtStT....",
-    "...TStT....",
-    "...TStT....",
-    "...TSttT...",
-    "...TSttT...",
-    "...TSttT...",
-    "...TSttT...",
-    "..TStttT...",
-    ".TSttttT...",
-    "TSttttT....",
-    "TSttT......",
-    "TTTT.......",
-    "...........",
-    "...........",
-]
-CHIPMUNK_BODY = [
-    "...............",
-    "...............",
-    "...OO.....OO...",
-    "..OppO...OppD..",
-    "..OOOOOOOOOOD..",
-    ".OOOOOOOOOOOOD.",
-    ".OOOOOOOOOOOOD.",
-    "OOheOOOOOOheODD",
-    "OOeeOOOOOOeeODD",
-    "OOeeOOOOOOeeODD",
-    "OWWWWOnnOWWWWDD",
-    "WWppWkWWkWppWWD",
-    "WWWWWWkkWWWWWWD",
-    ".WWWWWWWWWWWWD.",
-    ".OWWWccccWWWOD.",
-    "OOWWsaaaAsWWOD.",
-    ".OWWWsaAsWWWOD.",
-    ".OOWWWWWWWWWOD.",
-    "..OOWWWWWWWODD.",
-    "...DDDDDDDDDD..",
-    "....ss....ss...",
-]
+COMMON = {'k': hexc('#2b1f22'), 'e': hexc('#2b2230'), 'h': hexc('#ffffff'), 'p': hexc('#f59fae'), 'n': hexc('#c95f73'), 's': hexc('#f7c9c0')}
 
 CRITTERS = {
-    # golden hamster with cream cheeks, paws held at the chest
-    'hamster': ({
-        'O': hexc('#eea95a'), 'D': hexc('#cf8642'), 'W': hexc('#fff3e0'), 'w': hexc('#ead2b4'),
-    }, [
-        "..OOO............OOO..",
-        ".OpppO..........OpppD.",
-        ".OppOOOOOOOOOOOOOOppD.",
-        "..OOOOOOOOOOOOOOOOOD..",
-        ".OOOOOOOOOOOOOOOOOOOD.",
-        ".OOOOOOOOOOOOOOOOOOOD.",
-        "OOOOheOOOOOOOOOOheOODD",
-        "OOOOeeOOOOOOOOOOeeOODD",
-        "OOOOeeOOOOOOOOOOeeOODD",
-        "OOOWWWWWOOOOOOWWWWWODD",
-        "OOWWWWWWWWnnWWWWWWWWOD",
-        "OWWppWWWWkWWkWWWWppWWD",
-        "OWWWWWWWWWkkWWWWWWWWWD",
-        "OWWWWWWWWWWWWWWWWWWWWD",
-        ".WWWWWWWssWWssWWWWWWw.",
-        ".OWWWWWWssWWssWWWWWwD.",
-        "..OWWWWWWWWWWWWWWWwD..",
-        "...OOWWWWWWWWWWWWwDD..",
-        "....DDDDDDDDDDDDDDD...",
-        ".....ss.........ss....",
+    # golden hamster: white face and belly, golden back showing at the sides
+    'hamster': ({'G': hexc('#f0b765'), 'g': hexc('#d99a4e'), 'W': hexc('#fffaf2')}, [
+        "..GG.......GG..",
+        ".GgGGGGGGGGGgG.",
+        ".GGGGGWWWGGGGG.",
+        "GGGWWWWWWWWWGGG",
+        "GGWWWWWWWWWWWGG",
+        "GGWWkWWWWWkWWGG",
+        "GGWWkWWnWWkWWGg",
+        "GGWpWWWWWWWpWGg",
+        "GGWWWWWWWWWWWGg",
+        ".GWWWWWWWWWWWg.",
+        "WGWWWWWWWWWWWgW",
+        ".GGWWWWWWWWWgg.",
+        "..gGGGGGGGGGg..",
+        "...gg.....gg...",
     ]),
-    # white rabbit with long ears and lavender shading
-    'rabbit': ({
-        'W': hexc('#fffaf6'), 'V': hexc('#ddd3e6'), 'v': hexc('#c3b6d3'),
-    }, [
-        "....WW........WW....",
-        "...WppW......WppV...",
-        "...WppW......WppV...",
-        "...WppW......WppV...",
-        "...WppW......WppV...",
-        "...WWWW......WWVV...",
-        "..WWWWWWWWWWWWWWWV..",
-        ".WWWWWWWWWWWWWWWWWV.",
-        ".WWWWWWWWWWWWWWWWWV.",
-        "WWWheWWWWWWWWWheWWVV",
-        "WWWeeWWWWWWWWWeeWWVV",
-        "WWWeeWWWWWWWWWeeWWVV",
-        "WWppWWWWWnnWWWWppWVV",
-        "WWWWWWWWkWWkWWWWWWVV",
-        ".WWWWWWWWkkWWWWWWVV.",
-        ".WWWWWWVWWWWVWWWWVV.",
-        "..WWWWWVWWWWVWWWVV..",
-        "...VWWWWWWWWWWWVVv..",
-        "....vvvvvvvvvvvvv...",
+    # white rabbit with tall ears
+    'rabbit': ({'W': hexc('#fffaf6'), 'V': hexc('#e3d9ec')}, [
+        "...WW.....WW...",
+        "..WppW...WppV..",
+        "..WppW...WppV..",
+        "..WppW...WppV..",
+        "..WWWWWWWWWWV..",
+        ".WWWWWWWWWWWWV.",
+        "WWWWWWWWWWWWWVV",
+        "WWWWkWWWWWkWWVV",
+        "WWWWkWWnWWkWWVV",
+        "WWWpWWWWWWWpWVV",
+        ".WWWWWWWWWWWWV.",
+        "WWWWWWWWWWWWVVW",
+        ".WWWWWWWWWWWVV.",
+        "..VVVVVVVVVVV..",
+        "...VV.....VV...",
     ]),
-    # chipmunk with a big striped tail, holding an acorn
-    'chipmunk': ({
-        'O': hexc('#dd9156'), 'D': hexc('#b56c3d'), 'W': hexc('#fdebd3'),
-        'S': hexc('#6e4233'), 'T': hexc('#c97d48'), 't': hexc('#f0b47a'),
-        'a': hexc('#d9a35b'), 'A': hexc('#b07a3c'), 'c': hexc('#7b5236'),
-    }, layered(CHIPMUNK_TAIL, CHIPMUNK_BODY, 13)),
-    # grey tabby kitten with a curled tail
-    'kitten': ({
-        'O': hexc('#aeb4c8'), 'D': hexc('#8a90a8'), 'S': hexc('#6f7591'), 'W': hexc('#fbf7f4'),
-        'w': hexc('#e2dce0'),
-    }, [
-        "..O.............O.....",
-        ".OOO...........OOD....",
-        ".OpOO.........OOpD....",
-        ".OppOOOSOSOSOOOppD....",
-        ".OOOOOOOSOSOOOOOOD....",
-        "OOOOOOOOOOOOOOOOOODD..",
-        "OOOheOOOOOOOOOheOODD..",
-        "OOOeeOOOOOOOOOeeOODD..",
-        "OOOeeOOOOOOOOOeeOODD..",
-        "OOWWWWWWWnnWWWWWWODD..",
-        "OWppWWWWkWWkWWWWppWD..",
-        "OWWWWWWWWkkWWWWWWWWD..",
-        ".OWWWWWWWWWWWWWWWWD...",
-        "..OOWWWWWWWWWWWWDD..O.",
-        "..OOOWWWWWWWWWWSDD.OSD",
-        ".OOOSWWWWWWWWWWSDD.OD.",
-        ".OOOOWWWWWWWWWWODD.OD.",
-        ".OOOOWwWWWWWWwWODDOSD.",
-        "..OOOWwWWWWWWwWOOOSD..",
-        "...DDDWWDDDDWWDDDDD...",
+    # grey tabby kitten with a tail flicking up on the right
+    'kitten': ({'G': hexc('#a7aec4'), 'g': hexc('#868da6'), 'W': hexc('#fffaf6'), 'V': hexc('#e6e0e8')}, [
+        ".G.........G.....",
+        ".GG.......GG.....",
+        ".GpGGGgGGGpG.....",
+        "GGGGGGgGGGGGG....",
+        "GGGWWWWWWWWGGG...",
+        "GGWWWWWWWWWWGG...",
+        "GWWWkWWWWWkWWG...",
+        "GWWWkWWnWWkWWG.G.",
+        "GWWpWWWWWWWpWG.Gg",
+        ".WWWWWWWWWWWWV.Gg",
+        "WWWWWWWWWWWWVVWGg",
+        ".WWWWWWWWWWWVVGg.",
+        "..GVVVVVVVVVGGg..",
+        "...GG.....GG.....",
+    ]),
+    # round yellow chick with a little tuft
+    'chick': ({'Y': hexc('#ffe27a'), 'y': hexc('#f4c64f'), 'o': hexc('#f29a4a')}, [
+        ".......Y.......",
+        "......YY.......",
+        "....YYYYYYY....",
+        "..YYYYYYYYYYY..",
+        ".YYYYYYYYYYYYy.",
+        ".YYYkYYYYYkYYy.",
+        "YYYYkYYooYkYYyy",
+        "YYYpYYYooYYpYyy",
+        "yYYYYYYYYYYYYyy",
+        "YyYYYYYYYYYYyYy",
+        ".yYYYYYYYYYYyy.",
+        "..yyYYYYYYyyy..",
+        "....yyyyyyy....",
+        "....oo...oo....",
     ]),
 }
 
