@@ -292,11 +292,11 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
   --frame-l: #f7d3cf;
   --box: #fffaf6;
   --ink: #5a3b44;
-  --ink-soft: #94737b;
+  --ink-soft: #7a5c64;
   --line-soft: #f3d9d2;
   --accent: #ff8f9c;
   --accent-soft: #ffe4e6;
-  --accent-ink: #c94f60;
+  --accent-ink: #a83a4b;
   --accent-strong: #d8606f;
   --tint: #fdeeea;
   --tint-2: #f6e3df;
@@ -417,7 +417,7 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .ov-doing { font-size: 11.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
 .ov-meta .bar { width: 70px; }
-.ov-eta { color: var(--work); font-weight: 700; }
+.ov-eta { color: var(--work-ink, var(--work)); font-weight: 700; }
 .ov-step { font-size: 11px; color: var(--ink); background: var(--tint); border-radius: 6px; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel nav button { white-space: nowrap; padding: 4px 8px; }
 .nametag.on { z-index: 1; }
@@ -436,8 +436,14 @@ html.view-island, html.view-island body, html.view-island #root { background: tr
 .pop-foot button:hover { border-color: var(--accent); }
 .pop-foot .quit { color: var(--ink-soft); padding: 6px 10px; }
 
-.island { position: absolute; top: 0; left: 0; right: 0; background: #0b0b0f; color: #f4f1ec; border-radius: 0 0 16px 16px; overflow: hidden; cursor: default; font-size: 12px; }
-.island.open { border-radius: 0 0 22px 22px; }
+.island { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #0b0b0f; color: #f4f1ec; border-radius: 0 0 17px 17px; overflow: hidden; cursor: default; font-size: 12px;
+  /* spring-like morph between the pill and the open card */
+  transition: width 0.36s cubic-bezier(0.3, 1.3, 0.5, 1), height 0.36s cubic-bezier(0.3, 1.3, 0.5, 1), border-radius 0.36s ease;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06), 0 6px 18px rgba(0, 0, 0, 0.18); }
+.island.open { border-radius: 0 0 28px 28px; }
+.island.open .is-list { animation: is-in 0.26s 0.08s ease-out both; }
+.island.open .is-lim { animation: is-in 0.26s 0.14s ease-out both; }
+@keyframes is-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
 .is-bar { height: 34px; display: flex; align-items: center; padding: 0 12px; }
 .is-left, .is-right { flex: 1; display: flex; align-items: center; gap: 5px; min-width: 0; }
 .is-right { justify-content: flex-end; }
@@ -447,7 +453,7 @@ html.view-island, html.view-island body, html.view-island #root { background: tr
 .is-who.t-bad { box-shadow: 0 0 0 1.5px var(--bad); }
 .is-dim { color: #8a8790; font-size: 11px; }
 .is-alert { color: #ffb648; font-weight: 800; animation: isblink 1.2s ease-in-out infinite; }
-@keyframes isblink { 50% { opacity: 0.45; } }
+@keyframes isblink { 50% { opacity: 0.6; } }
 .is-work { display: flex; align-items: center; gap: 5px; color: #9fd0ff; font-weight: 700; }
 .is-work i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.4s ease-in-out infinite; }
 .is-ok { color: #8be09a; font-weight: 700; }
@@ -578,7 +584,6 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .ov-stat b { display: inline-block; transition: transform 0.2s; }
 .modal { animation: pop-in 0.16s ease-out; }
 .modal-bg { animation: fade 0.16s ease-out; }
-.is-list, .is-lim { animation: fade 0.18s ease-out; }
 .tool:active, .btn:active, .tab:active { transform: translateY(1px); }
 @keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
@@ -586,3 +591,28 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* ------------------------------------------------ readable text: status words use darker tones than dots and bars (WCAG AA 4.5:1) */
+:root { --work-ink: #2e6c8c; --wait-ink: #9e5f0b; --ok-ink: #2a7a40; --bad-ink: #b03a35; }
+.tone-work { color: var(--work-ink); }
+.tone-wait { color: var(--wait-ink); }
+.tone-ok { color: var(--ok-ink); }
+.tone-bad { color: var(--bad-ink); }
+.btn.primary, .wl-steps li.now .wl-n { color: color-mix(in srgb, var(--ink) 80%, #000); }
+/* readable small labels (AA) */
+:root { --muted-ink: #6f6369; --calm-ink: #4c7a3b; }
+.tag.demo { color: #5f45a6; }
+.tag.st-none, .tone-muted { color: var(--muted-ink); }
+.tone-calm { color: var(--calm-ink); }
+.callout.bad, .callout.bad code { color: #9c2f2b; }
+.timeline li.bad span { color: var(--bad-ink); }
+.timeline li.ok span { color: var(--ok-ink); }
+.btn.danger { color: var(--bad-ink); border-color: var(--bad-ink); }
+
+/* open island: the top row names the counts instead of repeating the icons */
+.is-head { color: #b9b3ad; font-size: 11.5px; font-weight: 700; }
+.is-lim b { font-weight: 600; color: #8a8790; }
+/* settings keep one height while switching tabs, so the dialog does not jump */
+.modal { height: min(600px, calc(100vh - 40px)); }
+.modal-body { flex: 1; }
+.island.open .is-head, .island.open .is-right { animation: fade 0.22s 0.06s ease-out both; }

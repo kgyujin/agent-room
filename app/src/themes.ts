@@ -20,11 +20,11 @@ const t = (id: string, name: string, bd: [string, string], c: string[]): UiTheme
 };
 
 export const UI_THEMES: UiTheme[] = [
-  t('peach', '복숭아', ['#fbe3dc', '#e7b9b0'], ['#d98a8f', '#f7d3cf', '#fffaf6', '#5a3b44', '#94737b', '#f3d9d2', '#ff8f9c', '#ffe4e6', '#c94f60', '#d8606f', '#fdeeea', '#f6e3df', '#fbe8e0']),
-  t('mint', '민트', ['#e2f4ec', '#a9d6c5'], ['#6fb5a0', '#cdeadf', '#f7fdfa', '#2f4a42', '#6b8a80', '#d6eee5', '#5cc3a3', '#dcf5ec', '#2f8a6e', '#3e9e80', '#e9f7f1', '#dcefe7', '#e3f4ee']),
-  t('sky', '하늘', ['#e4eefc', '#a9c0e6'], ['#7f9fd6', '#d3e0f7', '#f8fbff', '#33405a', '#6f7d98', '#dbe5f5', '#6f9df0', '#e1ebfd', '#3e63b5', '#5079cc', '#eaf1fd', '#dfe8f8', '#e6eefb']),
-  t('lavender', '라벤더', ['#efe8fb', '#c3b2e3'], ['#a58bd0', '#e3d8f5', '#fcfaff', '#45395a', '#807296', '#e8def5', '#b394ec', '#efe6fd', '#7552b8', '#8a68cc', '#f3edfc', '#e9e0f7', '#efe8fa']),
-  t('lemon', '레몬', ['#fdf4d8', '#e6cf93'], ['#d6a94e', '#f5e2b5', '#fffdf5', '#574628', '#8f7a55', '#f3e6c6', '#f2bf3c', '#fdf1cf', '#a8751a', '#c48e22', '#fdf5df', '#f6ebcd', '#faf0d6']),
+  t('peach', '복숭아', ['#fbe3dc', '#e7b9b0'], ['#d98a8f', '#f7d3cf', '#fffaf6', '#5a3b44', '#7a5c64', '#f3d9d2', '#ff8f9c', '#ffe4e6', '#a83a4b', '#d8606f', '#fdeeea', '#f6e3df', '#fbe8e0']),
+  t('mint', '민트', ['#e2f4ec', '#a9d6c5'], ['#6fb5a0', '#cdeadf', '#f7fdfa', '#2f4a42', '#56756b', '#d6eee5', '#5cc3a3', '#dcf5ec', '#236b55', '#3e9e80', '#e9f7f1', '#dcefe7', '#e3f4ee']),
+  t('sky', '하늘', ['#e4eefc', '#a9c0e6'], ['#7f9fd6', '#d3e0f7', '#f8fbff', '#33405a', '#5a6884', '#dbe5f5', '#6f9df0', '#e1ebfd', '#3e63b5', '#5079cc', '#eaf1fd', '#dfe8f8', '#e6eefb']),
+  t('lavender', '라벤더', ['#efe8fb', '#c3b2e3'], ['#a58bd0', '#e3d8f5', '#fcfaff', '#45395a', '#6b5d82', '#e8def5', '#b394ec', '#efe6fd', '#7552b8', '#8a68cc', '#f3edfc', '#e9e0f7', '#efe8fa']),
+  t('lemon', '레몬', ['#fdf4d8', '#e6cf93'], ['#d6a94e', '#f5e2b5', '#fffdf5', '#574628', '#75613c', '#f3e6c6', '#f2bf3c', '#fdf1cf', '#87600f', '#c48e22', '#fdf5df', '#f6ebcd', '#faf0d6']),
 ];
 
 /** backdrop choices; 'theme' follows the colour theme, '#rrggbb' is the user's own colour */

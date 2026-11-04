@@ -39,11 +39,11 @@ export function Welcome({ detected, onDemo, onSettings }: { detected: Overview['
                   {h.installed === 'full' ? (
                     <span className="wl-ok">연결됨</span>
                   ) : (
-                    <button className="btn small primary" disabled={busy !== null} onClick={() => install(h.agent)}>
-                      {busy === h.agent ? '연결 중…' : '연결'}
+                    <button className={`btn small ${h.agentDetected ? 'primary' : ''}`} disabled={busy !== null} onClick={() => install(h.agent)}>
+                      {busy === h.agent ? '연결 중…' : '연결하기'}
                     </button>
                   )}
-                  {!h.agentDetected && h.installed !== 'full' && <small className="muted">이 컴퓨터에서 아직 못 찾았어요</small>}
+                  {!h.agentDetected && h.installed !== 'full' && <small className="muted">아직 설치되지 않았어요 · 미리 연결해 둘 수 있어요</small>}
                 </div>
               ))}
             </div>
