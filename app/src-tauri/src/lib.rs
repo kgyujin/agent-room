@@ -447,18 +447,22 @@ fn float_over_menu_bar(win: &WebviewWindow) {
     }
 }
 
-/// Shows or hides the island at the top centre of the primary screen.
+/// Shows the island at the top centre of the primary screen, or removes it. The island's web
+/// view only exists while the setting is on, so a turned-off island costs no memory.
 fn show_island(app: &AppHandle, on: bool) {
-    let Some(w) = app.get_webview_window("island") else { return };
-    if on {
-        let size = w.inner_size().ok().map(|s| s.to_logical::<f64>(w.scale_factor().unwrap_or(1.0)));
-        if let Some(s) = size {
-            place_island(app, &w, s.width, s.height);
+    let existing = app.get_webview_window("island");
+    if !on {
+        if let Some(w) = existing {
+            let _ = w.destroy();
         }
-        let _ = w.show();
-    } else {
-        let _ = w.hide();
+        return;
     }
+    let Some(w) = existing.or_else(|| extra_window(app, "island", 340.0, 34.0, true).ok()) else { return };
+    let size = w.inner_size().ok().map(|s| s.to_logical::<f64>(w.scale_factor().unwrap_or(1.0)));
+    if let Some(s) = size {
+        place_island(app, &w, s.width, s.height);
+    }
+    let _ = w.show();
 }
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
@@ -479,8 +483,10 @@ fn island_layout(app: AppHandle, width: f64, height: f64) {
 }
 
 /// Opens the popover under the menu bar icon (or closes it when it is already open).
+/// The popover's web view is made on the first click, not at launch.
 fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
-    let Some(w) = app.get_webview_window("tray") else { return };
+    let existing = app.get_webview_window("tray");
+    let Some(w) = existing.or_else(|| extra_window(app, "tray", 360.0, 480.0, false).ok()) else { return };
     if w.is_visible().unwrap_or(false) {
         let _ = w.hide();
         return;
@@ -742,8 +748,6 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            extra_window(&handle, "tray", 360.0, 480.0, false)?;
-            extra_window(&handle, "island", 340.0, 34.0, true)?;
             show_island(&handle, island_on);
             Ok(())
         })
