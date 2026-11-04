@@ -44,9 +44,11 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
         working-directory: app
-      - name: Build .app / .dmg (unsigned)
+      - name: Build .app / .dmg (unsigned; update signing only happens in the release workflow)
         working-directory: app
-        run: npm run app:build
+        run: |
+          node scripts/build-hook.mjs --release
+          npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Verify ad-hoc signature
         run: codesign --verify --deep --strict --verbose=2 "target/release/bundle/macos/Agent Room.app"
       - uses: actions/upload-artifact@v4

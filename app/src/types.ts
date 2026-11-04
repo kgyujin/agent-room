@@ -74,6 +74,8 @@ export interface Settings {
   showTokens: boolean;
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
   characters: Record<string, string>;
+  /** built-in critter id -> fur colour (hex) */
+  critterColors: Record<string, string>;
 }
 
 export interface CharacterFile { name: string; bytes: number[] }
@@ -84,3 +86,5 @@ export interface Overview {
   serverError: string | null;
   demoRunning: boolean;
 }
+
+export interface SoundFile { event: string; bytes: number[] }

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { backend, DEFAULT_SETTINGS, IN_TAURI, win } from './bridge';
+import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, type AppUpdate } from './bridge';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
-import { Scene, type Theme } from './game/scene';
-import { BUILTIN_CRITTERS, DEFAULT_CHARACTERS, loadBuiltin, loadSkin, type Skin } from './game/skin';
+import { Scene, type Anchor, type Theme } from './game/scene';
+import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud, MiniPill } from './ui/Hud';
 import { DetailPanel } from './ui/DetailPanel';
@@ -37,6 +37,18 @@ export default function App() {
   const [pinned, setPinned] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [mini, setMini] = useState(false);
+  // update available on GitHub Releases (checked at launch and every 6 hours)
+  const [update, setUpdate] = useState<AppUpdate | null>(null);
+  const [updating, setUpdating] = useState<number | null>(null);
+  useEffect(() => {
+    const run = () => void checkUpdate().then(setUpdate);
+    run();
+    const id = window.setInterval(run, 6 * 3600_000);
+    return () => clearInterval(id);
+  }, []);
+  // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
+  const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
   const [settingsOpen, setSettingsOpen] = useState<null | 'general' | 'agents' | 'dev'>(null);
   const [detailTab, setDetailTab] = useState<'timeline' | 'tasks' | 'session'>('timeline');
   const [now, setNow] = useState(Date.now());
@@ -52,7 +64,7 @@ export default function App() {
   const realSessions = list.filter((s) => !s.isDemo);
   const selected = (pinned && sessions[pinned]) || list[0] || null;
   const compact = mini || vw < 560;
-  const panelOpen = settings.panelOpen && !mini && vw >= 720 && selected !== null;
+  const panelOpen = settings.panelOpen && !mini && !office && vw >= 720 && selected !== null;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -147,35 +159,44 @@ export default function App() {
   useEffect(() => {
     const sc = sceneRef.current;
     if (!sc) return;
-    sc.setView({ session: selected, empty: list.length === 0 });
-  }, [selected, list.length, ready]);
+    // ended sessions leave the office; live ones each get a desk and a critter
+    sc.setSessions(list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost'));
+  }, [list, ready]);
 
   useEffect(() => {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
     sc.insetBottom = dockH ? dockH + 24 : 0;
-    sc.insetTop = bannersH && !mini ? bannersH + 10 : 0;
+    sc.insetTop = mini ? 0 : bannersH ? bannersH + 56 : 44;
     sc.resize();
   }, [panelOpen, ready, mini, dockH, bannersH]);
 
-  // custom characters (local PNGs); reloaded each time the settings window opens
+  // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
+  const colorsKey = JSON.stringify(settings.critterColors ?? {});
   const reloadSkins = useCallback(async () => {
+    const colors: Record<string, string> = JSON.parse(colorsKey);
     const files = await backend.listCharacters().catch(() => []);
     const loaded = await Promise.all([
-      ...BUILTIN_CRITTERS.map(([id]) => loadBuiltin(id).then((sk) => [`builtin/${id}`, sk] as const).catch(() => null)),
+      ...BUILTIN_CRITTERS.map(([id]) => loadBuiltin(id, colors[id]).then((sk) => [`builtin/${id}`, sk] as const).catch(() => null)),
       ...files.map((f) => loadSkin(f.bytes).then((sk) => [f.name, sk] as const).catch(() => null)),
     ]);
     setSkins(Object.fromEntries(loaded.filter((x) => x !== null)));
-  }, []);
+  }, [colorsKey]);
   useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
+
+  // the user's own effect sounds
+  const reloadSounds = useCallback(async () => {
+    soundRef.current.setCustom(await backend.listSounds().catch(() => []));
+  }, []);
+  useEffect(() => { void reloadSounds(); }, [reloadSounds]);
 
   useEffect(() => {
     const sc = sceneRef.current;
     if (!sc) return;
-    sc.skins = Object.fromEntries(
-      Object.entries({ ...DEFAULT_CHARACTERS, ...settings.characters }).flatMap(([agent, name]) => (skins[name] ? [[agent, skins[name]]] : [])),
-    );
+    sc.skins = skins;
+    sc.prefs = skinPrefs(settings.characters ?? {}, Object.keys(skins).filter((k) => !k.startsWith('builtin/')));
+    sc.assignSkins();
   }, [settings.characters, skins, ready]);
 
   useEffect(() => {
@@ -248,7 +269,9 @@ export default function App() {
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     soundRef.current.unlock();
     const r = e.currentTarget.getBoundingClientRect();
-    if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top) && selected) {
+    const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
+    if (hit && sessions[hit]) {
+      setPinned(hit);
       setDetailTab('session');
       if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
       if (mini) void toggleMini(false);
@@ -274,22 +297,30 @@ export default function App() {
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 56 }}>
-        {!IN_TAURI && !compact && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
+        {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
             {compact ? '데모 · 실제 Agent 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 Agent 아님)'}
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}
+        {update && !compact && (
+          <div className="banner update">
+            {updating === null ? <>새 버전 {update.version}이 나왔어요</> : <>업데이트 받는 중… {updating}%</>}
+            {updating === null && <button onClick={() => { setUpdating(0); update.install(setUpdating).catch(() => setUpdating(null)); }}>업데이트</button>}
+          </div>
+        )}
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      {!compact && (
+      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini} />
+
+      {!compact && !office && (
         <div className="topleft">
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
       )}
-      {!compact && (
+      {!compact && !office && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} showTokens={settings.showTokens} />
@@ -314,8 +345,9 @@ export default function App() {
         />
       )}
 
-      <div className="toolbar" style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+      <div className={`toolbar ${office ? 'faded' : ''}`} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
         {!mini && vw >= 720 && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
+        {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
         {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
@@ -334,6 +366,8 @@ export default function App() {
           realCount={realSessions.length}
           characters={Object.keys(skins).filter((k) => !k.startsWith('builtin/'))}
           onCharactersChanged={reloadSkins}
+          sound={soundRef.current}
+          onSoundsChanged={reloadSounds}
         />
       )}
     </div>
@@ -367,6 +401,42 @@ function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected
 }
 
 /** offsetHeight of the referenced element, kept current with a ResizeObserver (0 when unmounted) */
+/** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
+function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean }) {
+  const [anchors, setAnchors] = useState<Anchor[]>([]);
+  useEffect(() => {
+    let raf = 0;
+    let last = '';
+    const loop = () => {
+      const a = scene.current?.anchors() ?? [];
+      const sig = a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
+      if (sig !== last) {
+        last = sig;
+        setAnchors(a);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [scene]);
+  if (hidden) return null;
+  return (
+    <div className="nametags">
+      {anchors.map((a) => {
+        const s = sessions[a.key];
+        if (!s) return null;
+        const who = s.isDemo ? '데모' : AGENT_NAME[s.agent].split(' ')[0];
+        return (
+          <button key={a.key} className={`nametag a-${s.isDemo ? 'demo' : s.agent} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+            <b>{who}</b>
+            {s.project && <span>{s.project}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const IS_MAC = /Mac/.test(navigator.userAgent);
 
 function useHeight(): [React.RefObject<HTMLDivElement | null>, number] {

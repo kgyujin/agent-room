@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
-import { BUILTIN_CRITTERS, DEFAULT_CHARACTERS } from '../game/skin';
+import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_CHARACTERS } from '../game/skin';
+import type { Sfx, Sound } from '../game/audio';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
 
@@ -16,6 +17,8 @@ export function SettingsModal(props: {
   realCount: number;
   characters: string[];
   onCharactersChanged: () => Promise<void>;
+  sound: Sound;
+  onSoundsChanged: () => Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const { settings: s, onChange } = props;
@@ -51,6 +54,7 @@ export function SettingsModal(props: {
               <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
               <Toggle label="토큰 사용량 표시 (로컬 로그 기준)" v={s.showTokens} on={(v) => set('showTokens', v)} />
               <AutostartToggle />
+              <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
             </>
           )}
           {tab === 'characters' && <Characters settings={s} onChange={onChange} names={props.characters} onAdded={props.onCharactersChanged} />}
@@ -59,6 +63,55 @@ export function SettingsModal(props: {
         </div>
       </div>
     </div>
+  );
+}
+
+const SOUND_EVENTS: [Sfx, string][] = [['start', '작업 시작'], ['done', '작업 완료'], ['alert', '승인·입력 요청'], ['error', '오류']];
+
+/** pick your own file per effect; stored in ~/.agent-room/sounds, played instead of the built-in tone */
+function Sounds({ sound, onChanged }: { sound: Sound; onChanged: () => Promise<void> }) {
+  const [mine, setMine] = useState<string[]>([]);
+  const [note, setNote] = useState<string | null>(null);
+  const refresh = useCallback(async () => setMine((await backend.listSounds().catch(() => [])).map((f) => f.event)), []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  const pick = async (ev: string, f: File | undefined) => {
+    if (!f) return;
+    try {
+      await backend.saveSound(ev, f.name, Array.from(new Uint8Array(await f.arrayBuffer())));
+      setNote(null);
+    } catch (e) {
+      setNote(String(e));
+    }
+    await onChanged();
+    await refresh();
+  };
+  const reset = async (ev: string) => {
+    await backend.removeSound(ev).catch(() => undefined);
+    await onChanged();
+    await refresh();
+  };
+  return (
+    <>
+      <h4>효과음 바꾸기</h4>
+      {SOUND_EVENTS.map(([ev, label]) => (
+        <div key={ev} className="field">
+          <span>{label} <small className="muted">· {mine.includes(ev) ? '내 파일' : '기본음'}</small></span>
+          <div className="row tight">
+            <button className="btn small" onClick={() => { sound.unlock(); sound.play(ev, true); }}>듣기</button>
+            <label className="btn small">
+              파일 고르기
+              <input type="file" accept=".mp3,.wav,.ogg,.m4a,audio/*" hidden onChange={(e) => { void pick(ev, e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+            {mine.includes(ev) && <button className="btn small" onClick={() => void reset(ev)}>기본음</button>}
+          </div>
+        </div>
+      ))}
+      {note && <p className="small">{note}</p>}
+      <p className="muted small">
+        2MB 이하 mp3·wav·ogg·m4a 파일을 고르면 그 소리로 바뀌어요. 다른 사이트에서 받은 소리는 그 사이트의 이용 조건을 확인하고 써 주세요. 파일은 이
+        컴퓨터의 ~/.agent-room/sounds 폴더에만 저장돼요.
+      </p>
+    </>
   );
 }
 
@@ -135,6 +188,27 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
           </select>
         </Field>
       ))}
+      <h4>펫 색 바꾸기</h4>
+      {BUILTIN_CRITTERS.map(([id, label]) => {
+        const cur = s.critterColors?.[id];
+        const setColor = (c?: string) => {
+          const next = { ...(s.critterColors ?? {}) };
+          if (c) next[id] = c;
+          else delete next[id];
+          onChange({ ...s, critterColors: next });
+        };
+        return (
+          <div key={id} className="field">
+            <span>{label}</span>
+            <div className="swatches">
+              <button className={`swatch orig ${!cur ? 'on' : ''}`} onClick={() => setColor()} title="원래 색" aria-label={`${label} 원래 색`} />
+              {CRITTER_COLORS.map((c) => (
+                <button key={c} className={`swatch ${cur === c ? 'on' : ''}`} style={{ background: c }} onClick={() => setColor(c)} aria-label={`${label} 색 ${c}`} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
       <div className="char-add">
         <div>
           <b>포켓몬 도트도 넣을 수 있어요</b>

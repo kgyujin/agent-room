@@ -7,6 +7,7 @@ the face is stamped on afterwards. Output per critter is a 6-frame strip the app
 slices: front, walk front x2, back, walk back x2.
 Run `python3 gen_critters.py` (writes app/public/assets/critters).
 """
+import json
 import os
 from PIL import Image
 
@@ -113,14 +114,19 @@ BLUSH = hexc('#ff9fb0')
 MOUTH = hexc('#7a3b46')
 
 
+EYE_MID = hexc('#7a5368')
+
+
 def eyes(cv, y, gap=4, tall=3):
-    """big glossy eyes: 2 px wide, `tall` px high, white shine top-left (same side on both eyes)"""
+    """big sparkly eyes: 3 px wide, `tall`+1 px high, white shine top-left and a soft
+    lower glint (same pattern on both eyes, so the light comes from one side)"""
     for side in (-1, 1):
-        x0 = 12 + side * gap - (1 if side < 0 else 0)
-        for dy in range(tall):
-            cv.put(x0, y + dy, EYE)
-            cv.put(x0 + 1, y + dy, EYE)
+        x0 = 12 + side * (gap + 1) - 1
+        for dy in range(tall + 1):
+            for dx in range(3):
+                cv.put(x0 + dx, y + dy, EYE)
         cv.put(x0, y, SHINE)
+        cv.put(x0 + 1, y + tall, EYE_MID)
 
 
 def cheeks(cv, y, gap=7):
@@ -136,9 +142,19 @@ def feet(cv, rp, lid, lift=None, y=24):
         cv.layer(ellipse(x, y + 0.6 + dy, 2.6, 1.7), rp, lid)
 
 
+# main fur/feather ramp per critter (light, base, dark, line); the app can recolour exactly these
+MAIN_HEX = {
+    'shiba': ('#ffbe73', '#f59a45', '#d47428', '#8a4418'),
+    'cat': ('#c9cdd8', '#a6abbb', '#7f8597', '#454a5c'),
+    'penguin': ('#6aa6e8', '#3f7fd0', '#2c5fa8', '#1d3a6b'),
+    'hamster': ('#ffd9a0', '#f6b96b', '#d9934a', '#8a5426'),
+}
+MAIN = {k: ramp(*v) for k, v in MAIN_HEX.items()}
+
+
 # ---------------------------------------------------------------- species
 def shiba(view, lift):
-    O = ramp('#ffbe73', '#f59a45', '#d47428', '#8a4418')
+    O = MAIN['shiba']
     C = ramp('#fffaf0', '#fff1dc', '#ecd2b3', '#a8805c')
     P = hexc('#ffb3bd')
     cv = Canvas()
@@ -166,7 +182,7 @@ def shiba(view, lift):
 
 
 def cat(view, lift):
-    G = ramp('#c9cdd8', '#a6abbb', '#7f8597', '#454a5c')     # silver tabby
+    G = MAIN['cat']     # silver tabby
     S = hexc('#6d7386')
     Wt = ramp('#ffffff', '#f7f5f2', '#dcd8d3', '#8a8580')
     P = hexc('#ffb3c4')
@@ -187,8 +203,6 @@ def cat(view, lift):
         cv.paint(mirror(tri((4.4, 6.4), (4.2, 2.2), (7.4, 4.6))), P, on='ears')
         cv.paint(ellipse(12.5, 15.4, 4.6, 2.6), Wt[1], on='head')
         eyes(cv, 10, gap=4)
-        for xx in (8, 16):
-            cv.put(xx, 12, hexc('#4fae62'))                                       # green iris glint
         cv.put(12, 14, P)                                                         # nose
         cv.put(11, 15, MOUTH); cv.put(13, 15, MOUTH)
         cheeks(cv, 13, gap=7)
@@ -199,7 +213,7 @@ def cat(view, lift):
 
 
 def penguin(view, lift):
-    B = ramp('#6aa6e8', '#3f7fd0', '#2c5fa8', '#1d3a6b')
+    B = MAIN['penguin']
     Wt = ramp('#ffffff', '#f4f8ff', '#d4e0f0', '#7a8aa6')
     Y = ramp('#ffe07a', '#ffc23d', '#e09a1c', '#8a5a10')
     cv = Canvas()
@@ -223,7 +237,7 @@ def penguin(view, lift):
 
 
 def hamster(view, lift):
-    O = ramp('#ffd9a0', '#f6b96b', '#d9934a', '#8a5426')
+    O = MAIN['hamster']
     Wt = ramp('#ffffff', '#fff6ea', '#ecdcc8', '#9c7c5c')
     P = hexc('#ffaab8')
     cv = Canvas()
@@ -263,6 +277,8 @@ def main():
         for i, (view, lift) in enumerate(FRAMES):
             strip.alpha_composite(make(view, lift), (i * W, 0))
         strip.save(os.path.join(OUT, f'{name}.png'))
+    with open(os.path.join(OUT, 'critters.json'), 'w') as f:
+        json.dump({k: list(v) for k, v in MAIN_HEX.items()}, f)
     print('critters written:', ', '.join(CRITTERS))
 
 

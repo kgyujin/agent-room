@@ -141,6 +141,23 @@ export const DEFAULT_CHARACTERS: Record<string, string> = {
   claude: 'builtin/shiba', codex: 'builtin/penguin', generic: 'builtin/hamster',
 };
 
+/**
+ * Skin preference per role for auto-assignment: the role's chosen critter, then the
+ * user's own PNGs, then the built-ins. Each new session takes the first one not in use.
+ */
+export function skinPrefs(chosen: Record<string, string>, own: string[]): Record<string, string[]> {
+  const builtins = BUILTIN_CRITTERS.map(([id]) => `builtin/${id}`);
+  const firsts = Object.keys(DEFAULT_CHARACTERS).map((r) => chosen[r] ?? DEFAULT_CHARACTERS[r]);
+  const out: Record<string, string[]> = {};
+  for (const role of Object.keys(DEFAULT_CHARACTERS)) {
+    const first = chosen[role] ?? DEFAULT_CHARACTERS[role];
+    // other roles' signature critters go last, so Claude and Codex keep looking different
+    const rest = [...own, ...builtins].sort((a, b) => Number(firsts.includes(a)) - Number(firsts.includes(b)));
+    out[role] = [...new Set([first, ...rest])];
+  }
+  return out;
+}
+
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -150,16 +167,65 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/** colours the user can pick for a built-in critter's fur/feathers */
+export const CRITTER_COLORS = ['#f59a45', '#f2c14e', '#e86a8a', '#b07cd6', '#5f86e0', '#4fb3a6', '#6fae4f', '#8a6a5a', '#a6abbb', '#4a4a5c'];
+
+type RGB = [number, number, number];
+const hex2rgb = (h: string): RGB => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) as RGB;
+function rgb2hsl([r, g, b]: RGB): RGB {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+function hsl2rgb([h, s, l]: RGB): RGB {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+
+let rampsP: Promise<Record<string, string[]>> | null = null;
+
+/** Maps the critter's main ramp onto `color`, keeping each tone's lightness step (exact colour swap, no blending). */
+async function recolor(img: HTMLImageElement, id: string, color: string): Promise<HTMLCanvasElement> {
+  rampsP ??= fetch('/assets/critters/critters.json').then((r) => r.json());
+  const ramp = (await rampsP)[id] ?? [];
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0);
+  if (!ramp.length) return c;
+  const base = rgb2hsl(hex2rgb(ramp[1]));
+  const want = rgb2hsl(hex2rgb(color));
+  const map = new Map(ramp.map((h) => {
+    const [, s, l] = rgb2hsl(hex2rgb(h));
+    const ns = base[1] ? Math.min(1, (s / base[1]) * want[1]) : want[1];
+    const nl = Math.max(0.04, Math.min(0.96, l + (want[2] - base[2])));
+    return [hex2rgb(h).join(','), hsl2rgb([want[0], ns, nl])] as const;
+  }));
+  const d = g.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const to = map.get(`${d.data[i]},${d.data[i + 1]},${d.data[i + 2]}`);
+    if (to && d.data[i + 3]) [d.data[i], d.data[i + 1], d.data[i + 2]] = to;
+  }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+
 /** Built-in strip: front, walk front x2, back, walk back x2 (equal-width frames, already 1px art). */
-export async function loadBuiltin(id: string): Promise<Skin> {
+export async function loadBuiltin(id: string, color?: string): Promise<Skin> {
   const img = await loadImage(`/assets/critters/${id}.png`);
+  const src: CanvasImageSource = color ? await recolor(img, id, color) : img;
   const w = img.naturalWidth / 6;
   const h = img.naturalHeight;
   const f = [0, 1, 2, 3, 4, 5].map((i) => {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
-    c.getContext('2d')!.drawImage(img, i * w, 0, w, h, 0, 0, w, h);
+    c.getContext('2d')!.drawImage(src, i * w, 0, w, h, 0, 0, w, h);
     return c;
   });
   return { canvas: f[0], w, h, walkF: [f[1], f[2]], back: f[3], walkB: [f[4], f[5]] };
