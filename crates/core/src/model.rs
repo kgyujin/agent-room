@@ -87,15 +87,24 @@ pub struct PlanItem {
     pub status: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// One plan usage window (e.g. 5 hours, 7 days) as the agent itself reports it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TokenUsage {
-    pub input: u64,
-    pub output: u64,
-    pub cache_read: u64,
-    pub cache_write: u64,
-    /// where the numbers come from, e.g. "claude-transcript" / "codex-rollout"
-    pub source: String,
+pub struct LimitWindow {
+    /// window length (300 = 5 hours, 10080 = 7 days; 0 = unknown)
+    pub minutes: u32,
+    /// 0..100, as reported
+    pub used_pct: f64,
+    /// unix ms
+    pub resets_at: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RateLimits {
+    pub windows: Vec<LimitWindow>,
+    /// unix ms when these numbers were read
+    pub at: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,7 +127,8 @@ pub enum EvKind {
     Plan { items: Vec<PlanItem> },
     /// one task of an explicit task list (Claude Task* tools / TaskCreated / TaskCompleted hooks)
     TaskUpdate { id: String, text: Option<String>, status: Option<String> },
-    Tokens { usage: TokenUsage },
+    /// remaining plan usage (Claude status line / Codex rollout log)
+    Limits { limits: RateLimits },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

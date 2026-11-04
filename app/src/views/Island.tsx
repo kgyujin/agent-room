@@ -3,10 +3,10 @@
 // clicking opens the list. The window is resized from Rust so it stays centred.
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtDuration, stateLabel, stateTone } from '../labels';
+import { fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark } from '../ui/icons';
 import { progressOf } from '../ui/Hud';
-import { isActive, userTodo } from '../ui/Overview';
+import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { useLive } from './useLive';
 
 const COLLAPSED: [number, number] = [340, 34];
@@ -19,11 +19,16 @@ export function Island() {
   const todos = list.filter((s) => userTodo(s, now));
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
   const done = list.filter((s) => s.state === 'completed');
+  // remaining plan usage per agent, one line under the list
+  const limits = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]);
+  // lowest remaining share across agents, shown on the collapsed pill once it is 10% or less
+  const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
+  const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
   useEffect(() => {
-    const [w, h] = open ? [420, 44 + Math.max(1, Math.min(list.length, 8)) * ROW + 12] : COLLAPSED;
+    const [w, h] = open ? [420, 44 + Math.max(1, Math.min(list.length, 8)) * ROW + 12 + (limits.length ? 30 : 0)] : COLLAPSED;
     void backend.islandLayout(w, h);
-  }, [open, list.length]);
+  }, [open, list.length, limits.length]);
 
   const enter = () => { clearTimeout(leave.current); setOpen(true); };
   const exit = () => { leave.current = window.setTimeout(() => setOpen(false), 450); };
@@ -41,6 +46,11 @@ export function Island() {
         </div>
         <div className="is-notch" />
         <div className="is-right">
+          {low && low.left <= 10 && (
+            <span className="is-low" title={`${low.name} 남은 사용량이 얼마 없어요`}>
+              <AgentMark agent={low.a} size={11} /> {low.left}%
+            </span>
+          )}
           {todos.length ? (
             <span className="is-alert">! {todos.length}</span>
           ) : working.length ? (
@@ -77,6 +87,19 @@ export function Island() {
             );
           })}
         </ul>
+      )}
+      {open && limits.length > 0 && (
+        <div className="is-lim" title="남은 사용량 (에이전트가 알려준 요금제 한도)">
+          {limits.map(([a, l]) => (
+            <span key={a}>
+              <AgentMark agent={a} size={13} />
+              {l!.windows.map((w) => {
+                const left = Math.max(0, Math.round(100 - w.usedPct));
+                return <em key={w.minutes} className={left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}>{windowLabel(w.minutes)} {left}%</em>;
+              })}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

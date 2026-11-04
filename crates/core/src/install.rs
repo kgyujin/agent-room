@@ -81,6 +81,10 @@ fn write_atomic(path: &Path, v: &Value) -> Result<(), String> {
     let tmp = path.with_extension("json.agent-room-tmp");
     let txt = serde_json::to_string_pretty(v).map_err(|e| e.to_string())? + "\n";
     fs::write(&tmp, txt).map_err(|e| e.to_string())?;
+    // keep the original file's permissions (a 0600 settings file must not become world-readable)
+    if let Ok(meta) = fs::metadata(path) {
+        fs::set_permissions(&tmp, meta.permissions()).map_err(|e| e.to_string())?;
+    }
     fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
@@ -89,10 +93,12 @@ fn backup(t: Target, path: &Path) -> Result<Option<PathBuf>, String> {
         return Ok(None);
     }
     let dir = paths::backups_dir();
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    paths::ensure_private_dir(&paths::data_dir()).map_err(|e| e.to_string())?;
+    paths::ensure_private_dir(&dir).map_err(|e| e.to_string())?;
     let file = path.file_name().and_then(|f| f.to_str()).unwrap_or("config");
     let dst = dir.join(format!("{}-{}-{}", t.name(), now_ms(), file));
     fs::copy(path, &dst).map_err(|e| e.to_string())?;
+    paths::make_private(&dst).map_err(|e| e.to_string())?;
     // prune old backups of this agent
     let mut all = list_backups(t);
     while all.len() > KEEP_BACKUPS {
@@ -140,6 +146,41 @@ fn strip_ours(doc: &mut Value) {
             o.remove("hooks");
         }
     }
+    strip_statusline(doc);
+}
+
+/// Puts back the user's own status line (or none) if ours is set.
+fn strip_statusline(doc: &mut Value) {
+    let Some(o) = doc.as_object_mut() else { return };
+    if !o.get("statusLine").is_some_and(is_ours) {
+        return;
+    }
+    let prev = fs::read_to_string(paths::claude_prev_statusline()).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).filter(|v| !v.is_null());
+    match prev {
+        Some(v) => {
+            o.insert("statusLine".into(), v);
+        }
+        None => {
+            o.remove("statusLine");
+        }
+    }
+}
+
+/// Claude passes remaining plan usage only to its status line command, so ours wraps
+/// the user's: it forwards the usage numbers, then runs the user's command and prints its output.
+fn set_statusline(doc: &mut Value, bin: &Path) -> Result<(), String> {
+    let o = doc.as_object_mut().unwrap();
+    let prev = o.get("statusLine").cloned().unwrap_or(Value::Null);
+    let txt = serde_json::to_string(&prev).map_err(|e| e.to_string())?;
+    paths::ensure_private_dir(&paths::data_dir()).map_err(|e| e.to_string())?;
+    fs::write(paths::claude_prev_statusline(), txt).map_err(|e| e.to_string())?;
+    paths::make_private(&paths::claude_prev_statusline()).map_err(|e| e.to_string())?;
+    let mut ours = json!({ "type": "command", "command": format!("\"{}\" statusline", bin.display()) });
+    if let Some(p) = prev.get("padding") {
+        ours["padding"] = p.clone();
+    }
+    o.insert("statusLine".into(), ours);
+    Ok(())
 }
 
 fn count_ours(doc: &Value, events: &[&str]) -> usize {
@@ -160,7 +201,8 @@ pub fn status(t: Target) -> HookStatus {
     let installed = match read_json(&path) {
         Ok(Some(doc)) => {
             let n = count_ours(&doc, t.events());
-            if n == 0 { "none" } else if n == t.events().len() { "full" } else { "partial" }
+            let status_line = t != Target::Claude || doc.get("statusLine").is_some_and(is_ours);
+            if n == 0 { "none" } else if n == t.events().len() && status_line { "full" } else { "partial" }
         }
         Ok(None) => "none",
         Err(e) => {
@@ -235,6 +277,9 @@ pub fn install(t: Target, hook_bin_src: Option<&Path>) -> Result<HookStatus, Str
             groups.push(json!({ "hooks": [ { "type": "command", "command": cmd, "timeout": 5 } ] }));
         }
     }
+    if t == Target::Claude {
+        set_statusline(&mut doc, &bin)?;
+    }
     write_atomic(&path, &doc)?;
     Ok(status(t))
 }
@@ -306,18 +351,63 @@ mod tests {
         assert_eq!(doc["hooks"]["Stop"].as_array().unwrap().len(), 2, "user hook kept + ours added");
         assert_eq!(doc["hooks"]["Stop"][0]["hooks"][0]["command"], "say done");
         let keys: Vec<&String> = doc.as_object().unwrap().keys().collect();
-        assert_eq!(keys, ["model", "hooks", "zeta"], "key order preserved");
+        assert_eq!(keys, ["model", "hooks", "zeta", "statusLine"], "key order preserved (our status line appended)");
 
         // idempotent
         install(Target::Claude, Some(&fake_bin)).unwrap();
         let doc: Value = serde_json::from_str(&fs::read_to_string(d.join("claude/settings.json")).unwrap()).unwrap();
         assert_eq!(doc["hooks"]["Stop"].as_array().unwrap().len(), 2);
 
+        assert!(doc["statusLine"]["command"].as_str().unwrap().ends_with(" statusline"));
+
         let st = uninstall(Target::Claude).unwrap();
         assert_eq!(st.installed, "none");
         let after: Value = serde_json::from_str(&fs::read_to_string(d.join("claude/settings.json")).unwrap()).unwrap();
         let before: Value = serde_json::from_str(original).unwrap();
         assert_eq!(after, before);
+    }
+
+    #[test]
+    fn users_status_line_is_wrapped_and_restored() {
+        let _g = ENV.lock().unwrap();
+        let d = sandbox("s");
+        fs::create_dir_all(d.join("claude")).unwrap();
+        let original = r#"{"statusLine":{"type":"command","command":"~/bin/my-line","padding":0},"zeta":1}"#;
+        fs::write(d.join("claude/settings.json"), original).unwrap();
+        let fake_bin = d.join("agent-room-hook");
+        fs::write(&fake_bin, b"x").unwrap();
+        install(Target::Claude, Some(&fake_bin)).unwrap();
+        install(Target::Claude, Some(&fake_bin)).unwrap();
+        let doc: Value = serde_json::from_str(&fs::read_to_string(d.join("claude/settings.json")).unwrap()).unwrap();
+        assert!(doc["statusLine"]["command"].as_str().unwrap().contains(MARKER));
+        assert_eq!(doc["statusLine"]["padding"], 0);
+        let prev: Value = serde_json::from_str(&fs::read_to_string(paths::claude_prev_statusline()).unwrap()).unwrap();
+        assert_eq!(prev["command"], "~/bin/my-line", "reinstall keeps the user's command, not ours");
+        uninstall(Target::Claude).unwrap();
+        let after: Value = serde_json::from_str(&fs::read_to_string(d.join("claude/settings.json")).unwrap()).unwrap();
+        assert_eq!(after, serde_json::from_str::<Value>(original).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copies_of_configs_stay_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let _g = ENV.lock().unwrap();
+        let d = sandbox("p");
+        fs::create_dir_all(d.join("claude")).unwrap();
+        let cfg = d.join("claude/settings.json");
+        fs::write(&cfg, r#"{"env":{"ANTHROPIC_API_KEY":"sk-ant-xxxxxxxxxxxx"},"statusLine":{"type":"command","command":"x"}}"#).unwrap();
+        fs::set_permissions(&cfg, fs::Permissions::from_mode(0o600)).unwrap();
+        let fake_bin = d.join("agent-room-hook");
+        fs::write(&fake_bin, b"x").unwrap();
+        install(Target::Claude, Some(&fake_bin)).unwrap();
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&cfg), 0o600, "rewritten config keeps its mode");
+        for b in list_backups(Target::Claude) {
+            assert_eq!(mode(&b), 0o600, "backup is private");
+        }
+        assert_eq!(mode(&paths::backups_dir()), 0o700);
+        assert_eq!(mode(&paths::claude_prev_statusline()), 0o600);
     }
 
     #[test]

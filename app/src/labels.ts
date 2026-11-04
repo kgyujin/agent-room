@@ -17,7 +17,7 @@ export function stateLabel(s: Snapshot): string {
     case 'testing':
       if (s.tool === null && s.lastTest) return s.lastTest.ok === true ? '테스트 통과' : s.lastTest.ok === false ? '테스트 실패' : '테스트 종료';
       return '테스트 실행 중';
-    case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '사용자 입력 대기';
+    case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '답변 기다리는 중';
     case 'completed': return '작업 완료';
     case 'error': return s.error?.fatal ? '오류로 중단됨' : '오류 발생';
     case 'disconnected': return '연결 끊김';
@@ -59,7 +59,7 @@ export function timelineText(e: TimelineEntry): string {
     case 'turn_complete': return '작업 완료';
     case 'turn_failed': return `오류로 중단${d}`;
     case 'interrupted': return '사용자가 중단';
-    case 'compacting': return '대화 정리(컴팩트)';
+    case 'compacting': return '대화 요약 (컴팩트)';
     case 'subagent': return `하위 에이전트 시작${d}`;
     case 'plan': return `작업 목록 갱신${d}`;
     default: return e.kind;
@@ -88,8 +88,20 @@ export function fmtAgo(ms: number): string {
   return `${Math.floor(m / 60)}시간 전`;
 }
 
-export function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
+/** "5시간" / "주간" for the usage windows the agents report */
+export function windowLabel(minutes: number): string {
+  if (minutes === 300) return '5시간';
+  if (minutes === 10080) return '주간';
+  if (minutes >= 1440) return `${Math.round(minutes / 1440)}일`;
+  if (minutes > 0) return `${Math.round(minutes / 60)}시간`;
+  return '한도';
+}
+
+/** time until a limit resets: "40분 후", "3시간 10분 후", "2일 5시간 후" */
+export function fmtUntil(ms: number): string {
+  const m = Math.max(0, Math.round(ms / 60000));
+  if (m < 60) return `${m}분 후`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간${m % 60 ? ` ${m % 60}분` : ''} 후`;
+  return `${Math.floor(h / 24)}일${h % 24 ? ` ${h % 24}시간` : ''} 후`;
 }

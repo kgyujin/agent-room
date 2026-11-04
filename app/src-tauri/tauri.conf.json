@@ -15,8 +15,8 @@
       {
         "label": "main",
         "title": "Agent Room",
-        "width": 980,
-        "height": 700,
+        "width": 1100,
+        "height": 800,
         "minWidth": 300,
         "minHeight": 260,
         "resizable": true,

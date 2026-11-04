@@ -9,7 +9,7 @@ pub mod model;
 pub mod paths;
 pub mod sanitize;
 pub mod session;
-pub mod tokens;
+pub mod limits;
 
 #[cfg(feature = "runtime")]
 pub mod runtime;

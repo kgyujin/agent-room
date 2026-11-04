@@ -1,5 +1,5 @@
-import type { Snapshot } from '../types';
-import { activityLabel, AGENT_NAME, fmtAgo, fmtClock, fmtDuration, fmtTokens, stateLabel, stateTone } from '../labels';
+import type { RateLimits, Snapshot } from '../types';
+import { activityLabel, AGENT_NAME, fmtAgo, fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon } from './icons';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
@@ -9,7 +9,7 @@ export function progressOf(s: Snapshot): { done: number; total: number } | null 
 
 const ACTIVE = ['starting', 'planning', 'reading', 'editing', 'running', 'testing', 'waiting', 'error'];
 
-export function Hud({ s, now, showTokens }: { s: Snapshot; now: number; showTokens: boolean }) {
+export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: RateLimits | null }) {
   const tone = stateTone(s);
   const prog = progressOf(s);
   const active = ACTIVE.includes(s.state) && s.connection === 'live';
@@ -41,29 +41,23 @@ export function Hud({ s, now, showTokens }: { s: Snapshot; now: number; showToke
             <dd>{fmtDuration(turnMs)}</dd>
           </>
         )}
-        {s.turnStartedAt && (
-          <>
-            <dt>작업 시작</dt>
-            <dd>{fmtClock(s.turnStartedAt)}</dd>
-          </>
-        )}
         <dt>마지막 활동</dt>
         <dd>{fmtAgo(now - s.lastEventAt)}</dd>
-        <dt>진행</dt>
-        <dd>
-          {prog ? (
-            <span className="prog" title="Agent가 보고한 작업 목록 기준">
-              <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
-              {prog.done}/{prog.total}
-            </span>
-          ) : active ? '진행 중' : s.completedTurns > 0 ? `완료 ${s.completedTurns}회` : '—'}
-        </dd>
-        {showTokens && s.tokens && (
+        {prog && (
           <>
-            <dt>토큰</dt>
-            <dd title={`캐시 읽기 ${fmtTokens(s.tokens.cacheRead)} · 캐시 쓰기 ${fmtTokens(s.tokens.cacheWrite)} · 출처: ${s.tokens.source} (로컬 로그)`}>
-              입력 {fmtTokens(s.tokens.input)} · 출력 {fmtTokens(s.tokens.output)}
+            <dt>진행</dt>
+            <dd>
+              <span className="prog" title="에이전트가 보고한 작업 목록 기준">
+                <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
+                {prog.done}/{prog.total}
+              </span>
             </dd>
+          </>
+        )}
+        {limits && (
+          <>
+            <dt>남은 사용량</dt>
+            <dd title="에이전트가 알려준 요금제 한도 기준이에요">{limits.windows.map((w) => `${windowLabel(w.minutes)} ${Math.max(0, Math.round(100 - w.usedPct))}%`).join(' · ')}</dd>
           </>
         )}
       </dl>
@@ -79,14 +73,14 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
         {fmtAgo(now - s.lastEventAt)}부터 새 이벤트가 없어요. 오래 걸리는 명령을 실행 중일 수도 있지만, 지금 상태를 확정할 수 없어요.
       </div>
     );
-  if (s.connection === 'lost') return <div className="callout muted">Agent 프로세스가 종료 이벤트 없이 사라졌어요.</div>;
+  if (s.connection === 'lost') return <div className="callout muted">에이전트 프로세스가 종료 이벤트 없이 사라졌어요.</div>;
   if (s.connection === 'ended') return <div className="callout muted">세션이 종료됐어요.</div>;
   if (s.waiting)
     return (
       <div className="callout wait">
         {s.waiting.kind === 'approval'
           ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 터미널에서 확인해 주세요.`
-          : s.waiting.message ?? 'Agent가 입력을 기다리고 있어요.'}
+          : '답변을 기다리고 있어요. 터미널에서 확인해 주세요.'}
         <span className="since">{fmtAgo(now - s.waiting.since)}</span>
       </div>
     );
@@ -100,7 +94,7 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
   return null;
 }
 
-export function MiniPill({ s, now, onExpand }: { s: Snapshot | null; now: number; onExpand?: () => void }) {
+export function MiniPill({ s, now, onExpand, onConnect }: { s: Snapshot | null; now: number; onExpand?: () => void; onConnect?: () => void }) {
   const prog = s ? progressOf(s) : null;
   return (
     <div className="mini-pill">
@@ -115,7 +109,10 @@ export function MiniPill({ s, now, onExpand }: { s: Snapshot | null; now: number
           </span>
         </>
       ) : (
-        <span className="mini-state">연결된 Agent 없음</span>
+        <>
+          <span className="mini-state">연결된 에이전트 없음</span>
+          {onConnect && <button className="btn small primary" onClick={onConnect}>연결하기</button>}
+        </>
       )}
       {onExpand && (
         <button className="tool" onClick={onExpand} title="창으로 보기" aria-label="창으로 보기">

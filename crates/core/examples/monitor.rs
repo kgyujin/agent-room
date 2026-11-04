@@ -30,7 +30,7 @@ fn main() {
                 }
                 let s = &u.snapshot;
                 println!(
-                    "{:<18} -> {:<10} activity={:<8} tool={:<10} detail={:<20} plan={}/{} tokens={} pid={:?} timeline+{}",
+                    "{:<18} -> {:<10} activity={:<8} tool={:<10} detail={:<20} plan={}/{} limits={} pid={:?} timeline+{}",
                     hook_event,
                     format!("{:?}", s.state).to_lowercase(),
                     s.activity.map(|a| format!("{a:?}").to_lowercase()).unwrap_or_default(),
@@ -38,7 +38,7 @@ fn main() {
                     s.detail.clone().unwrap_or_default(),
                     s.plan.iter().filter(|p| p.status == "completed").count(),
                     s.plan.len(),
-                    s.tokens.as_ref().map(|t| format!("in{}/out{}/cr{}", t.input, t.output, t.cache_read)).unwrap_or("-".into()),
+                    s.limits.as_ref().map(|l| l.windows.iter().map(|w| format!("{}m:{:.0}%", w.minutes, w.used_pct)).collect::<Vec<_>>().join(",")).unwrap_or("-".into()),
                     pid,
                     u.appended.len()
                 );

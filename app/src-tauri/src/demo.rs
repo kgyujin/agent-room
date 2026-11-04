@@ -1,7 +1,7 @@
 //! Demo mode: replays a scripted, clearly labelled session (agent = "demo") through the
 //! same reducer as real events. It never touches real sessions.
 
-use agent_room_core::model::{Activity, AgentKind, EvKind, NormEvent, PlanItem, TokenUsage};
+use agent_room_core::model::{Activity, AgentKind, EvKind, LimitWindow, NormEvent, PlanItem, RateLimits};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -63,7 +63,7 @@ fn script() -> Vec<(u64, EvKind)> {
         (800, EvKind::PermissionRequest { tool: Some("Bash".into()), detail: Some("npm run build".into()) }),
         (9000, end("Bash", Run, Some(true))),
         (0, plan(4, None)),
-        (0, EvKind::Tokens { usage: TokenUsage { input: 18_240, output: 6_310, cache_read: 152_000, cache_write: 9_800, source: "demo".into() } }),
+        (0, EvKind::Limits { limits: RateLimits { windows: vec![LimitWindow { minutes: 300, used_pct: 38.0, resets_at: Some(agent_room_core::model::now_ms() + 2 * 3_600_000) }, LimitWindow { minutes: 10080, used_pct: 22.0, resets_at: Some(agent_room_core::model::now_ms() + 4 * 86_400_000) }], at: agent_room_core::model::now_ms() } }),
         (2000, EvKind::TurnComplete),
         (25_000, EvKind::NeedsInput { message: Some("다음 요청을 기다리는 중".into()) }),
         (12_000, EvKind::PromptSubmitted),

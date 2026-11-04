@@ -4,7 +4,7 @@
 //! so the UI receives changed sessions only.
 
 use crate::model::*;
-use crate::tokens::UsageReader;
+use crate::limits::CodexLogReader;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 
@@ -82,7 +82,8 @@ pub struct Snapshot {
     pub last_test: Option<TestResult>,
     /// explicit task list reported by the agent; empty = progress unknown
     pub plan: Vec<PlanItem>,
-    pub tokens: Option<TokenUsage>,
+    /// remaining plan usage last reported in this session (account-wide, so the newest one wins)
+    pub limits: Option<RateLimits>,
     pub completed_turns: u32,
     pub tool_count: u32,
     pub files_edited: Vec<String>,
@@ -128,7 +129,7 @@ struct Session {
     tasks: Vec<(String, PlanItem)>,
     pid: Option<u32>,
     transcript: Option<String>,
-    usage: UsageReader,
+    usage: CodexLogReader,
     last_usage_poll: u64,
     ended_at: Option<u64>,
 }
@@ -176,6 +177,13 @@ impl SessionStore {
 
     pub fn apply(&mut self, ev: NormEvent) -> Option<Update> {
         let key = format!("{}:{}", ev.agent.as_str(), ev.session_id);
+        // Claude's status line repeats the same numbers several times a second while it streams;
+        // unchanged numbers are not news (and would redraw the UI and the tray menu each time)
+        if let (EvKind::Limits { limits }, Some(sess)) = (&ev.kind, self.sessions.get(&key)) {
+            if sess.snap.limits.as_ref().is_some_and(|l| l.windows == limits.windows) {
+                return None;
+            }
+        }
         let is_start = matches!(ev.kind, EvKind::SessionStart { .. });
         let sess = self.sessions.entry(key.clone()).or_insert_with(|| Session {
             snap: Snapshot {
@@ -201,7 +209,7 @@ impl SessionStore {
                 error: None,
                 last_test: None,
                 plan: vec![],
-                tokens: None,
+                limits: None,
                 completed_turns: 0,
                 tool_count: 0,
                 files_edited: vec![],
@@ -211,7 +219,7 @@ impl SessionStore {
             tasks: vec![],
             pid: None,
             transcript: None,
-            usage: UsageReader::default(),
+            usage: CodexLogReader::default(),
             last_usage_poll: 0,
             ended_at: None,
         });
@@ -415,8 +423,8 @@ impl SessionStore {
                     s.plan = items;
                 }
             }
-            EvKind::Tokens { usage } => {
-                s.tokens = Some(usage);
+            EvKind::Limits { limits } => {
+                s.limits = Some(limits);
             }
         }
 
@@ -431,13 +439,13 @@ impl SessionStore {
             sess.timeline.pop_front();
         }
 
-        // token usage from the agent's own local log (throttled)
-        if let Some(path) = sess.transcript.clone() {
+        // Codex: remaining usage from its own rollout log (throttled)
+        if let (Some(path), AgentKind::Codex) = (sess.transcript.clone(), ev.agent) {
             let due = matches!(ev.kind, EvKind::TurnComplete | EvKind::ToolEnd { .. } | EvKind::SessionStart { .. }) && ev.ts.saturating_sub(sess.last_usage_poll) > 1500;
             if due {
                 sess.last_usage_poll = ev.ts;
-                if let Some(u) = sess.usage.poll(&path, ev.agent == AgentKind::Codex) {
-                    sess.snap.tokens = Some(u);
+                if let Some(l) = sess.usage.poll(&path, ev.ts) {
+                    sess.snap.limits = Some(l);
                 }
             }
         }
@@ -565,5 +573,15 @@ mod tests {
         st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: Some("A".into()), status: Some("pending".into()) }, 1));
         let u = st.apply(ev(EvKind::TaskUpdate { id: "1".into(), text: None, status: Some("deleted".into()) }, 2)).unwrap();
         assert!(u.snapshot.plan.is_empty());
+    }
+
+    #[test]
+    fn repeated_limits_are_not_an_update() {
+        let mut st = SessionStore::default();
+        let l = |used: f64| EvKind::Limits { limits: RateLimits { windows: vec![LimitWindow { minutes: 300, used_pct: used, resets_at: Some(9) }], at: 1 } };
+        assert!(st.apply(ev(l(10.0), 1)).is_some(), "first report creates/updates the session");
+        assert!(st.apply(ev(l(10.0), 2)).is_none(), "same numbers: no update");
+        let u = st.apply(ev(l(11.0), 3)).unwrap();
+        assert_eq!(u.snapshot.limits.unwrap().windows[0].used_pct, 11.0);
     }
 }

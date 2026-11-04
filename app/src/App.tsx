@@ -9,6 +9,8 @@ import { Hud, MiniPill } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
+import { Welcome } from './ui/Welcome';
+import { latestLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, stateTone } from './labels';
@@ -351,10 +353,10 @@ export default function App() {
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 12 }}>
-        {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
+        {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
-            {compact ? '데모 · 실제 Agent 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 Agent 아님)'}
+            {compact ? '데모 · 실제 에이전트 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)'}
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}
@@ -377,14 +379,14 @@ export default function App() {
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
-            <Hud s={selected} now={now} showTokens={settings.showTokens} />
+            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} />
           ) : (
-            <EmptyCard detected={detected} onSetup={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
+            <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
         </div>
       )}
 
-      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} />}
+      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} onConnect={() => setSettingsOpen('agents')} />}
 
       {panelOpen && selected && (
         <DetailPanel
@@ -392,6 +394,7 @@ export default function App() {
           s={selected}
           sessions={list}
           onSelect={setPinned}
+          showLimits={settings.showLimits}
           timeline={timelines[selected.key] ?? []}
           tab={detailTab}
           setTab={setDetailTab}
@@ -402,7 +405,7 @@ export default function App() {
       )}
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
-        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
+        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
@@ -432,27 +435,9 @@ export default function App() {
 
 function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0]['name']; label: string; on?: boolean; onClick: () => void }) {
   return (
-    <button className={`tool ${on ? 'on' : ''}`} onClick={onClick} title={label} aria-label={label}>
+    <button className={`tool ${on ? 'on' : ''}`} onClick={onClick} data-tip={label} aria-label={label}>
       <Icon name={icon} size={16} />
     </button>
-  );
-}
-
-function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected']; onSetup: () => void; onDemo: () => void }) {
-  const running = [detected.claude ? `${AGENT_NAME.claude} ${detected.claude}개` : '', detected.codex ? `${AGENT_NAME.codex} ${detected.codex}개` : ''].filter(Boolean).join(', ');
-  return (
-    <div className="card hud empty">
-      <div className="hud-title">연결된 Agent 없음</div>
-      <p className="muted">
-        {running
-          ? `실행 중인 ${running} 프로세스가 보여요. 다음 Hook 이벤트가 들어오면 방에 나타납니다. 계속 안 보이면 Hook 설치 상태를 확인하세요.`
-          : 'Claude Code나 Codex가 작업을 시작하면 자동으로 연결돼요. 처음이라면 Hook을 먼저 설치해 주세요.'}
-      </p>
-      <div className="row">
-        <button className="btn primary" onClick={onSetup}>Agent 연동 설정</button>
-        {IN_TAURI && <button className="btn" onClick={onDemo}>데모 보기</button>}
-      </div>
-    </div>
   );
 }
 
@@ -461,18 +446,24 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const fullRef = useRef(full);
   fullRef.current = full;
+  const selRef = useRef(selected);
+  selRef.current = selected;
+  const sessRef = useRef(sessions);
+  sessRef.current = sessions;
   useEffect(() => {
     let raf = 0;
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
-      // nudge tags up so neighbours never cover each other (compact tags are ~60 x 22 css px)
+      // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
+      // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
+      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 40);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < (fullRef.current ? 120 : 60) && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
         placed.push(p);
       }
-      const sig = a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
+      const sig = selRef.current + '|' + a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
       if (sig !== last) {
         last = sig;
         setAnchors(a);
@@ -490,12 +481,13 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
         if (!s) return null;
         const prog = progressOf(s);
         const tone = stateTone(s);
+        const urgent = needsYou(s);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {(full || selected === a.key) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            {(full || selected === a.key || urgent) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
             <i className={`dot tone-${tone}`} />
-            {prog && <small>{prog.done}/{prog.total}</small>}
+            {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
           </button>
         );
       })}
@@ -504,6 +496,9 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
+
+/** the session is waiting on the user (approval, answer, or an error to look at) */
+const needsYou = (s: Snapshot | undefined) => !!s && userTodo(s, 0) !== null;
 
 /** soft radial backdrop around the room (window mode); the canvas leaves it clear */
 function backdropStyle(s: Settings): React.CSSProperties {

@@ -239,6 +239,17 @@ pub fn sanitize(raw: &Value) -> Value {
         }
         out.insert("token_usage".into(), Value::Object(t));
     }
+    // remaining plan usage (Claude status line): numbers only, two levels deep
+    if let Some(Value::Object(rl)) = obj.get("rate_limits") {
+        let mut r = Map::new();
+        for (k, w) in rl {
+            if let Value::Object(w) = w {
+                let nums: Map<String, Value> = w.iter().filter(|(_, v)| v.is_number()).map(|(k, v)| (k.clone(), v.clone())).collect();
+                r.insert(k.clone(), Value::Object(nums));
+            }
+        }
+        out.insert("rate_limits".into(), Value::Object(r));
+    }
     Value::Object(out)
 }
 
