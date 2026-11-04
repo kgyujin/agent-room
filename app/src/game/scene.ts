@@ -10,7 +10,7 @@ import type { Skin } from './skin';
 export type Theme = 'day' | 'sunset' | 'night';
 
 // outside the room: the black void of a handheld RPG interior map
-const VOID = '#101018';
+const VOID = '#fbe8e0';
 
 interface Spark { x: number; y: number; t: number }
 

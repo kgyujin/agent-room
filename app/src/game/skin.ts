@@ -133,8 +133,13 @@ export function reduce(img: HTMLImageElement): Skin {
 
 /** built-in original critters (tools/art/gen_critters.py); stored in settings as 'builtin/<id>' */
 export const BUILTIN_CRITTERS: [string, string][] = [
-  ['shiba', '시바견'], ['cat', '고등어 고양이'],
+  ['shiba', '아기 시바'], ['penguin', '아기 펭귄'], ['hamster', '햄찌'], ['cat', '은빛 고양이'],
 ];
+
+/** critter each role uses until the user picks another one */
+export const DEFAULT_CHARACTERS: Record<string, string> = {
+  claude: 'builtin/shiba', codex: 'builtin/penguin', generic: 'builtin/hamster',
+};
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {

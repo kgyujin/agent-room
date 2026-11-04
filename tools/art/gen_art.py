@@ -36,7 +36,7 @@ C = {k: hexc(v) for k, v in {
 BOOK_COLS = [hexc(h) for h in ('#d06a5f', '#5f8fc9', '#e3b85c', '#7fb07a', '#a77cc2', '#e98aa8', '#6b9fa0', '#c98d58')]
 
 C.update({k: hexc(v) for k, v in {
-    'outline': '#3b2a2e', 'frame': '#101018', 'walltop': '#4a4262', 'walltop_l': '#6c6488',
+    'outline': '#3b2a2e', 'frame': '#7a5a62', 'walltop': '#9a7480', 'walltop_l': '#b8929c',
     'wp': '#cfeae0', 'wp_s': '#bfe1d5', 'wp_d': '#a8d2c4', 'crown': '#fff6ea',
     'wains': '#ebc18d', 'wains_d': '#c99a66', 'wains_l': '#f6d8ae', 'base': '#8a5a40',
     'fl_a': '#efc48e', 'fl_b': '#e6b87f', 'fl_c': '#f3cd9c', 'fl_seam': '#c99764', 'fl_sh': '#cf9d68',

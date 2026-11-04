@@ -33,7 +33,7 @@
 @font-face { font-family: 'Galmuri11'; src: url('../node_modules/galmuri/dist/Galmuri11-Bold.woff2') format('woff2'); font-weight: 700 900; }
 
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #101018; user-select: none; -webkit-user-select: none; }
+html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #fbe8e0; user-select: none; -webkit-user-select: none; }
 button { font: inherit; color: inherit; cursor: pointer; }
 
 .app { position: relative; width: 100vw; height: 100vh; }
@@ -280,3 +280,47 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .tab.on { background: #e8ecf6; border-color: #2c3554; }
 .tab .dot { border-radius: 0; }
 .tasks + p, .pad > p.muted.small { margin-top: 12px; }
+
+/* ------------------------------------------------ cute pass: warm pastel boxes, soft rounded frames */
+:root {
+  --frame: #d98a8f;
+  --frame-l: #f7d3cf;
+  --box: #fffaf6;
+  --ink: #5a3b44;
+  --ink-soft: #94737b;
+  --line-soft: #f3d9d2;
+  --accent: #ff8f9c;
+  --accent-soft: #ffe4e6;
+}
+.card, .panel, .toolbar, .mini-pill, .tab, .banner, .banner.preview {
+  border: 2px solid var(--frame);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 2px var(--box), inset 0 0 0 3px var(--frame-l), 0 3px 0 rgba(217, 138, 143, 0.35);
+}
+.panel { border-radius: 0; border-width: 0 0 0 2px; box-shadow: -3px 0 0 rgba(217, 138, 143, 0.2); }
+.tab { border-radius: 999px; }
+.btn { border-radius: 10px; border-color: var(--frame); box-shadow: 0 2px 0 var(--frame); }
+.btn.primary { background: #ff8f9c; border-color: #d8606f; box-shadow: 0 2px 0 #d8606f; }
+.btn.primary:hover { background: #ffa1ac; }
+.tool { border-radius: 8px; color: #b0727b; }
+.tool:hover, .tool.on { background: var(--accent-soft); color: #c94f60; }
+.panel nav, .modal nav { border-radius: 10px; background: #fdeeea; }
+.panel nav button, .modal nav button { border-radius: 8px; }
+.panel nav button.on, .modal nav button.on { box-shadow: 0 0 0 2px var(--frame); }
+.tab.on { background: var(--accent-soft); border-color: #c94f60; }
+.field select, .field input[type='number'] { border-radius: 8px; }
+.toggle i { border-radius: 999px; border-color: var(--frame); background: #f6e3df; }
+.toggle i::after { border-radius: 50%; background: var(--frame); }
+.agent-card, .callout { border-radius: 10px; }
+.bar { border-color: var(--frame); background: #f6e3df; border-radius: 999px; }
+.bar i { border-radius: 999px; }
+.dock .hud-grid { border-left-color: var(--frame-l); }
+.modal-bg { background: rgba(90, 59, 68, 0.28); }
+.timeline li { --mk: var(--frame-l); }
+.timeline li::before { background: var(--frame-l); }
+.timeline li::after { border-radius: 50%; }
+.timeline li.k-turn_start, .timeline li.k-turn_complete { --mk: var(--frame); }
+.tasks .box { border-color: var(--frame); border-radius: 4px; }
+.char-add { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-top: 14px; padding: 12px; border: 2px dashed var(--frame-l); border-radius: 12px; background: #fff3f1; }
+.char-add p { margin: 4px 0 0; }
+.char-add .btn { flex: none; }

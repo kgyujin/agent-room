@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
-import { BUILTIN_CRITTERS } from '../game/skin';
+import { BUILTIN_CRITTERS, DEFAULT_CHARACTERS } from '../game/skin';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
 
@@ -15,6 +15,7 @@ export function SettingsModal(props: {
   onToggleDemo: () => void;
   realCount: number;
   characters: string[];
+  onCharactersChanged: () => Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const { settings: s, onChange } = props;
@@ -52,7 +53,7 @@ export function SettingsModal(props: {
               <AutostartToggle />
             </>
           )}
-          {tab === 'characters' && <Characters settings={s} onChange={onChange} names={props.characters} />}
+          {tab === 'characters' && <Characters settings={s} onChange={onChange} names={props.characters} onAdded={props.onCharactersChanged} />}
           {tab === 'agents' && <Agents />}
           {tab === 'dev' && <Dev {...props} />}
         </div>
@@ -90,8 +91,22 @@ function AutostartToggle() {
 
 const ROLES: [string, string][] = [['claude', 'Claude Code'], ['codex', 'Codex'], ['generic', '연결 없음·데모']];
 
-function Characters({ settings: s, onChange, names }: { settings: Settings; onChange: (s: Settings) => void; names: string[] }) {
+function Characters({ settings: s, onChange, names, onAdded }: { settings: Settings; onChange: (s: Settings) => void; names: string[]; onAdded: () => Promise<void> }) {
   const [dir, setDir] = useState('~/.agent-room');
+  const [note, setNote] = useState<string | null>(null);
+  const add = async (files: FileList | null) => {
+    const added: string[] = [];
+    for (const f of Array.from(files ?? [])) {
+      try {
+        added.push(await backend.saveCharacter(f.name, Array.from(new Uint8Array(await f.arrayBuffer()))));
+      } catch (e) {
+        setNote(String(e));
+        return;
+      }
+    }
+    await onAdded();
+    if (added.length) setNote(`추가했어요: ${added.join(', ')} · 위 목록에서 고르면 바로 바뀌어요`);
+  };
   useEffect(() => {
     backend.dataDir().then(setDir).catch(() => undefined);
   }, []);
@@ -105,8 +120,7 @@ function Characters({ settings: s, onChange, names }: { settings: Settings; onCh
     <>
       {ROLES.map(([agent, label]) => (
         <Field key={agent} label={label}>
-          <select value={s.characters[agent] ?? ''} onChange={(e) => pick(agent, e.target.value)}>
-            <option value="">기본 캐릭터</option>
+          <select value={s.characters[agent] ?? DEFAULT_CHARACTERS[agent]} onChange={(e) => pick(agent, e.target.value)}>
             {BUILTIN_CRITTERS.map(([id, label]) => (
               <option key={id} value={`builtin/${id}`}>{label}</option>
             ))}
@@ -121,10 +135,20 @@ function Characters({ settings: s, onChange, names }: { settings: Settings; onCh
           </select>
         </Field>
       ))}
+      <div className="char-add">
+        <div>
+          <b>포켓몬 도트도 넣을 수 있어요</b>
+          <p className="muted small">좋아하는 포켓몬 도트 PNG를 추가하면 위 목록의 "내 캐릭터"에 바로 나타나요. 확대된 이미지도 괜찮아요.</p>
+        </div>
+        <label className="btn primary">
+          PNG 추가
+          <input type="file" accept="image/png" multiple hidden onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
+        </label>
+      </div>
+      {note && <p className="small">{note}</p>}
       <p className="muted small">
-        PNG 한 장을 <span className="mono">{dir}/characters/</span> 폴더에 넣고 설정을 다시 열면 목록에 나타나요. 확대된 도트 이미지도
-        1칸 = 1px 원래 크기로 줄여서 쓰고, 단색 배경은 투명하게 처리해요. 왼쪽을 보는 그림을 기준으로 방향을 뒤집어요. 파일은 이
-        컴퓨터에만 있고 어디에도 올리지 않아요.
+        추가한 PNG는 <span className="mono">{dir}/characters/</span> 폴더에 저장되고, 이 폴더에 직접 넣어도 돼요. 확대된 도트는 1칸 = 1px
+        원래 크기로 줄이고 단색 배경은 투명하게 처리해요. 파일은 이 컴퓨터에만 있고 어디에도 올리지 않아요.
       </p>
     </>
   );

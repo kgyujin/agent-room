@@ -39,6 +39,7 @@ export interface Backend {
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
   listCharacters(): Promise<CharacterFile[]>;
+  saveCharacter(name: string, bytes: number[]): Promise<string>;
 }
 
 const tauriBackend: Backend = {
@@ -59,6 +60,7 @@ const tauriBackend: Backend = {
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
   listCharacters: () => tauriInvoke('list_characters'),
+  saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
 };
 
 // ---------------------------------------------------------------- browser preview (design only)
@@ -139,6 +141,12 @@ function previewBackend(): Backend {
     dataDir: async () => '~/.agent-room',
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
+    saveCharacter: async (name, bytes) => {
+      const w = window as { __previewCharacters?: CharacterFile[] };
+      const stem = name.replace(/\.png$/i, '');
+      (w.__previewCharacters ??= []).push({ name: stem, bytes });
+      return stem;
+    },
   };
 }
 

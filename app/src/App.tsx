@@ -3,7 +3,7 @@ import { backend, DEFAULT_SETTINGS, IN_TAURI, win } from './bridge';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Theme } from './game/scene';
-import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, type Skin } from './game/skin';
+import { BUILTIN_CRITTERS, DEFAULT_CHARACTERS, loadBuiltin, loadSkin, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud, MiniPill } from './ui/Hud';
 import { DetailPanel } from './ui/DetailPanel';
@@ -174,7 +174,7 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.skins = Object.fromEntries(
-      Object.entries(settings.characters ?? {}).flatMap(([agent, name]) => (skins[name] ? [[agent, skins[name]]] : [])),
+      Object.entries({ ...DEFAULT_CHARACTERS, ...settings.characters }).flatMap(([agent, name]) => (skins[name] ? [[agent, skins[name]]] : [])),
     );
   }, [settings.characters, skins, ready]);
 
@@ -329,6 +329,7 @@ export default function App() {
           onToggleDemo={toggleDemo}
           realCount={realSessions.length}
           characters={Object.keys(skins).filter((k) => !k.startsWith('builtin/'))}
+          onCharactersChanged={reloadSkins}
         />
       )}
     </div>

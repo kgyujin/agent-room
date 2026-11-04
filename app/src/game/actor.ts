@@ -173,7 +173,6 @@ export class Actor {
   }
 
   draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number, skin?: Skin) {
-    const L = atlas.layout;
     const sx = ox + this.x;
     const sy = oy + this.y - this.z;
     if (this.z === 0) atlas.draw(ctx, 'shadow', sx - 4, sy - 1);
@@ -194,8 +193,7 @@ export class Actor {
       ctx.restore();
       return { x: sx, y: sy };
     }
-    const name = `ch_${this.agent}_${this.frame}`;
-    atlas.draw(ctx, atlas.has(name) ? name : `ch_${this.agent}_stand_f0`, sx - L.char.ax, sy - L.char.ay, this.flip);
+    // no human fallback: until a critter skin has loaded only the shadow is drawn
     return { x: sx, y: sy };
   }
 

@@ -379,6 +379,29 @@ fn list_characters() -> Vec<CharacterFile> {
     out
 }
 
+/// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
+#[tauri::command]
+fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
+    if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
+    }
+    let stem: String = name.trim_end_matches(".png").trim_end_matches(".PNG").chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .take(40)
+        .collect();
+    let stem = if stem.is_empty() { "character".to_string() } else { stem };
+    let dir = agent_room_core::paths::data_dir().join("characters");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut saved = stem.clone();
+    let mut n = 2;
+    while dir.join(format!("{saved}.png")).exists() {
+        saved = format!("{stem}-{n}");
+        n += 1;
+    }
+    std::fs::write(dir.join(format!("{saved}.png")), &bytes).map_err(|e| e.to_string())?;
+    Ok(saved)
+}
+
 #[tauri::command]
 fn data_dir() -> String {
     agent_room_core::paths::data_dir().display().to_string()
@@ -398,7 +421,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, quit_app
+            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, quit_app
         ])
         .setup(|app| {
             let handle = app.handle().clone();
