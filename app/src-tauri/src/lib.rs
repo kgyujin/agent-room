@@ -237,7 +237,7 @@ fn refresh_tray(app: &AppHandle) {
         format!("{}{}", state_label(s), extra)
     });
     let _ = tray.set_title(title.as_deref());
-    let _ = tray.set_tooltip(Some(title.as_deref().unwrap_or("Agent Room · 연결된 Agent 없음")));
+    let _ = tray.set_tooltip(Some(title.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
     if let Ok(menu) = build_menu(app, &sessions) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -249,13 +249,14 @@ fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<taur
     menu.append(&MenuItem::with_id(app, "mini", "룸만 띄우기", true, None::<&str>)?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     if sessions.is_empty() {
-        menu.append(&MenuItem::with_id(app, "none", "연결된 Agent 세션 없음", false, None::<&str>)?)?;
+        menu.append(&MenuItem::with_id(app, "none", "연결된 에이전트 없음", false, None::<&str>)?)?;
     }
     for s in sessions.iter().take(8) {
         let label = format!("{} · {} — {}", agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s));
         menu.append(&MenuItem::with_id(app, format!("session:{}", s.key), label, true, None::<&str>)?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(app, "settings", "설정…", true, None::<&str>)?)?;
     menu.append(&MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?)?;
     Ok(menu)
 }
@@ -727,6 +728,10 @@ pub fn run() {
                     "mini" => {
                         show_main(app);
                         let _ = app.emit("set-mini", true);
+                    }
+                    "settings" => {
+                        show_main(app);
+                        let _ = app.emit("open-settings", ());
                     }
                     "quit" => app.exit(0),
                     id if id.starts_with("session:") => {
