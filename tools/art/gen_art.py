@@ -139,9 +139,6 @@ def wall_right_tex(px, py):
         if abs(x - 8) < 0.5 and 27.5 < z < 29.5:
             return C['led_r']                                # pin
         return C['cork']
-    # wall shelf above the desk
-    if 22 <= x <= 41 and 38.5 <= z <= 40.5:
-        return C['wood_l'] if z > 39.5 else C['wood']
     # clock
     cx, cz = 45, 33
     if (x - cx) ** 2 + ((z - cz) * 0.5) ** 2 <= 2.4 ** 2 * 1.0:
@@ -209,16 +206,28 @@ def plank(px, py):
 
 
 def shelf_props(s):
-    # little books and a plant on the wall shelf (y=0..3, z=40.5)
+    # wall shelf above the desk: a real plank with books and a small pot on it
+    iso.box(s, 22, 0, 38, 19, 3, 2, C['wood_h'], C['wood_l'], C['wood'])
     x = 23
-    for i, h in enumerate((6, 7, 5, 6)):
-        iso.box(s, x, 0, 40.5, 1.4, 3, h, shade(BOOK_COLS[i], 1.15), BOOK_COLS[i], shade(BOOK_COLS[i], 0.8))
-        x += 1.6
-    iso.box(s, 36, 0.5, 40.5, 3, 2.5, 3, C['pot'], C['pot'], C['pot_d'])
-    for (dx, dz) in ((0, 4), (1, 5), (2, 4), (1, 6), (3, 5), (-0.5, 5)):
-        p = P(36 + dx, 1.5, 40.5 + dz)
-        s.put(p[0], p[1], C['leaf_l'] if dz > 5 else C['leaf'])
-        s.put(p[0] + 1, p[1], C['leaf_d'])
+    for i, (w, h) in enumerate(((1, 6), (1, 7), (2, 5), (1, 6))):
+        iso.box(s, x, 0, 40, w, 3, h, shade(BOOK_COLS[i], 1.15), BOOK_COLS[i], shade(BOOK_COLS[i], 0.8))
+        x += w
+    iso.box(s, 28, 0, 40, 1, 3, 4, shade(BOOK_COLS[5], 1.15), BOOK_COLS[5], shade(BOOK_COLS[5], 0.8))
+    iso.box(s, 36, 0, 40, 3, 3, 3, C['pot'], C['pot'], C['pot_d'])
+    bush(s, P(37.5, 1.5, 43)[0], P(37.5, 1.5, 43)[1] - 2, 4, 3)
+
+
+def bush(s, cx, cy, rx, ry):
+    """leafy clump: clean ellipse, lit from top-left, darker rim at the bottom-right (no noise)"""
+    for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
+        for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+            dx, dy = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
+            d = dx * dx + dy * dy
+            if d > 1:
+                continue
+            l = -dx * 0.6 - dy * 0.8
+            col = C['leaf_l'] if l > 0.35 else C['leaf'] if l > -0.35 else C['leaf_d']
+            s.put(x, y, col)
 
 
 # ---------------------------------------------------------------- furniture (each a separate sprite for depth sorting)
@@ -261,17 +270,12 @@ def make_furniture():
     # plant in the back corner
     s = furn('plant', (1, 0.5, 6, 5))
     iso.box(s, 1.5, 0.5, 0, 4.5, 4.5, 7, C['pot'], C['pot'], C['pot_d'])
-    rnd = random.Random(3)
-    for i in range(70):
-        a = rnd.uniform(0, math.pi * 2)
-        r = rnd.uniform(0, 7)
-        h = rnd.uniform(8, 26)
-        p = P(3.7 + math.cos(a) * r * 0.5, 2.7 + math.sin(a) * r * 0.5, h)
-        col = C['leaf_l'] if h > 20 else C['leaf'] if h > 13 else C['leaf_d']
-        s.rect(p[0] - 1, p[1], 3, 2, col)
-    for i in range(6):
-        p = P(3.7, 2.7, 7 + i * 2)
-        s.put(p[0], p[1], C['leaf_d'])
+    for i in range(5):
+        p = P(3.5, 2.5, 7 + i * 2)
+        s.put(p[0], p[1], C['trunk'])
+    for (dz, dx, rx, ry) in ((11, -3, 5, 4), (13, 3, 5, 4), (18, -1, 6, 5), (23, 1, 5, 4)):
+        p = P(3.5, 2.5, dz)
+        bush(s, p[0] + dx, p[1], rx, ry)
 
     # desk
     s = furn('desk', (21, 0, 41, 10))

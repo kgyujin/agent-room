@@ -411,7 +411,7 @@ pub fn run() {
             let menu = build_menu(&handle, &[])?;
             TrayIconBuilder::with_id("main")
                 .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
-                .icon_as_template(false)
+                .icon_as_template(true)
                 .tooltip("Agent Room")
                 .menu(&menu)
                 .on_menu_event(|app, ev| match ev.id().as_ref() {
