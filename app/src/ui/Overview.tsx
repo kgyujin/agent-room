@@ -15,7 +15,7 @@ export function userTodo(s: Snapshot, now: number): { text: string; since: numbe
   if (s.connection !== 'live') return null;
   if (s.waiting)
     return {
-      text: s.waiting.kind === 'approval' ? `${s.waiting.tool ?? '도구'} 실행 승인` : s.waiting.message ?? '답변 입력',
+      text: s.waiting.kind === 'approval' ? `${s.waiting.tool ?? '도구'} 실행 승인` : '답변 입력',
       since: s.waiting.since,
     };
   if (s.state === 'error') return { text: s.lastTest?.ok === false ? '테스트 실패 확인' : '오류 확인', since: s.error?.at ?? now };
@@ -167,7 +167,7 @@ function AgentRow({ s, now, on, onClick }: { s: Snapshot; now: number; on: boole
         )}
         {t !== null && <span className="muted">{isActive(s) ? '진행' : '소요'} {fmtDuration(t)}</span>}
         {eta !== null && <span className="ov-eta" title="끝난 단계의 평균 시간으로 계산한 추정치예요">약 {Math.max(1, Math.round(eta / 60000))}분 남음</span>}
-        {s.subagents > 0 && <span className="muted">하위 {s.subagents}</span>}
+        {s.subagents > 0 && <span className="muted">하위 에이전트 {s.subagents}</span>}
       </div>
       {step && <div className="ov-step">지금: {step.text}</div>}
     </button>

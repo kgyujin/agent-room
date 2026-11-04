@@ -43,15 +43,17 @@ export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: Rate
         )}
         <dt>마지막 활동</dt>
         <dd>{fmtAgo(now - s.lastEventAt)}</dd>
-        <dt>진행</dt>
-        <dd>
-          {prog ? (
-            <span className="prog" title="에이전트가 보고한 작업 목록 기준">
-              <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
-              {prog.done}/{prog.total}
-            </span>
-          ) : active ? '진행 중' : s.completedTurns > 0 ? `완료 ${s.completedTurns}회` : '—'}
-        </dd>
+        {prog && (
+          <>
+            <dt>진행</dt>
+            <dd>
+              <span className="prog" title="에이전트가 보고한 작업 목록 기준">
+                <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
+                {prog.done}/{prog.total}
+              </span>
+            </dd>
+          </>
+        )}
         {limits && (
           <>
             <dt>남은 사용량</dt>
@@ -78,7 +80,7 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
       <div className="callout wait">
         {s.waiting.kind === 'approval'
           ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 터미널에서 확인해 주세요.`
-          : s.waiting.message ?? '에이전트가 입력을 기다리고 있어요.'}
+          : '답변을 기다리고 있어요. 터미널에서 확인해 주세요.'}
         <span className="since">{fmtAgo(now - s.waiting.since)}</span>
       </div>
     );
