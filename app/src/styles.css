@@ -85,7 +85,8 @@ h4 { margin: 16px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04
 .banner.demo + .banner.error { top: 44px; }
 
 /* ------------------------------------------------ HUD */
-.topleft { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 8px; max-width: 290px; z-index: 3; }
+.topleft { position: absolute; top: 12px; left: 12px; right: 64px; display: flex; flex-direction: column; gap: 8px; z-index: 3; pointer-events: none; }
+.topleft > * { pointer-events: auto; }
 .hud { padding: 14px 16px; width: 280px; }
 .hud-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .hud-agent { font-weight: 700; }
