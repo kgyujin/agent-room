@@ -37,6 +37,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # reuse compiled Rust deps between runs (main's cache is readable from release tags)
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-release
       - uses: actions/setup-node@v4
         with:
           node-version: 22
