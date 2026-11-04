@@ -450,9 +450,15 @@ fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
     let pos = rect.position.to_physical::<f64>(k);
     let size = rect.size.to_physical::<f64>(k);
     let ww = w.outer_size().map(|s| s.width as f64).unwrap_or(360.0 * k);
-    let x = pos.x + size.width / 2.0 - ww / 2.0;
+    let mut x = pos.x + size.width / 2.0 - ww / 2.0;
     let y = pos.y + size.height + 4.0 * k;
-    let _ = w.set_position(tauri::PhysicalPosition::new(x.max(0.0), y));
+    // keep the whole popover on the display whose menu bar was clicked
+    if let Ok(Some(m)) = app.monitor_from_point(pos.x + size.width / 2.0, pos.y + size.height / 2.0) {
+        let left = m.position().x as f64;
+        let right = left + m.size().width as f64;
+        x = x.min(right - ww - 8.0 * k).max(left + 8.0 * k);
+    }
+    let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
     let _ = w.show();
     let _ = w.set_focus();
     let _ = w.emit("popover-shown", ());
