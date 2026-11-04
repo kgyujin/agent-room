@@ -196,7 +196,7 @@ export default function App() {
     if (!sc) return;
     sc.skins = skins;
     sc.prefs = skinPrefs(settings.characters ?? {}, Object.keys(skins).filter((k) => !k.startsWith('builtin/')));
-    sc.assignSkins();
+    sc.assignSkins(true);
   }, [settings.characters, skins, ready]);
 
   useEffect(() => {

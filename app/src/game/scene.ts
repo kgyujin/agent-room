@@ -88,10 +88,12 @@ export class Scene {
     for (const m of this.mates) this.applyBehavior(m);
   }
 
-  /** each critter keeps its skin; new ones take the first preferred skin nobody else wears */
-  assignSkins() {
+  /** each critter keeps its skin; new ones take the first preferred skin nobody else wears.
+   *  reset: re-pick every skin (the user changed the character settings) */
+  assignSkins(reset = false) {
     const taken = new Set<string>();
     for (const m of this.mates) {
+      if (reset) m.skin = '';
       const pref = this.prefs[m.agent] ?? [];
       if (!m.skin || !this.skins[m.skin] || taken.has(m.skin)) {
         m.skin = pref.find((n) => this.skins[n] && !taken.has(n)) ?? pref.find((n) => this.skins[n]) ?? '';
