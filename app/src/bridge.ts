@@ -17,8 +17,8 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
+  theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
 };
 
@@ -88,7 +88,7 @@ function previewSnapshot(state: string): Snapshot {
       { text: '요구사항 읽기', status: 'completed' }, { text: 'UI 컴포넌트 수정', status: 'completed' },
       { text: '테스트 작성', status: 'in_progress' }, { text: '빌드 확인', status: 'pending' },
     ],
-    tokens: { input: 18240, output: 6310, cacheRead: 152000, cacheWrite: 9800, source: 'demo' },
+    limits: { windows: [{ minutes: 300, usedPct: 38, resetsAt: now + 2.2 * 3_600_000 }, { minutes: 10080, usedPct: 22, resetsAt: now + 4.3 * 86_400_000 }], at: now },
     completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0,
   };
   const set = (p: Partial<Snapshot>) => Object.assign(s, p);
@@ -124,13 +124,15 @@ function previewBackend(): Backend {
     }, 9000);
   }
   // 'multi': several agents at once (browser design preview only)
+  // Codex sessions in the preview report a tighter limit so both rows differ
+  const cx: Snapshot['limits'] = { windows: [{ minutes: 300, usedPct: 84, resetsAt: Date.now() + 47 * 60_000 }, { minutes: 10080, usedPct: 51, resetsAt: Date.now() + 2.1 * 86_400_000 }], at: Date.now() };
   const multi = (): Snapshot[] => [
     { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app' },
-    { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', isDemo: false, project: 'api-server' },
+    { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', limits: cx, isDemo: false, project: 'api-server' },
     { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs' },
     { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra' },
-    { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', isDemo: false, project: 'mobile' },
-    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', isDemo: false, project: 'data-pipeline', plan: [] },
+    { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', limits: cx, isDemo: false, project: 'mobile' },
+    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', limits: cx, isDemo: false, project: 'data-pipeline', plan: [] },
   ];
   const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   let settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day' };
