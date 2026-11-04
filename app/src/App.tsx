@@ -455,9 +455,9 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
-      // nudge tags up so neighbours never cover each other (compact tags are ~60 x 22 css px)
+      // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 60);
+      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 40);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
@@ -487,7 +487,7 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {(full || selected === a.key || urgent) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
             <i className={`dot tone-${tone}`} />
-            {prog && <small>{prog.done}/{prog.total}</small>}
+            {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
           </button>
         );
       })}

@@ -57,6 +57,7 @@ Claude Code / Codex ──(공식 Hook: stdin JSON)──▶ agent-room-hook ─
 * 앱과 core 크레이트에는 HTTP 클라이언트가 없습니다 (`cargo tree`에 reqwest/hyper/ureq 없음). WebView CSP도 `connect-src ipc:`로 막혀 있습니다.
 * 프롬프트, Agent 응답, 파일 내용, 명령 출력은 Hook 프로세스 안에서 버리고 앱으로 보내지 않습니다. 명령어는 `*_TOKEN=`, `Bearer …`, `sk-…` 같은 값을 가린 뒤 잘라서 보냅니다.
 * 이벤트는 메모리에만 있습니다(세션당 최근 300개). 디스크에 저장하는 것은 설정 파일과 Agent 설정 백업뿐입니다.
+* `~/.agent-room`은 본인만 열 수 있게(0700) 만들고, Agent 설정 백업과 보관한 상태줄 명령은 본인만 읽을 수 있게(0600) 저장합니다. Agent 설정의 `env`에 API 키가 있을 수 있어서예요. Agent 설정 파일을 고쳐 쓸 때는 원래 파일 권한을 그대로 유지합니다. 소켓도 본인 전용(0600)입니다.
 * 남은 사용량(5시간·주간 한도)은 Agent가 이미 내놓는 숫자만 읽습니다. Claude Code는 상태줄 명령에 넘겨주는 `rate_limits`(Pro·Max 요금제), Codex는 rollout 로그의 `rate_limits`입니다.
 * Claude의 상태줄은 `agent-room-hook statusline`이 감쌉니다. 쓰던 상태줄 명령은 `~/.agent-room/claude-statusline.json`에 보관해 그대로 실행하고 출력도 그대로 보여주며, 연동 해제 시 원래 설정으로 돌려놓습니다.
 

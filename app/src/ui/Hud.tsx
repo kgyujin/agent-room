@@ -1,5 +1,5 @@
 import type { RateLimits, Snapshot } from '../types';
-import { activityLabel, AGENT_NAME, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
+import { activityLabel, AGENT_NAME, fmtAgo, fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon } from './icons';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
@@ -39,12 +39,6 @@ export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: Rate
           <>
             <dt>{active ? '작업 시간' : '소요 시간'}</dt>
             <dd>{fmtDuration(turnMs)}</dd>
-          </>
-        )}
-        {s.turnStartedAt && (
-          <>
-            <dt>작업 시작</dt>
-            <dd>{fmtClock(s.turnStartedAt)}</dd>
           </>
         )}
         <dt>마지막 활동</dt>

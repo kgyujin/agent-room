@@ -104,14 +104,11 @@ function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?
     ['프로젝트', s.project ?? '—'],
     ['경로', s.cwd ?? '—'],
     ['모델', s.model ?? '—'],
-    ['권한 모드', s.permissionMode ?? '—'],
     ['세션 시작', `${fmtClock(s.startedAt)}${s.startExact ? '' : ' (앱이 처음 관찰한 시각)'}`],
     ['세션 경과', fmtDuration(now - s.startedAt)],
-    ['마지막 이벤트', `${fmtClock(s.lastEventAt)} · ${fmtAgo(now - s.lastEventAt)}`],
+    ['마지막 활동', fmtAgo(now - s.lastEventAt)],
     ['연결 상태', { live: '연결됨', stale: '이벤트 없음(불확실)', ended: '종료됨', lost: '프로세스 없음' }[s.connection]],
     ['완료한 요청', `${s.completedTurns}회`],
-    ['도구 호출', `${s.toolCount}회`],
-    ['세션 ID', s.sessionId],
   ];
   return (
     <div className="pad">

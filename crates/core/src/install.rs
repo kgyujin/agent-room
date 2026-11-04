@@ -81,6 +81,10 @@ fn write_atomic(path: &Path, v: &Value) -> Result<(), String> {
     let tmp = path.with_extension("json.agent-room-tmp");
     let txt = serde_json::to_string_pretty(v).map_err(|e| e.to_string())? + "\n";
     fs::write(&tmp, txt).map_err(|e| e.to_string())?;
+    // keep the original file's permissions (a 0600 settings file must not become world-readable)
+    if let Ok(meta) = fs::metadata(path) {
+        fs::set_permissions(&tmp, meta.permissions()).map_err(|e| e.to_string())?;
+    }
     fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
@@ -89,10 +93,12 @@ fn backup(t: Target, path: &Path) -> Result<Option<PathBuf>, String> {
         return Ok(None);
     }
     let dir = paths::backups_dir();
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    paths::ensure_private_dir(&paths::data_dir()).map_err(|e| e.to_string())?;
+    paths::ensure_private_dir(&dir).map_err(|e| e.to_string())?;
     let file = path.file_name().and_then(|f| f.to_str()).unwrap_or("config");
     let dst = dir.join(format!("{}-{}-{}", t.name(), now_ms(), file));
     fs::copy(path, &dst).map_err(|e| e.to_string())?;
+    paths::make_private(&dst).map_err(|e| e.to_string())?;
     // prune old backups of this agent
     let mut all = list_backups(t);
     while all.len() > KEEP_BACKUPS {
@@ -166,8 +172,9 @@ fn set_statusline(doc: &mut Value, bin: &Path) -> Result<(), String> {
     let o = doc.as_object_mut().unwrap();
     let prev = o.get("statusLine").cloned().unwrap_or(Value::Null);
     let txt = serde_json::to_string(&prev).map_err(|e| e.to_string())?;
-    fs::create_dir_all(paths::data_dir()).map_err(|e| e.to_string())?;
+    paths::ensure_private_dir(&paths::data_dir()).map_err(|e| e.to_string())?;
     fs::write(paths::claude_prev_statusline(), txt).map_err(|e| e.to_string())?;
+    paths::make_private(&paths::claude_prev_statusline()).map_err(|e| e.to_string())?;
     let mut ours = json!({ "type": "command", "command": format!("\"{}\" statusline", bin.display()) });
     if let Some(p) = prev.get("padding") {
         ours["padding"] = p.clone();
@@ -379,6 +386,28 @@ mod tests {
         uninstall(Target::Claude).unwrap();
         let after: Value = serde_json::from_str(&fs::read_to_string(d.join("claude/settings.json")).unwrap()).unwrap();
         assert_eq!(after, serde_json::from_str::<Value>(original).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copies_of_configs_stay_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let _g = ENV.lock().unwrap();
+        let d = sandbox("p");
+        fs::create_dir_all(d.join("claude")).unwrap();
+        let cfg = d.join("claude/settings.json");
+        fs::write(&cfg, r#"{"env":{"ANTHROPIC_API_KEY":"sk-ant-xxxxxxxxxxxx"},"statusLine":{"type":"command","command":"x"}}"#).unwrap();
+        fs::set_permissions(&cfg, fs::Permissions::from_mode(0o600)).unwrap();
+        let fake_bin = d.join("agent-room-hook");
+        fs::write(&fake_bin, b"x").unwrap();
+        install(Target::Claude, Some(&fake_bin)).unwrap();
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&cfg), 0o600, "rewritten config keeps its mode");
+        for b in list_backups(Target::Claude) {
+            assert_eq!(mode(&b), 0o600, "backup is private");
+        }
+        assert_eq!(mode(&paths::backups_dir()), 0o700);
+        assert_eq!(mode(&paths::claude_prev_statusline()), 0o600);
     }
 
     #[test]
