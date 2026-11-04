@@ -6,11 +6,12 @@ import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud, MiniPill } from './ui/Hud';
-import { DetailPanel } from './ui/DetailPanel';
+import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
-import { Icon } from './ui/icons';
-import { AGENT_NAME } from './labels';
+import { AgentMark, Icon } from './ui/icons';
+import { progressOf } from './ui/Hud';
+import { AGENT_NAME, stateTone } from './labels';
 import { applyUiTheme, uiTheme } from './themes';
 
 const PANEL_W = 330;
@@ -53,7 +54,7 @@ export default function App() {
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
   const [settingsOpen, setSettingsOpen] = useState<null | 'general' | 'agents' | 'dev'>(null);
-  const [detailTab, setDetailTab] = useState<'timeline' | 'tasks' | 'session'>('timeline');
+  const [detailTab, setDetailTab] = useState<Tab>('overview');
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
   const [vw, setVw] = useState(window.innerWidth);
@@ -387,6 +388,8 @@ export default function App() {
         <DetailPanel
           width={PANEL_W}
           s={selected}
+          sessions={list}
+          onSelect={setPinned}
           timeline={timelines[selected.key] ?? []}
           tab={detailTab}
           setTab={setDetailTab}
@@ -459,10 +462,10 @@ function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: Reac
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
-      // nudge tags up so neighbours never cover each other (tags are ~110 x 22 css px)
+      // nudge tags up so neighbours never cover each other (compact tags are ~60 x 22 css px)
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < 110 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        while (placed.some((q) => Math.abs(q.x - p.x) < 60 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
         placed.push(p);
       }
       const sig = a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
@@ -481,11 +484,14 @@ function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: Reac
       {anchors.map((a) => {
         const s = sessions[a.key];
         if (!s) return null;
-        const who = s.isDemo ? '데모' : AGENT_NAME[s.agent].split(' ')[0];
+        const prog = progressOf(s);
+        const tone = stateTone(s);
         return (
-          <button key={a.key} className={`nametag a-${s.isDemo ? 'demo' : s.agent} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
-            <b>{who}</b>
-            {s.project && <span>{s.project}</span>}
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+            <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
+            {selected === a.key && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            <i className={`dot tone-${tone}`} />
+            {prog && <small>{prog.done}/{prog.total}</small>}
           </button>
         );
       })}

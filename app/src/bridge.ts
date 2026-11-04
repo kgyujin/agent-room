@@ -121,6 +121,9 @@ function previewBackend(): Backend {
     { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app' },
     { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', isDemo: false, project: 'api-server' },
     { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs' },
+    { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra' },
+    { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', isDemo: false, project: 'mobile' },
+    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', isDemo: false, project: 'data-pipeline', plan: [] },
   ];
   const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   let settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day' };

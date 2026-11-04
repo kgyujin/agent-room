@@ -95,7 +95,8 @@ export class Scene {
       let m = this.mates.find((x) => x.key === k);
       if (!m) {
         const used = new Set(this.mates.map((x) => x.slot));
-        const slot = [...Array(this.desks).keys()].find((i) => !used.has(i)) ?? 0;
+        const order = this.atlas.layout.deskOrder ?? [...Array(this.desks).keys()];
+        const slot = order.find((i) => !used.has(i)) ?? 0;
         const agent = s ? (s.agent === 'demo' ? 'generic' : s.agent) : 'generic';
         const actor = new Actor(agent, this.atlas.layout, `sofa${slot}`);
         m = { key: k, agent, slot, actor, session: s, skin: '', sparks: [], restVariant: REST_KEYS[slot % REST_KEYS.length], restSince: Date.now() };
@@ -122,7 +123,10 @@ export class Scene {
   }
 
   private spotFor(m: Mate, spot: string): string {
-    if (spot === 'desk' || spot === 'sofa' || spot === 'front') return `${spot}${m.slot}`;
+    if (spot === 'desk' || spot === 'sofa' || spot === 'front') {
+      const own = `${spot}${m.slot}`;
+      return own in this.atlas.layout.spots ? own : `desk${m.slot}`;
+    }
     if (SHARED.has(spot) && this.mates.some((o) => o !== m && o.actor.spot === spot)) return `desk${m.slot}`;
     return spot;
   }

@@ -7,6 +7,8 @@ export interface Layout {
   furniture: Piece[];
   /** number of workstations (desk0..), one critter each */
   desks: number;
+  /** desk indices in the order new critters take them */
+  deskOrder?: number[];
   spots: Record<string, { x: number; y: number; face: Facing; z?: number; sit?: boolean }>;
   nodes: Record<string, [number, number]>;
   edges: [string, string][];
