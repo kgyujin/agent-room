@@ -4,16 +4,13 @@ Outputs to app/public/assets/:
   atlas.png / atlas.json   - all sprites + scene layout (furniture boxes, spots, overlay positions)
 """
 import json
-import math
 import os
-import random
 
 from PIL import Image
 
-from pix import Spr, Iso, hexc, shade
+from pix import Spr, hexc, shade
 import character
 
-random.seed(7)
 OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'app', 'public', 'assets')
 
 # ---------------------------------------------------------------- palette
@@ -38,410 +35,285 @@ C = {k: hexc(v) for k, v in {
 
 BOOK_COLS = [hexc(h) for h in ('#d06a5f', '#5f8fc9', '#e3b85c', '#7fb07a', '#a77cc2', '#e98aa8', '#6b9fa0', '#c98d58')]
 
-N = 28          # room floor size (world units)
-F = 3           # floor slab thickness: furniture stands on z = F
-WALL_H = 30     # eave height above z=0
-GABLE = 26      # extra height of the gable peak (iso squashes it, so it must be tall)
-SW, SH = 240, 210
-iso = Iso(120, 96)
-P = iso.p
+C.update({k: hexc(v) for k, v in {
+    'frame': '#4b3a3e', 'frame_l': '#6f5a5c',
+    'wp': '#cfeae0', 'wp_s': '#bfe1d5', 'wp_d': '#a8d2c4', 'crown': '#fff6ea',
+    'wains': '#ebc18d', 'wains_d': '#c99a66', 'wains_l': '#f6d8ae', 'base': '#8a5a40',
+    'fl_a': '#efc48e', 'fl_b': '#e6b87f', 'fl_c': '#f3cd9c', 'fl_seam': '#c99764', 'fl_sh': '#cf9d68',
+    'rug': '#e8705f', 'rug_d': '#c95549', 'rug_b': '#fff1d6', 'rug_p': '#ffd36b',
+    'mat': '#86c46f', 'mat_d': '#649f55', 'step': '#8a7270',
+    'sky1': '#8fd0ee', 'sky2': '#b3e0f4', 'sky3': '#d8f0f8', 'curtain': '#f6a8b8', 'curtain_d': '#e0889c',
+    'chair': '#e0675c', 'chair_d': '#b84f47', 'chair_l': '#f08e83',
+    'teal': '#6cbcb0', 'teal_d': '#4f9a90', 'teal_l': '#9ad8cc',
+    'bean': '#f7d06a', 'bean_d': '#e0ae45', 'bean_l': '#fde39c',
+    'bezel': '#f2ede4', 'bezel_d': '#cfc6b8', 'mach': '#b9c3d6', 'mach_d': '#8f9ab0', 'mach_l': '#d9e0ec',
+}.items()})
+
+# Front top-down (3/4) room on a 16px tile grid. World coordinates = scene pixels.
+SW, SH = 204, 180
+IN_X0, IN_X1 = 6, 198          # inner area inside the frame
+WALL_Y0, FLOOR_Y0, FLOOR_Y1 = 6, 62, 174
 
 
 def new():
     return Spr(SW, SH)
 
 
-def plane_left(px, py):
-    """screen pixel -> (y, z) on the x=0 wall plane"""
-    y = (iso.ox - (px + 0.5)) / 2
-    return y, iso.oy + y - (py + 0.5)
+def block(s, x, y, w, top_h, front_h, top, front):
+    """furniture block: top face (lit edge on its first row) over a front face (dark last row)"""
+    s.rect(x, y, w, top_h, top)
+    s.rect(x, y, w, 1, shade(top, 1.18))
+    s.rect(x, y + top_h, w, front_h, front)
+    s.rect(x, y + top_h + front_h - 1, w, 1, shade(front, 0.85))
 
 
-def plane_right(px, py):
-    """screen pixel -> (x, z) on the y=0 wall plane"""
-    x = ((px + 0.5) - iso.ox) / 2
-    return x, iso.oy + x - (py + 0.5)
-
-
-def plane_y(px, py, y):
-    """screen pixel -> (x, z) on a y=const plane"""
-    x = ((px + 0.5) - iso.ox) / 2 + y
-    return x, iso.oy + x + y - (py + 0.5)
-
-
-def plane_x(px, py, x):
-    """screen pixel -> (y, z) on an x=const plane"""
-    y = x - ((px + 0.5) - iso.ox) / 2
-    return y, iso.oy + x + y - (py + 0.5)
-
-
-def floor_xy(px, py, z):
-    a = ((px + 0.5) - iso.ox) / 2          # x - y
-    b = (py + 0.5) - iso.oy + z            # x + y
-    return (a + b) / 2, (b - a) / 2
-
-
-def gable_top(x):
-    return WALL_H + GABLE * max(0.0, 1 - abs(x - N / 2) / (N / 2))
-
-
-# ---------------------------------------------------------------- walls
-def wall_band(u, z, ztop):
-    """shared wall finish: skirting, wainscot with panel grooves, rail, plaster"""
-    if z < F + 1:
-        return C['wood_d']
-    if z < F + 8:
-        if abs((u % 4) - 2) < 0.5:
-            return C['wains_d']
-        return C['wains']
-    if z < F + 9:
-        return C['wood_h']
-    if z > ztop - 1.5:
-        return C['wall_s']                                   # shadow under the eave
-    return C['wall']
-
-
-def wall_left_tex(px, py):
-    y, z = plane_left(px, py)
-    # window (two panes, mullion, sill) above the armchair
-    wy0, wy1, wz0, wz1 = 13, 22, F + 12, F + 23
-    if wy0 <= y <= wy1 and wz0 <= z <= wz1:
-        frame = y < wy0 + 1 or y > wy1 - 1 or z < wz0 + 1 or z > wz1 - 1
-        mull = abs(y - (wy0 + wy1) / 2) < 0.5 or abs(z - (wz0 + 6)) < 0.5
-        if frame or mull:
-            return C['cream']
-        return (0, 0, 0, 0)                                  # glass: sky shows through
-    if wz0 - 1.5 <= z < wz0 and wy0 - 1 <= y <= wy1 + 1:
-        return C['wood_l']                                   # sill
-    # little framed picture by the bookshelf
-    if 5 <= y <= 9 and F + 24 <= z <= F + 28:
-        if y < 5.5 or y > 8.5 or z < F + 24.5 or z > F + 27.5:
-            return C['wood']
-        return C['note_b'] if z > F + 26 else C['leaf_l']
-    return wall_band(y, z, WALL_H)
-
-
-def wall_right_tex(px, py):
-    x, z = plane_right(px, py)
-    # cork board (planning board)
-    if 3 <= x <= 11 and F + 13 <= z <= F + 22:
-        if x < 3.5 or x > 10.5 or z < F + 13.5 or z > F + 21.5:
-            return C['wood']
-        for (a, b, c0, c1, k) in ((4.5, 6.5, F + 17, F + 20.5, 'note_y'), (7, 9.5, F + 18, F + 21, 'note_p'),
-                                  (4.5, 7, F + 14, F + 16.5, 'paper'), (7.5, 10, F + 14.5, F + 17, 'note_b')):
-            if a <= x <= b and c0 <= z <= c1:
-                return C[k]
-        return C['cork']
-    # round clock in the gable
-    cx, cz = N / 2, WALL_H + 9
-    d = (x - cx) ** 2 + ((z - cz) * 0.5) ** 2
-    if d <= 2.6 ** 2:
-        if d > 1.8 ** 2:
-            return C['wood']
-        if (abs(x - cx) < 0.3 and cz <= z <= cz + 2.6) or (abs(z - cz) < 0.6 and cx <= x <= cx + 1.4):
-            return C['ink']
-        return C['cream']
-    return wall_band(x, z, gable_top(x))
-
-
-def plank(px, py):
-    x, y = floor_xy(px, py, F)
-    if (x % 4) < 0.5:
-        return C['seam']                                     # boards run along y
-    row = int(x // 4)
-    if ((y + row * 7) % 14) < 0.5:
-        return C['seam']
-    return (C['plank_a'], C['plank_c'], C['plank_b'])[row % 3]
-
-
-def draw_tree(s, cx, cy, r, seed):
-    """cherry blossom tree: short trunk, canopy of shaded puffs lit from the top-left (no noise)"""
-    rnd = random.Random(seed)
-    t = Spr(s.w, s.h)
-    for i in range(int(r * 1.3)):
-        for dx in range(3):
-            t.put(cx - 1 + dx, cy + i, shade(C['trunk'], 1.2) if dx == 0 else C['trunk'] if dx == 1 else shade(C['trunk'], 0.8))
-    puffs = [(cx, cy - r * 0.3, r * 0.5)]
-    for ring, (rr, n, ps) in enumerate(((0.75, 9, 0.33), (0.4, 6, 0.36))):
-        for i in range(n):
-            a = 2 * math.pi * i / n + ring * 0.4 + rnd.uniform(-0.15, 0.15)
-            puffs.append((cx + math.cos(a) * r * rr * 1.2, cy - r * 0.15 + math.sin(a) * r * rr * 0.8, r * ps * rnd.uniform(0.9, 1.1)))
-    puffs.sort(key=lambda p: p[1])
-    for (px0, py0, pr) in puffs:
-        for y in range(int(py0 - pr) - 1, int(py0 + pr) + 2):
-            for x in range(int(px0 - pr * 1.2) - 1, int(px0 + pr * 1.2) + 2):
-                dx, dy = (x + 0.5 - px0) / 1.15, (y + 0.5 - py0)
-                d = math.hypot(dx, dy)
-                if d > pr:
-                    continue
-                l = (-dx * 0.55 - dy * 0.85) / pr
-                if d > pr - 1.1 and l < 0:
-                    col = C['bloom_dd']                       # rim on the shadow side
-                elif l > 0.4:
-                    col = C['bloom_l']
-                elif l > -0.15:
-                    col = C['bloom']
-                else:
-                    col = C['bloom_d']
-                t.put(x, y, col)
-    t.outline(color=shade(C['bloom_dd'], 0.62))
-    s.paste(t, 0, 0)
-
-
-def draw_room_base(s):
-    # cherry trees peeking from behind the cabin
-    tl = P(-2, 12, WALL_H + 2)
-    draw_tree(s, tl[0] - 12, tl[1] - 2, 15, 1)
-    tr = P(20, -2, WALL_H + 4)
-    draw_tree(s, tr[0] + 14, tr[1] - 4, 17, 2)
-    # floor slab: planks on top, dark beam edges
-    iso.box(s, 0, 0, 0, N, N, F, plank,
-            lambda px, py: C['beam'] if plane_y(px, py, N)[1] > 0.9 else shade(C['beam'], 0.8),
-            lambda px, py: shade(C['beam'], 0.85) if plane_x(px, py, N)[1] > 0.9 else shade(C['beam'], 0.68))
-    # ambient occlusion: one darker plank row along both walls
-    s.poly([P(0, 0, F), P(N, 0, F), P(N, 1, F), P(1, 1, F), P(1, N, F), P(0, N, F)], lambda px, py: shade(plank(px, py), 0.86))
-    # walls (1 unit thick); right wall is a gable
-    iso.box(s, -1, -1, 0, 1, N + 1, WALL_H, C['cap'], C['wood'], wall_left_tex, rim=False)
-    gab = [P(N, 0, WALL_H), P(N / 2, 0, WALL_H + GABLE), P(0, 0, WALL_H), P(0, 0, 0), P(N, 0, 0)]
-    s.poly(gab, wall_right_tex)
-    s.poly([P(N, -1, 0), P(N, 0, 0), P(N, 0, WALL_H), P(N, -1, WALL_H - 0.5)], C['wood_d'])
-    # roof: dark eave beam along the left wall top and a thick trim along the gable
-    iso.box(s, -2, -2, WALL_H, 3, N + 3, 2, C['beam'], shade(C['beam'], 0.85), shade(C['beam'], 0.7), rim=False)
-    for side in (-1, 1):
-        x0, x1 = N / 2, (N + 3) if side > 0 else -3
-        z0, z1 = WALL_H + GABLE, WALL_H - 3 * GABLE / (N / 2)
-        top = [P(x0, 0, z0 + 3.5), P(x1, 0, z1 + 3.5)]
-        bot = [P(x1, 0, z1 - 0.3), P(x0, 0, z0 - 0.3)]
-        s.poly(top + bot, C['beam'])
-        s.poly([P(x0, 0, z0 + 3.5), P(x1, 0, z1 + 3.5), P(x1, 0, z1 + 2.6), P(x0, 0, z0 + 2.6)], shade(C['beam'], 1.3))
-    # string lights under the trim
-    for i in range(3, N - 2, 3):
-        p = P(i, 0, gable_top(i) - 2)
-        col = [C['led_a'], C['note_p'], C['note_b']][(i // 3) % 3]
-        s.put(p[0], p[1], col)
-        s.put(p[0], p[1] + 1, shade(col, 0.8))
+def draw_room(s):
+    s.rect(0, 0, SW, SH, C['frame'])
+    s.rect(IN_X0 - 1, WALL_Y0 - 1, IN_X1 - IN_X0 + 2, FLOOR_Y1 - WALL_Y0 + 2, C['frame_l'])
+    # wall: crown, striped wallpaper with a dot motif, chair rail, wainscot panels, baseboard
+    for y in range(WALL_Y0, FLOOR_Y0):
+        for x in range(IN_X0, IN_X1):
+            if y < WALL_Y0 + 2:
+                c = C['crown']
+            elif y < 46:
+                c = C['wp_s'] if x % 12 in (0, 1) else C['wp']
+                if x % 12 == 7 and (y - 8) % 12 in (5,):
+                    c = C['wp_d']
+                if y == WALL_Y0 + 2:
+                    c = C['wp_d']
+            elif y == 46:
+                c = C['wains_d']
+            elif y < 59:
+                c = C['wains_l'] if y == 47 else (C['wains_d'] if (x - IN_X0) % 16 == 15 else C['wains'])
+            else:
+                c = C['base']
+            s.put(x, y, c)
+    # floor: horizontal planks, staggered joints; a soft shadow row under the wall
+    for y in range(FLOOR_Y0, FLOOR_Y1):
+        r = (y - FLOOR_Y0) // 8
+        for x in range(IN_X0, IN_X1):
+            if (y - FLOOR_Y0) % 8 == 7 or (x + r * 13) % 32 == 0:
+                c = C['fl_seam']
+            else:
+                c = (C['fl_a'], C['fl_b'], C['fl_c'])[r % 3]
+            if y < FLOOR_Y0 + 2:
+                c = C['fl_sh']
+            s.put(x, y, c)
+    # door gap in the bottom frame + mat
+    s.rect(92, FLOOR_Y1, 20, SH - FLOOR_Y1, C['step'])
+    s.rect(92, SH - 2, 20, 2, C['frame'])
+    s.rect(92, 162, 20, 10, C['mat'])
+    s.rect(92, 171, 20, 1, C['mat_d'])
+    for x in range(94, 110, 4):
+        s.rect(x, 164, 2, 6, C['mat_d'])
     # rug
-    rx0, ry0, rx1, ry1 = 7, 11, 19, 24
+    rx0, ry0, rw, rh = 66, 100, 72, 46
+    s.rect(rx0, ry0, rw, rh, C['rug_d'])
+    s.rect(rx0 + 1, ry0 + 1, rw - 2, rh - 2, C['rug_b'])
+    s.rect(rx0 + 3, ry0 + 3, rw - 6, rh - 6, C['rug'])
+    for y in range(ry0 + 7, ry0 + rh - 6, 8):
+        for x in range(rx0 + 7 + ((y - ry0) // 8 % 2) * 4, rx0 + rw - 6, 8):
+            s.put(x, y, C['rug_p'])
+            s.put(x - 1, y, C['rug_d']); s.put(x + 1, y, C['rug_d'])
+            s.put(x, y - 1, C['rug_d']); s.put(x, y + 1, C['rug_d'])
+    # window with curtains
+    wx0, wy0, ww, wh = 58, 12, 32, 28
+    s.rect(wx0, wy0, ww, wh, C['white'])
+    for y in range(wy0 + 2, wy0 + wh - 2):
+        band = (y - wy0 - 2) * 3 // (wh - 4)
+        s.rect(wx0 + 2, y, ww - 4, 1, (C['sky1'], C['sky2'], C['sky3'])[band])
+    for (cx, cy, n) in ((wx0 + 7, wy0 + 8, 6), (wx0 + 20, wy0 + 16, 8)):
+        s.rect(cx, cy, n, 2, C['white'])
+        s.rect(cx + 2, cy - 1, n - 3, 1, C['white'])
+    s.rect(wx0 + ww // 2 - 1, wy0, 2, wh, C['white'])
+    s.rect(wx0, wy0 + wh // 2 - 1, ww, 2, C['white'])
+    s.rect(wx0 - 2, wy0 + wh, ww + 4, 2, C['crown'])
+    s.rect(wx0 - 2, wy0 + wh + 2, ww + 4, 1, C['wains_d'])
+    for cx in (wx0 - 5, wx0 + ww + 1):
+        s.rect(cx, wy0 - 2, 4, wh + 4, C['curtain'])
+        s.rect(cx + 1, wy0 - 2, 1, wh + 4, C['curtain_d'])
+    s.rect(wx0 - 6, wy0 - 3, ww + 12, 1, C['wood_d'])
+    # cork board with notes
+    bx0, by0 = 98, 15
+    s.rect(bx0, by0, 26, 20, C['wood'])
+    s.rect(bx0 + 1, by0 + 1, 24, 18, C['cork'])
+    for (nx, ny, c) in ((3, 3, 'note_y'), (11, 2, 'paper'), (17, 4, 'note_p'), (4, 11, 'note_b'), (13, 10, 'note_y')):
+        s.rect(bx0 + nx, by0 + ny, 6, 5, C[c])
+        s.put(bx0 + nx + 2, by0 + ny, C['led_r'])
+        s.rect(bx0 + nx + 1, by0 + ny + 2, 4, 1, shade(C[c], 0.8))
+    # clock
+    for y in range(9):
+        for x in range(9):
+            d = (x - 4) ** 2 + (y - 4) ** 2
+            if d <= 18:
+                s.put(152 + x, 10 + y, C['frame'] if d > 11 else C['white'])
+    s.rect(156, 12, 1, 3, C['frame']); s.rect(156, 14, 2, 1, C['frame'])
+    # contact shadows on the floor
+    for (x0, y0, w) in ((10, 76, 28), (126, 78, 48), (178, 76, 18)):
+        s.rect(x0, y0, w, 2, C['fl_sh'])
 
-    def rug(px, py):
-        x, y = floor_xy(px, py, F)
-        if x < rx0 + 0.8 or x > rx1 - 0.8 or y < ry0 + 0.8 or y > ry1 - 0.8:
-            return C['rug_p']
-        if x < rx0 + 1.6 or x > rx1 - 1.6 or y < ry0 + 1.6 or y > ry1 - 1.6:
-            return C['rug']
-        return C['rug_d']
-    s.poly([P(rx0, ry0, F), P(rx1, ry0, F), P(rx1, ry1, F), P(rx0, ry1, F)], rug)
-    # window light patch on the floor (one flat lighter tone)
-    s.poly([P(1, 14, F), P(5, 17, F), P(5, 25, F), P(1, 22, F)], lambda px, py: shade(rug(px, py) if floor_xy(px, py, F)[0] > rx0 else plank(px, py), 1.18))
-    # wall shelf above the desk with books and a small pot
-    iso.box(s, 15, 0, F + 19, 9, 2.5, 1, C['wood_h'], C['wood_l'], C['wood'])
-    x = 15.5
-    for i, (w, h) in enumerate(((1, 4), (1, 5), (1, 4), (1, 5))):
-        iso.box(s, x, 0, F + 20, w, 2.5, h, shade(BOOK_COLS[i], 1.15), BOOK_COLS[i], shade(BOOK_COLS[i], 0.8))
-        x += w
-    iso.box(s, 21, 0.5, F + 20, 2, 2, 2, C['pot'], C['pot'], C['pot_d'])
-    p = P(22, 1.5, F + 23)
-    bush(s, p[0], p[1], 3, 2)
+
+FURN = []   # (name, spr, base y)
 
 
-def bush(s, cx, cy, rx, ry):
-    """leafy clump: clean ellipse, lit from top-left, darker at the bottom-right (no noise)"""
-    for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
-        for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
-            dx, dy = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
-            if dx * dx + dy * dy > 1:
-                continue
-            l = -dx * 0.6 - dy * 0.8
-            s.put(x, y, C['leaf_l'] if l > 0.35 else C['leaf'] if l > -0.35 else C['leaf_d'])
-
-
-def shadow(s, x0, y0, x1, y1):
-    """contact shadow on the floor under a piece of furniture (flat darker floor tone)"""
-    s.poly([P(x0, y0, F), P(x1, y0, F), P(x1, y1, F), P(x0, y1, F)],
-           lambda px, py: (58, 40, 50, 70))
-
-
-# ---------------------------------------------------------------- furniture (each its own sprite for depth sorting)
-FURN = []   # (name, spr, box(x0,y0,x1,y1))
-
-
-def furn(name, box):
+def furn(name, base):
     s = new()
-    FURN.append((name, s, box))
+    FURN.append((name, s, base))
     return s
 
 
 def make_furniture():
-    # plant in the back corner
-    s = furn('plant', (0.5, 0.5, 4.5, 4.5))
-    iso.box(s, 1, 1, F, 3, 3, 4, C['pot'], C['pot'], C['pot_d'])
-    for (dz, dx, rx, ry) in ((F + 7, -2, 4, 3), (F + 8, 2, 4, 3), (F + 11, 0, 5, 4), (F + 14, 1, 4, 3)):
-        p = P(2.5, 2.5, dz)
-        bush(s, p[0] + dx, p[1], rx, ry)
+    # bookshelf against the wall
+    s = furn('bookshelf', 76)
+    block(s, 10, 24, 28, 6, 46, C['wood_l'], C['wood'])
+    for i, (y0, y1) in enumerate(((32, 44), (46, 58), (60, 72))):
+        s.rect(12, y0, 24, y1 - y0, shade(C['wood_d'], 0.85))
+        x = 12
+        k = i * 3
+        while x < 35:
+            bw = 2 + (k * 7) % 2
+            bh = (y1 - y0) - 1 - (k * 5) % 4
+            if (k * 11) % 9 == 4:
+                x += 3
+                k += 1
+                continue
+            col = BOOK_COLS[(k * 3 + i) % len(BOOK_COLS)]
+            s.rect(x, y1 - bh, bw, bh, col)
+            s.rect(x, y1 - bh, 1, bh, shade(col, 1.2))
+            s.rect(x, y1 - bh + 2, bw, 1, shade(col, 0.75))
+            x += bw
+            k += 1
+        s.rect(12, y1, 24, 2, C['wood_l'])
+    # little plant on top
+    s.rect(30, 20, 6, 5, C['pot']); s.rect(30, 20, 6, 1, shade(C['pot'], 1.2))
+    for (x, y) in ((31, 17), (33, 15), (34, 18), (32, 19), (29, 18), (35, 16)):
+        s.rect(x, y, 2, 2, C['leaf'])
+    s.put(33, 15, C['leaf_l']); s.put(29, 18, C['leaf_d'])
 
-    # bookshelf against the left wall
-    s = furn('bookshelf', (0, 4.5, 4, 11))
-    iso.box(s, 0, 4.5, F, 4, 6.5, 22, C['wood_l'], C['wood'], C['wood_d'])
+    # desk with drawers and an open knee space
+    s = furn('desk', 78)
+    block(s, 126, 54, 48, 12, 12, C['wood_h'], C['wood_l'])
+    s.rect(144, 66, 26, 11, shade(C['wood_d'], 0.8))
+    s.rect(170, 66, 4, 12, C['wood_l'])
+    for y in (68, 73):
+        s.rect(129, y, 12, 1, C['wood'])
+        s.rect(134, y + 2, 3, 1, C['wood_d'])
+    s.rect(138, 59, 22, 4, C['metal_l']); s.rect(138, 62, 22, 1, C['metal'])
+    for x in range(139, 159, 2):
+        s.put(x, 60, C['metal'])
+    s.rect(164, 57, 4, 5, C['cream']); s.rect(164, 57, 4, 1, C['lamp_d'])
 
-    def shelf_front(px, py):
-        y, z = plane_x(px, py, 4)
-        z -= F
-        if y < 5.2 or y > 10.3 or z < 1 or z > 21:
-            return C['wood']
-        if any(abs(z - b) < 0.6 for b in (7, 14)):
-            return C['wood_l']
-        row = 0 if z < 7 else 1 if z < 14 else 2
-        base_z = (1, 7.6, 14.6)[row]
-        bi = int((y - 5.2) / 1.0)
-        hgt = 4 + (bi * 5 + row * 3) % 3
-        if z - base_z > hgt:
-            return shade(C['wood_d'], 0.85)
-        col = BOOK_COLS[(bi * 3 + row * 5) % len(BOOK_COLS)]
-        if abs(z - base_z - hgt + 0.7) < 0.5:
-            return shade(col, 1.3)
-        return col
-    s.poly([P(4, 4.5, F + 22), P(4, 11, F + 22), P(4, 11, F), P(4, 4.5, F)], shelf_front)
+    # monitor (screen overlays are drawn right after it)
+    s = furn('monitor', 78.1)
+    s.rect(136, 32, 26, 22, C['bezel'])
+    s.rect(136, 32, 26, 1, shade(C['bezel'], 1.1))
+    s.rect(136, 53, 26, 1, C['bezel_d'])
+    s.rect(146, 54, 6, 3, C['bezel_d'])
+    s.rect(142, 57, 14, 2, C['bezel'])
+    s.put(159, 51, C['led_g'])
 
-    # desk against the right wall
-    s = furn('desk', (13, 0, 24, 6))
-    shadow(s, 13, 0, 24, 6.5)
-    for (lx, ly) in ((13, 4.5), (23, 4.5)):
-        iso.box(s, lx, ly, F, 1, 1, 12, C['wood'], C['wood'], C['wood_d'])
-    iso.box(s, 19, 0.5, F + 4, 4.5, 5, 8, C['wood_l'], C['wood'], C['wood_d'])           # drawers
-    for dz in (6, 10):
-        p = P(21, 5.5, F + dz)
-        s.put(p[0], p[1], C['wood_h']); s.put(p[0] + 1, p[1] + 1, C['wood_h'])
-    iso.box(s, 13, 0, F + 12, 11, 6, 1.5, C['wood_h'], C['wood_l'], C['wood'])           # top
-    iso.box(s, 17.5, 3.5, F + 13.5, 5, 2, 0.6, C['cream'], shade(C['cream'], 0.85), shade(C['cream'], 0.75))  # keyboard
-    iso.box(s, 22.3, 3.5, F + 13.5, 1.2, 1.2, 1.6, C['white'], C['note_p'], shade(C['note_p'], 0.85))  # mug
-    iso.box(s, 13.5, 1, F + 13.5, 2, 2, 0.6, C['lamp_d'], C['lamp_d'], shade(C['lamp_d'], 0.8))   # desk lamp
-    for i in range(5):
-        p = P(14.5, 2, F + 14 + i)
-        s.put(p[0], p[1], C['lamp_d'])
-    iso.box(s, 13.8, 1.3, F + 19, 2.5, 2, 1.5, C['lamp'], C['lamp_d'], shade(C['lamp_d'], 0.85))
+    # desk chair seen from behind (covers a seated character's lower body)
+    s = furn('chair', 100)
+    s.rect(137, 89, 17, 7, C['chair'])
+    s.rect(138, 90, 15, 1, C['chair_l'])
+    s.rect(137, 95, 17, 1, C['chair_d'])
+    s.rect(144, 96, 3, 2, C['metal_d'])
+    s.rect(139, 98, 13, 1, C['metal_d'])
+    s.put(139, 99, C['ink']); s.put(151, 99, C['ink']); s.put(145, 99, C['ink'])
 
-    # monitor
-    s = furn('monitor', (17, 1, 23, 3))
-    iso.box(s, 19.5, 1.5, F + 13.5, 1, 1, 1.5, C['metal'], C['metal'], C['metal_d'])
-    iso.box(s, 18.5, 1, F + 13.5, 3, 2, 0.5, C['metal_l'], C['metal'], C['metal_d'])
-    iso.box(s, 17, 2, F + 15, 6, 1, 8, C['metal_l'], C['metal'], C['metal_d'])
+    # test rig cabinet against the wall
+    s = furn('bench', 76)
+    block(s, 178, 40, 18, 6, 30, C['mach_l'], C['mach'])
+    s.rect(181, 49, 12, 9, C['screen'])
+    for y in (62, 65, 68):
+        s.rect(181, y, 12, 1, C['mach_d'])
+    s.rect(184, 34, 4, 6, C['glass']); s.rect(184, 37, 4, 3, C['code1']); s.rect(185, 32, 2, 2, C['glass'])
+    s.rect(190, 37, 3, 3, C['led_a'])
 
-    # chair: seat, then the backrest as its own sprite so the sitter is drawn in between
-    s = furn('chair', (17, 8, 22, 12))
-    shadow(s, 17, 8, 22, 12.5)
-    for (bx, by) in ((17.5, 8.5), (20.5, 8.5), (17.5, 11), (20.5, 11)):
-        iso.box(s, bx, by, F, 1, 1, 0.8, C['ink'], C['ink'], C['ink'])
-    iso.box(s, 19, 9.8, F + 0.8, 1, 1, 4.5, C['metal'], C['metal'], C['metal_d'])
-    iso.box(s, 17, 8, F + 5, 5, 4, 1.5, C['pillow2'], shade(C['pillow2'], 0.85), shade(C['pillow2'], 0.72))
-    s = furn('chair_back', (17, 12, 22, 13.5))
-    iso.box(s, 19, 12, F + 6.5, 1, 1, 2, C['metal'], C['metal'], C['metal_d'])
-    iso.box(s, 17, 12, F + 8.5, 5, 1.2, 6, C['pillow2'], shade(C['pillow2'], 0.85), shade(C['pillow2'], 0.72))
+    # armchair facing the viewer
+    s = furn('sofa', 138)
+    s.rect(12, 108, 32, 12, C['teal'])
+    s.rect(12, 108, 32, 1, C['teal_l'])
+    s.rect(18, 118, 20, 12, C['teal_l'])
+    s.rect(18, 118, 20, 1, shade(C['teal_l'], 1.15))
+    for ax in (12, 38):
+        s.rect(ax, 114, 6, 18, C['teal'])
+        s.rect(ax, 114, 6, 1, C['teal_l'])
+    s.rect(17, 118, 1, 12, C['teal_d']); s.rect(38, 118, 1, 12, C['teal_d'])
+    s.rect(12, 130, 32, 8, C['teal_d'])
+    s.rect(12, 137, 32, 1, shade(C['teal_d'], 0.85))
+    s.rect(14, 138, 2, 1, C['wood_d']); s.rect(40, 138, 2, 1, C['wood_d'])
 
-    # armchair under the window (rest spot); front arm separately
-    s = furn('sofa', (0, 15, 6, 19.5))
-    shadow(s, 0, 15, 6.5, 21.5)
-    iso.box(s, 0, 15, F, 6, 6, 1, C['wood_d'], C['wood_d'], shade(C['wood_d'], 0.8))
-    iso.box(s, 0, 15, F + 1, 6, 6, 4, C['sofa'], C['sofa_d'], shade(C['sofa_d'], 0.85))
-    iso.box(s, 0, 15, F + 5, 2, 6, 7, C['sofa_l'], C['sofa_d'], C['sofa'])                # back
-    iso.box(s, 2, 15, F + 5, 4, 1.5, 3, C['sofa_l'], C['sofa_d'], C['sofa'])              # rear arm
-    iso.box(s, 2, 16.5, F + 5, 1.6, 3, 3, C['pillow'], shade(C['pillow'], 0.88), shade(C['pillow'], 0.78))
-    s = furn('sofa_arm', (0, 19.5, 6, 21))
-    iso.box(s, 0, 19.5, F + 5, 6, 1.5, 3, C['sofa_l'], C['sofa_d'], C['sofa'])
+    # side table with a mug
+    s = furn('table', 138)
+    block(s, 48, 122, 14, 6, 3, C['wood_h'], C['wood_l'])
+    s.rect(50, 131, 2, 7, C['wood']); s.rect(58, 131, 2, 7, C['wood'])
+    s.rect(52, 118, 5, 5, C['cream']); s.rect(52, 118, 5, 1, C['lamp_d']); s.put(57, 120, C['cream'])
 
-    # tea table with a mug and a book
-    s = furn('table', (8, 17, 11, 20))
-    shadow(s, 8, 17, 11.5, 20.5)
-    iso.box(s, 9, 18, F, 1, 1, 5, C['wood'], C['wood'], C['wood_d'])
-    iso.box(s, 8.5, 17.5, F, 2, 2, 0.6, C['wood_d'], C['wood_d'], C['wood_d'])
-    iso.box(s, 8, 17, F + 5, 3, 3, 1, C['wood_h'], C['wood_l'], C['wood'])
-    iso.box(s, 8.3, 18.3, F + 6, 1.6, 1.4, 0.5, BOOK_COLS[1], BOOK_COLS[1], shade(BOOK_COLS[1], 0.8))
-    iso.box(s, 9.8, 17.4, F + 6, 1, 1, 1.4, C['white'], C['cream'], shade(C['cream'], 0.85))
+    # bean bag
+    s = furn('pouf', 154)
+    for y in range(140, 154):
+        for x in range(148, 170):
+            dx, dy = (x - 158.5) / 11, (y - 147.5) / 7.5
+            d = dx * dx + dy * dy
+            if d <= 1:
+                s.put(x, y, C['bean_l'] if dy < -0.45 and dx < 0.2 else C['bean_d'] if dy > 0.5 or dx > 0.7 else C['bean'])
 
-    # test rig on a metal stand in the back-right corner, next to the desk
-    s = furn('bench', (24.5, 0, 28, 4.5))
-    shadow(s, 24.5, 0, 28.5, 5)
-    for (lx, ly) in ((24.8, 3.2), (27, 3.2)):
-        iso.box(s, lx, ly, F, 0.8, 0.8, 9, C['metal'], C['metal'], C['metal_d'])
-    iso.box(s, 24.8, 0.5, F + 3, 3, 3, 0.6, C['metal_d'], C['metal_d'], C['metal_d'])      # lower shelf
-    iso.box(s, 25.3, 1, F + 3.6, 2, 2, 2, C['note_b'], shade(C['note_b'], 0.85), shade(C['note_b'], 0.7))
-    iso.box(s, 24.5, 0, F + 9, 3.5, 4.5, 1, C['wood_h'], C['wood_l'], C['wood'])
-    iso.box(s, 24.8, 0.3, F + 10, 3, 3.2, 5, C['metal_l'], C['metal'], C['metal_d'])    # rig box
-    iso.box(s, 26.5, 1, F + 15, 0.6, 0.6, 2.5, C['metal_d'], C['metal_d'], C['metal_d'])  # antenna
-    p = P(26.8, 1.3, F + 17.8); s.put(p[0], p[1], C['led_r'])
-    for i, col in enumerate((C['led_g'], C['note_b'], C['note_p'])):           # test tubes
-        p = P(25 + i * 0.9, 4, F + 10)
-        s.rect(p[0], p[1] - 3, 1, 3, col); s.put(p[0], p[1] - 4, C['glass'])
-
-    # floor cushion and a potted plant to fill the open front of the room
-    s = furn('pouf', (11, 23, 14.5, 26.5))
-    shadow(s, 11, 23, 15, 27)
-    iso.box(s, 11, 23, F, 3.5, 3.5, 2.5, C['note_y'], shade(C['note_y'], 0.85), shade(C['note_y'], 0.72))
-    iso.box(s, 12.2, 24.2, F + 2.5, 1.1, 1.1, 0.3, shade(C['note_y'], 0.8), shade(C['note_y'], 0.8), shade(C['note_y'], 0.8), rim=False)
-    s = furn('pot2', (25, 16, 27.5, 18.5))
-    shadow(s, 25, 16, 28, 19)
-    iso.box(s, 25, 16, F, 2.5, 2.5, 3, C['pot'], C['pot'], C['pot_d'])
-    p = P(26.25, 17.25, F + 6)
-    bush(s, p[0] - 1, p[1], 3, 3)
-    bush(s, p[0] + 2, p[1] - 2, 3, 2)
-
-    # floor lamp near the armchair
-    s = furn('floor_lamp', (1, 23, 3, 25))
-    iso.box(s, 1, 23, F, 2, 2, 0.6, C['wood_d'], C['wood_d'], C['wood_d'])
-    for z in range(1, 17):
-        p = P(2, 24, F + z)
-        s.put(p[0], p[1], C['wood_d'])
-    iso.box(s, 0.6, 22.6, F + 16, 2.8, 2.8, 4, C['cream'], C['glow'], shade(C['glow'], 0.9))
+    # big plant in the corner
+    s = furn('plant', 162)
+    s.rect(176, 150, 14, 12, C['pot'])
+    s.rect(176, 150, 14, 2, shade(C['pot'], 1.2))
+    s.rect(176, 161, 14, 1, C['pot_d'])
+    for (cx, cy, r) in ((183, 140, 7), (177, 144, 5), (189, 144, 5), (183, 133, 5)):
+        for y in range(cy - r, cy + r + 1):
+            for x in range(cx - r, cx + r + 1):
+                d = ((x - cx) ** 2 + (y - cy) ** 2) / (r * r)
+                if d <= 1:
+                    l = (x - cx) * 0.6 + (y - cy)
+                    s.put(x, y, C['leaf_l'] if l < -r * 0.5 else C['leaf_d'] if l > r * 0.5 else C['leaf'])
 
 
-SCREEN_FACE = (17, 3, F + 15.5, 23, F + 22.5)   # x0, y(plane), z0, x1, z1 of the monitor's viewer-facing face
+SCREEN = (139, 35, 20, 14)   # x, y, w, h of the monitor's screen
+RIG = (181, 49)              # top-left of the rig's status panel
 
 
 def screen_frames():
-    """Monitor screen overlays drawn over the monitor's y-plane face; u = x units (0..6), v = z px (0..7)."""
-    x0, yp, z0, x1, z1 = SCREEN_FACE
-    pts = [P(x0 + 0.5, yp, z1), P(x1 - 0.5, yp, z1), P(x1 - 0.5, yp, z0), P(x0 + 0.5, yp, z0)]
+    x0, y0, w, h = SCREEN
 
     def mk(fn):
         s = new()
-        s.poly(pts, lambda px, py: fn(*uv(px, py)))
+        for v in range(h):
+            for u in range(w):
+                s.put(x0 + u, y0 + v, fn(u, v))
         return s
 
-    def uv(px, py):
-        x, z = plane_y(px, py, yp)
-        return x - x0, int(z - z0)
+    def glyph(rows, col, bg):
+        gh, gw = len(rows), len(rows[0])
+        ou, ov = (w - gw) // 2, (h - gh) // 2
+        return lambda u, v: col if 0 <= v - ov < gh and 0 <= u - ou < gw and rows[v - ov][u - ou] == 'x' else bg
 
-    def glyph(u, v, rows, col, bg):
-        # rows: list of strings, centred; u in 0.5-unit columns (=1px), v in px rows (top=row 0)
-        h, w = len(rows), len(rows[0])
-        cu, cv = int((u - 0.5) * 2) - (10 - w) // 2, (6 - v) - (7 - h) // 2
-        if 0 <= cv < h and 0 <= cu < w and rows[cv][cu] == 'x':
-            return col
-        return bg
-    frames = {}
-    frames['scr_off'] = mk(lambda u, v: C['screen_l'] if v >= 6 else C['screen'])
-    frames['scr_idle'] = mk(lambda u, v: glyph(u, v, ['xx', 'xx'], C['code1'], C['screen_l']))
+    frames = {'scr_off': mk(lambda u, v: C['screen_l'] if u + v < 6 else C['screen'])}
+    frames['scr_idle'] = mk(glyph(['xx', 'xx'], C['code1'], C['screen_l']))
     for f in range(4):
         def code(u, v, f=f):
             line = (v + f) // 2
-            if (v + f) % 2 == 0:
-                ind = (line * 7) % 3 * 0.5
-                ln = 1.5 + (line * 5) % 4
-                if 0.5 + ind < u < 0.5 + ind + ln:
+            if (v + f) % 2 == 0 and v > 0:
+                ind = 2 + (line * 7) % 3 * 2
+                ln = 4 + (line * 5) % 8
+                if ind <= u < ind + ln:
                     return (C['code1'], C['code2'], C['code3'])[line % 3]
             return C['screen']
         frames[f'scr_code{f}'] = mk(code)
     for f in range(2):
-        frames[f'scr_read{f}'] = mk(lambda u, v, f=f: C['seam'] if 1 < u < 5 and (v + f) % 2 == 0 and 1 <= v <= 5 else C['paper'] if 0.5 < u < 5.5 else C['screen_l'])
-    frames['scr_err'] = mk(lambda u, v: glyph(u, v, ['x...x', '.x.x.', '..x..', '.x.x.', 'x...x'], C['led_r'], shade(C['led_r'], 0.4)))
-    frames['scr_ok'] = mk(lambda u, v: glyph(u, v, ['....x', '...x.', 'x.x..', '.x...'], C['led_g'], shade(C['led_g'], 0.35)))
-    frames['scr_wait'] = mk(lambda u, v: glyph(u, v, ['x', 'x', 'x', '.', 'x'], C['led_a'], shade(C['led_a'], 0.4)))
+        frames[f'scr_read{f}'] = mk(lambda u, v, f=f: C['seam'] if 3 < u < 16 and (v + f) % 3 == 0 and 2 <= v <= 11 else C['paper'] if 1 < u < 18 else C['screen_l'])
+    frames['scr_err'] = mk(glyph(['x...x', '.x.x.', '..x..', '.x.x.', 'x...x'], C['led_r'], shade(C['led_r'], 0.4)))
+    frames['scr_ok'] = mk(glyph(['....x', '...x.', 'x.x..', '.x...'], C['led_g'], shade(C['led_g'], 0.35)))
+    frames['scr_wait'] = mk(glyph(['x', 'x', 'x', '.', 'x'], C['led_a'], shade(C['led_a'], 0.4)))
     return frames
 
 
 def rig_frames():
-    """Status LEDs + gauge on the rig box's viewer-facing (y = 21) face."""
-    out = {}
-    yp = 3.5
+    x0, y0 = RIG
     states = {
         'rig_idle': [C['led_a'], C['led_off'], C['led_off']],
         'rig_run0': [C['led_a'], C['led_off'], C['led_off']],
@@ -450,50 +322,18 @@ def rig_frames():
         'rig_pass': [C['led_g'], C['led_g'], C['led_g']],
         'rig_fail': [C['led_r'], C['led_r'], C['led_r']],
     }
+    out = {}
     for name, cols in states.items():
         s = new()
-        s.poly([P(25.2, yp, F + 14.5), P(27.5, yp, F + 14.5), P(27.5, yp, F + 11.5), P(25.2, yp, F + 11.5)], C['screen'])
+        s.rect(x0, y0, 12, 9, C['screen'])
         for i, col in enumerate(cols):
-            p = P(25.5 + i * 0.7, yp, F + 13.8)
-            s.rect(p[0], p[1], 1, 1, col)
+            s.rect(x0 + 2 + i * 3, y0 + 2, 2, 2, col)
         fill = {'rig_idle': 0, 'rig_run0': 1, 'rig_run1': 2, 'rig_run2': 3, 'rig_pass': 3, 'rig_fail': 3}[name]
         bar = C['led_r'] if name == 'rig_fail' else C['led_g']
         for i in range(3):
-            p = P(25.5 + i * 0.7, yp, F + 12.3)
-            s.rect(p[0], p[1], 1, 1, bar if i < fill else C['led_off'])
+            s.rect(x0 + 2 + i * 3, y0 + 6, 2, 1, bar if i < fill else C['led_off'])
         out[name] = s
     return out
-
-
-def cloud(w, h, seed):
-    rnd = random.Random(seed)
-    s = Spr(w, h)
-    blobs = []
-    for i in range(7):
-        bx = rnd.uniform(w * 0.2, w * 0.8)
-        br = rnd.uniform(h * 0.25, h * 0.45)
-        blobs.append((bx, h - br - 1, br))
-    blobs.append((w * 0.15, h - h * 0.22 - 1, h * 0.22))
-    blobs.append((w * 0.85, h - h * 0.2 - 1, h * 0.2))
-    for y in range(h):
-        for x in range(w):
-            best = None
-            for (bx, by, br) in blobs:
-                d = math.hypot(x - bx, (y - by) * 1.2)
-                if d <= br:
-                    l = (y - (by - br)) / (2 * br)
-                    best = l if best is None else min(best, l)
-            if best is not None:
-                if y > h - 3:
-                    col = hexc('#f5d6e4')
-                elif best > 0.62:
-                    col = hexc('#f9e3ee')
-                elif best > 0.42:
-                    col = hexc('#fdf3f8')
-                else:
-                    col = hexc('#ffffff')
-                s.put(x, y, col)
-    return s
 
 
 def bubble(icon):
@@ -545,8 +385,6 @@ def small_fx():
     out['sweat'] = from_rows([".x.", "xyx", "xyx", ".x."], {'x': hexc('#7cc4e8'), 'y': hexc('#d9f2ff')})
     out['steam0'] = from_rows([".x.", "x..", ".x.", "..x"], {'x': C['white']})
     out['steam1'] = from_rows(["x..", ".x.", "..x", ".x."], {'x': C['white']})
-    out['petal'] = from_rows(["xy", "y."], {'x': C['bloom_l'], 'y': C['bloom_d']})
-    out['petal2'] = from_rows([".x", "xy"], {'x': C['bloom'], 'y': C['bloom_dd']})
     out['shadow'] = from_rows([".xxxxxx.", "xxxxxxxx", ".xxxxxx."], {'x': (58, 40, 50, 60)})
     return out
 
@@ -566,17 +404,16 @@ def main():
     sprites = {}   # name -> (Spr, dx, dy)   dx,dy = placement in scene coordinates (or 0,0)
 
     base = new()
-    draw_room_base(base)
-    b, bx, by = base.crop()
-    sprites['room'] = (b, bx, by)
+    draw_room(base)
+    sprites['room'] = (base, 0, 0)
 
     make_furniture()
     furniture = []
-    for (name, s, box) in FURN:
-        s.outline(factor=0.55)
+    for (name, s, base_y) in sorted(FURN, key=lambda f: f[2]):
+        s.outline(factor=0.5)
         c, x, y = s.crop()
         sprites[name] = (c, x, y)
-        furniture.append({'name': name, 'box': box})
+        furniture.append({'name': name, 'base': base_y})
     for name, s in {**screen_frames(), **rig_frames()}.items():
         c, x, y = s.crop()
         sprites[name] = (c, x, y)
@@ -585,8 +422,6 @@ def main():
         sprites[name] = (s, 0, 0)
     for icon in ('bang', 'ask', 'check', 'cross', 'dots', 'note', 'heart', 'gear', 'book', 'zzz'):
         sprites['bubble_' + icon] = (bubble(icon), 0, 0)
-    for i, (w, h) in enumerate(((72, 26), (54, 20), (38, 14), (96, 30))):
-        sprites[f'cloud{i}'] = (cloud(w, h, 20 + i), 0, 0)
     for agent in character.AGENT_LOOKS:
         for fname in character.FRAMES:
             sprites[f'ch_{agent}_{fname}'] = (character.render_frame(fname, agent), 0, 0)
@@ -614,31 +449,31 @@ def main():
     atlas.save(os.path.join(OUT, 'atlas.png'))
 
     layout = {
-        'scene': {'w': SW, 'h': SH, 'ox': iso.ox, 'oy': iso.oy, 'room': N, 'floorZ': F},
+        'scene': {'w': SW, 'h': SH},
         'furniture': furniture,
-        'screen': SCREEN_FACE,
         'char': {'w': character.W, 'h': character.H, 'ax': character.W // 2, 'ay': character.H - 1,
                  'agents': list(character.AGENT_LOOKS), 'frames': list(character.FRAMES)},
         'spots': {
-            'desk': {'x': 19.5, 'y': 10, 'face': 'ur', 'z': 6, 'sit': True},
-            'shelf': {'x': 6.5, 'y': 7.5, 'face': 'ul'},
-            'board': {'x': 7.5, 'y': 3.5, 'face': 'ur'},
-            'bench': {'x': 26.2, 'y': 7, 'face': 'ur'},
-            'sofa': {'x': 3.8, 'y': 17.8, 'face': 'dr', 'z': 5, 'sit': True},
-            'center': {'x': 14, 'y': 15, 'face': 'dr'},
-            'front': {'x': 17.5, 'y': 22, 'face': 'dr'},
-            'window': {'x': 8, 'y': 13, 'face': 'ul'},
-            'plantcorner': {'x': 6, 'y': 2.5, 'face': 'ul'},
+            'desk': {'x': 145, 'y': 99, 'face': 'ur', 'z': 5, 'sit': True},
+            'shelf': {'x': 24, 'y': 90, 'face': 'ul'},
+            'board': {'x': 111, 'y': 72, 'face': 'ur'},
+            'bench': {'x': 187, 'y': 90, 'face': 'ur'},
+            'sofa': {'x': 28, 'y': 139, 'face': 'dr', 'z': 13, 'sit': True},
+            'center': {'x': 100, 'y': 120, 'face': 'dr'},
+            'front': {'x': 112, 'y': 152, 'face': 'dr'},
+            'window': {'x': 74, 'y': 72, 'face': 'ul'},
+            'plantcorner': {'x': 166, 'y': 164, 'face': 'dr'},
         },
         'nodes': {
-            'center': [14, 15], 'deskA': [19.5, 14], 'desk': [19.5, 10], 'shelfA': [8, 9], 'shelf': [6.5, 7.5],
-            'board': [7.5, 3.5], 'bench': [26.2, 7], 'benchA': [24, 14], 'sofaA': [9, 14], 'sofaB': [7, 18], 'sofa': [3.8, 17.8],
-            'front': [17.5, 22], 'window': [8, 13], 'plantcorner': [6, 2.5],
+            'center': [100, 120], 'deskA': [145, 112], 'desk': [145, 99], 'shelfA': [32, 98], 'shelf': [24, 90],
+            'board': [111, 72], 'bench': [187, 90], 'benchA': [180, 110], 'sofaA': [62, 150], 'sofaB': [28, 150],
+            'sofa': [28, 139], 'front': [112, 152], 'window': [74, 72], 'plantcorner': [166, 164],
         },
-        'edges': [['center', 'deskA'], ['deskA', 'desk'], ['center', 'shelfA'], ['shelfA', 'shelf'], ['shelf', 'board'],
-                  ['board', 'plantcorner'], ['center', 'sofaA'], ['sofaA', 'sofaB'], ['sofaB', 'sofa'], ['sofaA', 'window'],
-                  ['window', 'shelfA'], ['center', 'benchA'], ['deskA', 'benchA'], ['benchA', 'bench'], ['center', 'front'], ['front', 'benchA']],
-        'steam': list(P(10.3, 17.9, F + 8)),
+        'edges': [['center', 'deskA'], ['deskA', 'desk'], ['center', 'shelfA'], ['shelfA', 'shelf'], ['shelfA', 'window'],
+                  ['window', 'board'], ['window', 'center'], ['board', 'center'], ['center', 'benchA'], ['deskA', 'benchA'],
+                  ['benchA', 'bench'], ['center', 'sofaA'], ['sofaA', 'sofaB'], ['sofaB', 'sofa'], ['center', 'front'],
+                  ['front', 'plantcorner'], ['front', 'sofaA']],
+        'steam': [54, 114],
     }
     with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
         json.dump({'frames': frames, 'layout': layout}, f, separators=(',', ':'))

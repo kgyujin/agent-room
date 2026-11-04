@@ -9,18 +9,14 @@ import type { Skin } from './skin';
 
 export type Theme = 'day' | 'sunset' | 'night';
 
-const SKY: Record<Theme, string[]> = {
-  day: ['#86cfe6', '#a9def0', '#cdeef4', '#f3eaf1', '#fde3ec'],
-  sunset: ['#8f9fd6', '#d6a6c9', '#f6bfae', '#fbd7b5', '#fde9cf'],
-  night: ['#141a3a', '#1f2650', '#2f3466', '#4a3f74', '#6b4f80'],
+// backdrop around the room: two-tone 16px checker (flat colours)
+const BACKDROP: Record<Theme, [string, string]> = {
+  day: ['#bfe6f0', '#b2dfeb'],
+  sunset: ['#f6cdb8', '#f1c0a9'],
+  night: ['#2b3058', '#272b50'],
 };
-const SKY_BANDS = 14;
+const CHECK = 16;
 
-// furniture static draw order (back to front); overlays drawn right after their host
-const ORDER = ['plant', 'bookshelf', 'bench', 'desk', 'monitor', 'chair', 'sofa', 'table', 'chair_back', 'sofa_arm', 'pouf', 'floor_lamp', 'pot2'];
-
-interface Cloud { name: string; x: number; y: number; speed: number }
-interface Petal { x: number; y: number; vx: number; vy: number; t: number; kind: string }
 interface Spark { x: number; y: number; t: number }
 
 export interface SceneView {
@@ -33,15 +29,12 @@ export class Scene {
   private ctx: CanvasRenderingContext2D;
   private buf = document.createElement('canvas');
   private bctx: CanvasRenderingContext2D;
-  private sky: HTMLCanvasElement | null = null;
+  private backdrop: HTMLCanvasElement | null = null;
   private scale = 3;
   private theme: Theme = 'day';
   private actor: Actor;
   private view: SceneView = { session: null, empty: true };
-  private clouds: Cloud[] = [];
-  private petals: Petal[] = [];
   private sparks: Spark[] = [];
-  private stars: [number, number][] = [];
   private tickN = 0;
   private timer: number | null = null;
   private fps = 12;
@@ -49,7 +42,7 @@ export class Scene {
   private restSince = 0;
   insetRight = 0;
   insetBottom = 0;
-  /** room-only mode: no sky, clouds or petals; transparent around the room */
+  /** room-only mode: transparent around the room */
   roomOnly = false;
   /** custom characters by agent ('claude', 'codex', 'generic'); demo uses 'generic' */
   skins: Record<string, Skin> = {};
@@ -61,17 +54,13 @@ export class Scene {
     this.bctx = this.buf.getContext('2d')!;
     this.actor = new Actor('generic', atlas.layout, 'sofa');
     this.actor.setBehavior(restBehavior('tea', false), 0);
-    for (let i = 0; i < 6; i++) {
-      this.clouds.push({ name: `cloud${i % 4}`, x: Math.random() * 500 - 60, y: 10 + Math.random() * 160, speed: 1.5 + Math.random() * 2.5 });
-    }
-    for (let i = 0; i < 70; i++) this.stars.push([Math.random(), Math.random() * 0.7]);
     this.resize();
   }
 
   setTheme(t: Theme) {
     if (t !== this.theme) {
       this.theme = t;
-      this.sky = null;
+      this.backdrop = null;
     }
   }
 
@@ -133,7 +122,7 @@ export class Scene {
     this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
-    this.sky = null;
+    this.backdrop = null;
     this.draw();
   }
 
@@ -142,31 +131,23 @@ export class Scene {
     const dpr = window.devicePixelRatio || 1;
     const bx = (cssX * dpr) / this.scale - this.off.x;
     const by = (cssY * dpr) / this.scale - this.off.y;
-    const f = this.actor.feet(this.atlas.layout);
+    const f = this.actor.feet();
     return bx > f.x - 9 && bx < f.x + 9 && by > f.y - 24 && by < f.y + 2;
   }
 
-  private buildSky() {
+  private buildBackdrop() {
     const c = document.createElement('canvas');
     c.width = this.buf.width;
     c.height = this.buf.height;
     const g = c.getContext('2d')!;
-    // flat horizontal bands (no dithering): each band is one solid colour
-    const stops = SKY[this.theme].map(hex);
-    const bandH = Math.ceil(c.height / SKY_BANDS);
-    for (let b = 0; b < SKY_BANDS; b++) {
-      const t = (b / (SKY_BANDS - 1)) * (stops.length - 1);
-      const i = Math.min(stops.length - 2, Math.floor(t));
-      const f = t - i;
-      const col = stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
-      g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-      g.fillRect(0, b * bandH, c.width, bandH);
+    const [a, b] = BACKDROP[this.theme];
+    for (let y = 0; y < c.height; y += CHECK) {
+      for (let x = 0; x < c.width; x += CHECK) {
+        g.fillStyle = (x / CHECK + y / CHECK) % 2 ? b : a;
+        g.fillRect(x, y, CHECK, CHECK);
+      }
     }
-    if (this.theme === 'night') {
-      g.fillStyle = '#fff6d8';
-      for (const [sx, sy] of this.stars) g.fillRect(Math.floor(sx * c.width), Math.floor(sy * c.height), 1, 1);
-    }
-    this.sky = c;
+    this.backdrop = c;
   }
 
   private burst() {
@@ -190,68 +171,43 @@ export class Scene {
     if (this.roomOnly) {
       g.clearRect(0, 0, W, H);
     } else {
-      if (!this.sky) this.buildSky();
-      g.drawImage(this.sky!, 0, 0);
+      if (!this.backdrop) this.buildBackdrop();
+      g.drawImage(this.backdrop!, 0, 0);
     }
 
-    // clouds drift slowly
-    const dt = 1 / Math.max(1, this.fps);
-    for (const c of this.roomOnly ? [] : this.clouds) {
-      c.x -= c.speed * dt;
-      const f = A.frames[c.name];
-      if (c.x < -f.w - 10) {
-        c.x = W + Math.random() * 60;
-        c.y = 10 + Math.random() * Math.max(20, H - 80);
-      }
-      A.draw(g, c.name, c.x, c.y);
-    }
-
-    // centre the island in the free area; gentle float
+    // centre the room in the free area
     const freeW = W - (this.insetRight * (window.devicePixelRatio || 1)) / this.scale;
     const freeH = H - (this.insetBottom * (window.devicePixelRatio || 1)) / this.scale;
-    const bob = Math.round(Math.sin(Date.now() / 2200) * 1.2);
     const room = A.frames.room;
     const ox = Math.floor((freeW - room.w) / 2) - room.dx;
-    const oy = Math.floor((freeH - room.h) / 2) - room.dy + bob;
+    const oy = Math.floor((freeH - room.h) / 2) - room.dy;
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);
     const b = this.actor.current;
 
-    // depth-sorted furniture + character: the character goes right after the last
-    // furniture piece it overlaps on screen and stands in front of
-    const ax = this.actor.x;
-    const ay = this.actor.y;
-    const feet = this.actor.feet(L);
-    const boxes = Object.fromEntries(L.furniture.map((f) => [f.name, f.box]));
-    const overlaps = (name: string) => {
-      const f = A.frames[name];
-      return f && f.dx < feet.x + 9 && f.dx + f.w > feet.x - 9 && f.dy < feet.y + 1 && f.dy + f.h > feet.y - 26;
-    };
-    const occludes = (b: [number, number, number, number]) => ax + 1 <= b[0] || ay + 1 <= b[1];
-    let insertAfter = -1;
-    ORDER.forEach((name, i) => {
-      if (boxes[name] && overlaps(name) && !occludes(boxes[name])) insertAfter = i;
-    });
+    // y-sorted: furniture whose front edge is above the character's feet is drawn first
+    const feet = this.actor.feet();
     const skin = this.skins[this.actor.agent === 'demo' ? 'generic' : this.actor.agent];
-    if (insertAfter === -1) this.actor.draw(g, A, ox, oy, skin);
-    ORDER.forEach((name, i) => {
-      A.placed(g, name, ox, oy);
-      if (name === 'monitor') A.placed(g, this.screenFrame(b), ox, oy);
-      if (name === 'bench') A.placed(g, this.rigFrame(b), ox, oy);
-      if (i === insertAfter) this.actor.draw(g, A, ox, oy, skin);
-    });
+    let drawn = false;
+    for (const f of L.furniture) {
+      if (!drawn && f.base > this.actor.y) {
+        this.actor.draw(g, A, ox, oy, skin);
+        drawn = true;
+      }
+      A.placed(g, f.name, ox, oy);
+      if (f.name === 'monitor') A.placed(g, this.screenFrame(b), ox, oy);
+      if (f.name === 'bench') A.placed(g, this.rigFrame(b), ox, oy);
+    }
+    if (!drawn) this.actor.draw(g, A, ox, oy, skin);
 
     // tea steam
     const st = Math.floor(this.tickN / 4) % 2;
     A.draw(g, st ? 'steam0' : 'steam1', ox + L.steam[0] - 1, oy + L.steam[1] - 6 - (Math.floor(this.tickN / 4) % 3));
 
-    // petals
-    if (!this.roomOnly) this.updatePetals(g, ox, oy);
-
     // character fx + bubble
     const hx = ox + feet.x;
-    const hy = oy + feet.y - 24;
+    const hy = oy + feet.y - (skin ? skin.h : 24);
     if (b?.fx === 'sweat' && Math.floor(this.tickN / 3) % 2 === 0) A.draw(g, 'sweat', hx + 6, hy + 4);
     if (b?.fx === 'sparkle' && this.tickN % 18 === 0) this.burst();
     this.sparks = this.sparks.filter((s) => s.t < 14);
@@ -305,29 +261,5 @@ export class Scene {
     }
   }
 
-  private updatePetals(g: CanvasRenderingContext2D, ox: number, oy: number) {
-    if (this.petals.length < 9 && Math.random() < 0.08) {
-      const fromRight = Math.random() < 0.6;
-      this.petals.push({
-        x: fromRight ? 160 + Math.random() * 50 : 40 + Math.random() * 40,
-        y: fromRight ? 15 + Math.random() * 30 : 25 + Math.random() * 25,
-        vx: -0.25 - Math.random() * 0.35,
-        vy: 0.35 + Math.random() * 0.3,
-        t: 0,
-        kind: Math.random() < 0.5 ? 'petal' : 'petal2',
-      });
-    }
-    this.petals = this.petals.filter((p) => p.t < 160);
-    for (const p of this.petals) {
-      p.t++;
-      p.x += p.vx + Math.sin(p.t / 7) * 0.25;
-      p.y += p.vy;
-      this.atlas.draw(g, p.kind, ox + p.x, oy + p.y);
-    }
-  }
-}
 
-function hex(h: string): [number, number, number] {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
