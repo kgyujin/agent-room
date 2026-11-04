@@ -17,6 +17,7 @@ export function useLive() {
       setSessions(Object.fromEntries(ov.sessions.map((s) => [s.key, s])));
       setSettings(st);
       applyUiTheme(uiTheme(st.uiTheme));
+      document.documentElement.classList.add(`font-${st.font ?? 'mixed'}`);
       unsub.push(
         await backend.onUpdate((u) =>
           setSessions((prev) => {

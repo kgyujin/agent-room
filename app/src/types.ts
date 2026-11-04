@@ -80,6 +80,13 @@ export interface Settings {
   uiTheme: string;
   /** status pill at the top centre of the screen */
   island: boolean;
+  /** 'mixed' = readable UI font with pixel numbers/titles, 'system', 'pixel' */
+  font: 'mixed' | 'system' | 'pixel';
+  /** '' = theme backdrop, a BACKDROPS id, or '#rrggbb' */
+  backdrop: string;
+  tagStyle: 'compact' | 'full' | 'off';
+  showDock: boolean;
+  showTabs: boolean;
 }
 
 export interface CharacterFile { name: string; bytes: number[] }

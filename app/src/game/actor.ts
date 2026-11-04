@@ -175,21 +175,50 @@ export class Actor {
       // hop while walking, 1px bob on each behavior step; source faces left.
       // Built-in critters also have back views and walk frames.
       const n = Number(this.frame.slice(-1)) || 0;
-      const lift = this.walking ? [0, 1, 2, 1][n % 4] : this.stepIdx % 2;
+      const [mx, lift, look] = this.walking ? [0, [0, 1, 2, 1][n % 4], null] : this.motion();
+      const right = look ? look === 'r' : this.lr === 'r';
       ctx.save();
-      if (this.lr === 'r') {
+      if (right) {
         ctx.translate(Math.round(sx) * 2, 0);
         ctx.scale(-1, 1);
       }
       const back = this.facing().startsWith('u');
       const still = (back && skin.back) || skin.canvas;
       const img = (this.walking && (back ? skin.walkB : skin.walkF)?.[n % 2]) || still;
-      ctx.drawImage(img, Math.round(sx) - (skin.w >> 1), Math.round(sy) - skin.h + 1 - lift);
+      ctx.drawImage(img, Math.round(sx) - (skin.w >> 1) + (right ? -mx : mx), Math.round(sy) - skin.h + 1 - lift);
       ctx.restore();
       return { x: sx, y: sy };
     }
     // no human fallback: until a critter skin has loaded only the shadow is drawn
     return { x: sx, y: sy };
+  }
+
+  /**
+   * How a critter acts out the current behaviour frame (critters have no limbs, so the
+   * work shows in how they move): [x offset, lift, glance direction or null].
+   */
+  private motion(): [number, number, 'l' | 'r' | null] {
+    const f = this.frame;
+    const k = this.stepIdx;
+    const t = this.stepTick;
+    if (f.startsWith('type_')) return [0, k % 2, null];                       // tap-tap at the keyboard
+    if (f.startsWith('panic_')) return [t % 2 ? 1 : -1, 0, null];             // shake
+    if (f.startsWith('cheer_')) return [0, [0, 3, 5, 3][k % 4], null];        // jump for joy
+    if (f.startsWith('stretch_')) return [0, 1, null];
+    if (f.startsWith('wave_')) return [0, k % 2 ? 2 : 0, null];              // hop to get attention
+    if (f.startsWith('reach_')) return [0, 2, null];                          // stretch up to the shelf
+    if (f.startsWith('read_') || f.startsWith('sit_read')) return [Math.floor(k / 2) % 2, 0, null]; // lean into the page
+    if (f.startsWith('browse_')) return [k % 2, 0, null];
+    if (f === 'look_l') return [0, 0, 'l'];
+    if (f === 'look_r') return [0, 0, 'r'];
+    if (f === 'sit_sleep') return [0, Math.floor(Date.now() / 1600) % 2, null]; // slow breathing
+    return [0, 0, null];                                                       // still: thinking, waiting, sitting
+  }
+
+  /** draw-order key: the spot's own depth while resting on it, else the feet */
+  depth() {
+    const d = this.walking ? undefined : this.layout.spots[this.spot]?.depth;
+    return d ?? this.y + 0.5;
   }
 
   /** screen position of the feet (scene coords, before offset) */

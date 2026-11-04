@@ -9,7 +9,8 @@ export interface Layout {
   desks: number;
   /** desk indices in the order new critters take them */
   deskOrder?: number[];
-  spots: Record<string, { x: number; y: number; face: Facing; z?: number; sit?: boolean }>;
+  /** depth: draw-order key while sitting there (e.g. on a stool, after its desk) */
+  spots: Record<string, { x: number; y: number; face: Facing; z?: number; sit?: boolean; depth?: number }>;
   nodes: Record<string, [number, number]>;
   edges: [string, string][];
   steam: [number, number];

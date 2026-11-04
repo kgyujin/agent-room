@@ -46,6 +46,14 @@ pub struct Settings {
     pub ui_theme: String,
     /// status pill at the top centre of the screen (around the MacBook notch)
     pub island: bool,
+    /// "mixed" (readable UI font, pixel numbers/titles), "system" or "pixel"
+    pub font: String,
+    /// "" = theme backdrop, a preset id, or "#rrggbb"
+    pub backdrop: String,
+    /// pet name tags: "compact", "full" or "off"
+    pub tag_style: String,
+    pub show_dock: bool,
+    pub show_tabs: bool,
 }
 
 impl Default for Settings {
@@ -65,6 +73,11 @@ impl Default for Settings {
             critter_colors: Default::default(),
             ui_theme: "peach".into(),
             island: true,
+            font: "mixed".into(),
+            backdrop: String::new(),
+            tag_style: "compact".into(),
+            show_dock: true,
+            show_tabs: true,
         }
     }
 }

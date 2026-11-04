@@ -4,9 +4,9 @@ import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_CHARACTERS } from '../game/sk
 import type { Sfx, Sound } from '../game/audio';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
-import { UI_THEMES } from '../themes';
+import { BACKDROPS, UI_THEMES, backdropOf, uiTheme } from '../themes';
 
-type Tab = 'general' | 'characters' | 'agents' | 'dev';
+type Tab = 'look' | 'general' | 'characters' | 'agents' | 'dev';
 
 export function SettingsModal(props: {
   initialTab: Tab;
@@ -29,15 +29,16 @@ export function SettingsModal(props: {
       <div className="modal card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="설정">
         <header>
           <nav>
-            <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>일반</button>
+            <button className={tab === 'look' ? 'on' : ''} onClick={() => setTab('look')}>꾸미기</button>
             <button className={tab === 'characters' ? 'on' : ''} onClick={() => setTab('characters')}>캐릭터</button>
+            <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>알림·소리</button>
             <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agent 연동</button>
             <button className={tab === 'dev' ? 'on' : ''} onClick={() => setTab('dev')}>고급</button>
           </nav>
           <button className="tool" onClick={props.onClose} aria-label="닫기"><Icon name="close" /></button>
         </header>
         <div className="modal-body">
-          {tab === 'general' && (
+          {tab === 'look' && (
             <>
               <Field label="색 테마">
                 <div className="swatches">
@@ -55,13 +56,46 @@ export function SettingsModal(props: {
                   <option value="night">늘 밤</option>
                 </select>
               </Field>
+              <Field label="방 바깥 배경">
+                <div className="swatches">
+                  {[{ id: '', name: '테마 색', bd: uiTheme(s.uiTheme).bd }, ...BACKDROPS].map((b) => (
+                    <button key={b.id} className={`swatch ${(s.backdrop || '') === b.id ? 'on' : ''}`} title={b.name} aria-label={b.name}
+                      style={{ background: `radial-gradient(circle, ${b.bd[0]} 30%, ${b.bd[1]})` }} onClick={() => set('backdrop', b.id)} />
+                  ))}
+                  <label className={`swatch pick ${s.backdrop?.startsWith('#') ? 'on' : ''}`} title="직접 고르기"
+                    style={{ background: s.backdrop?.startsWith('#') ? `radial-gradient(circle, ${backdropOf(s.backdrop, uiTheme(s.uiTheme)).join(' 30%, ')})` : undefined }}>
+                    <input type="color" value={s.backdrop?.startsWith('#') ? s.backdrop : '#cfe3d6'} onChange={(e) => set('backdrop', e.target.value)} aria-label="배경 색 직접 고르기" />
+                  </label>
+                </div>
+              </Field>
+              <Field label="글꼴">
+                <select value={s.font} onChange={(e) => set('font', e.target.value as Settings['font'])}>
+                  <option value="mixed">기본 (숫자·제목만 도트)</option>
+                  <option value="system">읽기 쉬운 글꼴만</option>
+                  <option value="pixel">전부 도트</option>
+                </select>
+              </Field>
+              <Field label="펫 이름표">
+                <select value={s.tagStyle} onChange={(e) => set('tagStyle', e.target.value as Settings['tagStyle'])}>
+                  <option value="compact">간단히</option>
+                  <option value="full">프로젝트 이름까지</option>
+                  <option value="off">숨기기</option>
+                </select>
+              </Field>
+              <h4>화면 구성</h4>
+              <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
+              <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />
+              <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
+            </>
+          )}
+          {tab === 'general' && (
+            <>
               <Toggle label="효과음" v={s.sfx} on={(v) => set('sfx', v)} />
               <Toggle label="배경 음악 (Lo-fi)" v={s.bgm} on={(v) => set('bgm', v)} />
               <Toggle label="작업 완료·오류 알림" v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
               <Toggle label="승인·입력 요청 알림" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
               <Toggle label="앱을 보고 있을 땐 알림 생략" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
-              <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
               <Toggle label="토큰 사용량 표시 (로컬 로그 기준)" v={s.showTokens} on={(v) => set('showTokens', v)} />
               <AutostartToggle />
               <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
