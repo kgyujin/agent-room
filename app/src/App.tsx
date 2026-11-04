@@ -6,12 +6,13 @@ import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud, MiniPill } from './ui/Hud';
-import { DetailPanel } from './ui/DetailPanel';
+import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
-import { Icon } from './ui/icons';
-import { AGENT_NAME } from './labels';
-import { applyUiTheme, uiTheme } from './themes';
+import { AgentMark, Icon } from './ui/icons';
+import { progressOf } from './ui/Hud';
+import { AGENT_NAME, stateTone } from './labels';
+import { applyUiTheme, backdropOf, uiTheme } from './themes';
 
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
@@ -52,8 +53,8 @@ export default function App() {
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
-  const [settingsOpen, setSettingsOpen] = useState<null | 'general' | 'agents' | 'dev'>(null);
-  const [detailTab, setDetailTab] = useState<'timeline' | 'tasks' | 'session'>('timeline');
+  const [settingsOpen, setSettingsOpen] = useState<null | 'look' | 'general' | 'agents' | 'dev'>(null);
+  const [detailTab, setDetailTab] = useState<Tab>('overview');
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
   const [vw, setVw] = useState(window.innerWidth);
@@ -98,7 +99,8 @@ export default function App() {
         }),
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
-        await backend.onTrayEvent('select-session', (k) => setPinned(String(k))),
+        await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
+        await backend.onTrayEvent('open-settings', () => setSettingsOpen('look')),
       );
     })();
     return () => unsub.forEach((u) => u());
@@ -211,7 +213,8 @@ export default function App() {
   useEffect(() => {
     const th = uiTheme(settings.uiTheme);
     applyUiTheme(th);
-    if (sceneRef.current) sceneRef.current.backdrop = th.void;
+    document.documentElement.classList.remove('font-mixed', 'font-system', 'font-pixel');
+    document.documentElement.classList.add(`font-${settings.font ?? 'mixed'}`);
     sceneRef.current?.setTheme(settings.theme);
     const snd = soundRef.current;
     snd.sfxOn = settings.sfx;
@@ -342,7 +345,7 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
@@ -364,14 +367,14 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini} />
+      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini || settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} />
 
-      {!compact && !office && (
+      {!compact && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
       )}
-      {!compact && !office && (
+      {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} showTokens={settings.showTokens} />
@@ -387,6 +390,8 @@ export default function App() {
         <DetailPanel
           width={PANEL_W}
           s={selected}
+          sessions={list}
+          onSelect={setPinned}
           timeline={timelines[selected.key] ?? []}
           tab={detailTab}
           setTab={setDetailTab}
@@ -403,7 +408,7 @@ export default function App() {
         <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
         {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
-        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('general')} />
+        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('look')} />
       </div>
 
       {settingsOpen && (
@@ -452,17 +457,19 @@ function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean }) {
+function NameTags({ scene, sessions, selected, onSelect, hidden, full }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
+  const fullRef = useRef(full);
+  fullRef.current = full;
   useEffect(() => {
     let raf = 0;
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
-      // nudge tags up so neighbours never cover each other (tags are ~110 x 22 css px)
+      // nudge tags up so neighbours never cover each other (compact tags are ~60 x 22 css px)
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < 110 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        while (placed.some((q) => Math.abs(q.x - p.x) < (fullRef.current ? 120 : 60) && Math.abs(q.y - p.y) < 22)) p.y -= 22;
         placed.push(p);
       }
       const sig = a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
@@ -481,11 +488,14 @@ function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: Reac
       {anchors.map((a) => {
         const s = sessions[a.key];
         if (!s) return null;
-        const who = s.isDemo ? '데모' : AGENT_NAME[s.agent].split(' ')[0];
+        const prog = progressOf(s);
+        const tone = stateTone(s);
         return (
-          <button key={a.key} className={`nametag a-${s.isDemo ? 'demo' : s.agent} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
-            <b>{who}</b>
-            {s.project && <span>{s.project}</span>}
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+            <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
+            {(full || selected === a.key) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            <i className={`dot tone-${tone}`} />
+            {prog && <small>{prog.done}/{prog.total}</small>}
           </button>
         );
       })}
@@ -494,6 +504,12 @@ function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: Reac
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
+
+/** soft radial backdrop around the room (window mode); the canvas leaves it clear */
+function backdropStyle(s: Settings): React.CSSProperties {
+  const [a, b] = backdropOf(s.backdrop, uiTheme(s.uiTheme));
+  return { background: `radial-gradient(ellipse 75% 70% at 45% 45%, ${a}, ${b})` };
+}
 
 /** [ref, offsetHeight, offsetWidth] of the referenced element, kept current with a ResizeObserver (0 when unmounted) */
 function useHeight(): [React.RefObject<HTMLDivElement | null>, number, number] {

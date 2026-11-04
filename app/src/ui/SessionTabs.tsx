@@ -1,5 +1,6 @@
 import type { Snapshot } from '../types';
 import { AGENT_NAME, stateTone } from '../labels';
+import { AgentMark } from './icons';
 
 export function SessionTabs({ sessions, selected, pinned, onSelect }: { sessions: Snapshot[]; selected: string | null; pinned: string | null; onSelect: (k: string | null) => void }) {
   if (!sessions.length) return null;
@@ -10,9 +11,9 @@ export function SessionTabs({ sessions, selected, pinned, onSelect }: { sessions
       </button>
       {sessions.map((s) => (
         <button key={s.key} role="tab" className={`tab ${selected === s.key && pinned ? 'on' : ''}`} onClick={() => onSelect(s.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+          <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
+          <span>{s.project ?? s.sessionId.slice(0, 6)}</span>
           <span className={`dot tone-${stateTone(s)}`} />
-          {s.isDemo ? 'DEMO' : AGENT_NAME[s.agent].split(' ')[0]}
-          <small>{s.project ?? s.sessionId.slice(0, 6)}</small>
         </button>
       ))}
     </div>

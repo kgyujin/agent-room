@@ -18,7 +18,8 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true, characters: {}, critterColors: {}, uiTheme: 'peach',
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
+  font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
 };
 
 export interface Backend {
@@ -26,7 +27,11 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown', cb: (payload: unknown) => void): Promise<Unlisten>;
+  /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
+  trayAction(action: string, key?: string): Promise<void>;
+  /** resize the island window, kept centred at the top of the screen */
+  islandLayout(width: number, height: number): Promise<void>;
   hooksStatus(): Promise<HookStatus[]>;
   hooksInstall(agent: string): Promise<HookStatus>;
   hooksUninstall(agent: string): Promise<HookStatus>;
@@ -51,6 +56,8 @@ const tauriBackend: Backend = {
   onUpdate: (cb) => tauriListen('session-update', cb),
   onDetected: (cb) => tauriListen('agents-detected', cb),
   onTrayEvent: (name, cb) => tauriListen(name, cb),
+  trayAction: (action, key) => tauriInvoke('tray_action', { action, key: key ?? null }),
+  islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
   hooksStatus: () => tauriInvoke('hooks_status'),
   hooksInstall: (agent) => tauriInvoke('hooks_install', { agent }),
   hooksUninstall: (agent) => tauriInvoke('hooks_uninstall', { agent }),
@@ -121,6 +128,9 @@ function previewBackend(): Backend {
     { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app' },
     { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', isDemo: false, project: 'api-server' },
     { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs' },
+    { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra' },
+    { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', isDemo: false, project: 'mobile' },
+    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', isDemo: false, project: 'data-pipeline', plan: [] },
   ];
   const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   let settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day' };
@@ -139,6 +149,8 @@ function previewBackend(): Backend {
     onUpdate: async (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((l) => l !== cb); }; },
     onDetected: async () => () => {},
     onTrayEvent: async () => () => {},
+    trayAction: async () => undefined,
+    islandLayout: async () => undefined,
     hooksStatus: async () => [
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },
       { agent: 'codex', configPath: '~/.codex/hooks.json', agentDetected: false, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },

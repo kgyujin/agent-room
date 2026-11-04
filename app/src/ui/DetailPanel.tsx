@@ -2,12 +2,16 @@ import type { Snapshot, TimelineEntry } from '../types';
 import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, fmtTokens, timelineText } from '../labels';
 import { Icon } from './icons';
 import { progressOf } from './Hud';
+import { Overview } from './Overview';
 
-type Tab = 'timeline' | 'tasks' | 'session';
+export type Tab = 'overview' | 'timeline' | 'tasks' | 'session';
+const TAB_NAME: Record<Tab, string> = { overview: '현황', timeline: '타임라인', tasks: '작업 목록', session: '세션 정보' };
 
 export function DetailPanel(props: {
   width: number;
   s: Snapshot;
+  sessions: Snapshot[];
+  onSelect: (k: string) => void;
   timeline: TimelineEntry[];
   tab: Tab;
   setTab: (t: Tab) => void;
@@ -20,9 +24,9 @@ export function DetailPanel(props: {
     <aside className="panel" style={{ width: props.width }}>
       <header>
         <nav>
-          {(['timeline', 'tasks', 'session'] as Tab[]).map((t) => (
+          {(Object.keys(TAB_NAME) as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-              {t === 'timeline' ? '타임라인' : t === 'tasks' ? '작업 목록' : '세션 정보'}
+              {TAB_NAME[t]}
             </button>
           ))}
         </nav>
@@ -31,6 +35,7 @@ export function DetailPanel(props: {
         </button>
       </header>
       <div className="panel-body">
+        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} />}
         {tab === 'timeline' && <Timeline entries={props.timeline} />}
         {tab === 'tasks' && <Tasks s={s} />}
         {tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
