@@ -189,7 +189,7 @@ fn refresh_tray(app: &AppHandle) {
 fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     menu.append(&MenuItem::with_id(app, "open", "Agent Room 열기", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "mini", "미니 창으로 보기", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "mini", "룸만 띄우기", true, None::<&str>)?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     if sessions.is_empty() {
         menu.append(&MenuItem::with_id(app, "none", "연결된 Agent 세션 없음", false, None::<&str>)?)?;

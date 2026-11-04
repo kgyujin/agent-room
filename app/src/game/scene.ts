@@ -48,6 +48,8 @@ export class Scene {
   private restSince = 0;
   insetRight = 0;
   insetBottom = 0;
+  /** room-only mode: no sky, clouds or petals; transparent around the room */
+  roomOnly = false;
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
 
@@ -110,7 +112,8 @@ export class Scene {
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
+    // measure the container: the canvas itself carries a pinned CSS size from the last resize
+    const rect = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width * dpr));
     const h = Math.max(1, Math.round(rect.height * dpr));
     // pin the CSS size to the backing store so the browser never resamples:
@@ -123,7 +126,8 @@ export class Scene {
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - this.insetBottom * dpr);
     // largest integer scale that fits the room with some sky around it
-    this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + 40), availH / (room.h + 40))));
+    const margin = this.roomOnly ? 6 : 40;
+    this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
     this.sky = null;
@@ -179,13 +183,17 @@ export class Scene {
     const H = this.buf.height;
     const A = this.atlas;
     const L = A.layout;
-    if (!this.sky) this.buildSky();
     g.imageSmoothingEnabled = false;
-    g.drawImage(this.sky!, 0, 0);
+    if (this.roomOnly) {
+      g.clearRect(0, 0, W, H);
+    } else {
+      if (!this.sky) this.buildSky();
+      g.drawImage(this.sky!, 0, 0);
+    }
 
     // clouds drift slowly
     const dt = 1 / Math.max(1, this.fps);
-    for (const c of this.clouds) {
+    for (const c of this.roomOnly ? [] : this.clouds) {
       c.x -= c.speed * dt;
       const f = A.frames[c.name];
       if (c.x < -f.w - 10) {
@@ -235,7 +243,7 @@ export class Scene {
     A.draw(g, st ? 'steam0' : 'steam1', ox + L.steam[0] - 1, oy + L.steam[1] - 6 - (Math.floor(this.tickN / 4) % 3));
 
     // petals
-    this.updatePetals(g, ox, oy);
+    if (!this.roomOnly) this.updatePetals(g, ox, oy);
 
     // character fx + bubble
     const hx = ox + feet.x;
@@ -256,7 +264,8 @@ export class Scene {
     // lighting
     if (this.theme !== 'day') {
       g.save();
-      g.globalCompositeOperation = 'multiply';
+      // source-atop keeps the transparent surroundings untouched in room-only mode
+      g.globalCompositeOperation = this.roomOnly ? 'source-atop' : 'multiply';
       g.fillStyle = this.theme === 'night' ? 'rgba(70,72,140,0.55)' : 'rgba(255,200,180,0.18)';
       g.fillRect(0, 0, W, H);
       g.restore();
@@ -265,6 +274,7 @@ export class Scene {
     // blit
     const c = this.ctx;
     c.imageSmoothingEnabled = false;
+    c.clearRect(0, 0, this.canvas.width, this.canvas.height);
     c.drawImage(this.buf, 0, 0, W * this.scale, H * this.scale);
   }
 

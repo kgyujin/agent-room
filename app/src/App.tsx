@@ -74,7 +74,7 @@ export default function App() {
           if (u.snapshot.isDemo && u.removed) setDemoRunning(false);
         }),
         await backend.onDetected(setDetected),
-        await backend.onTrayEvent('set-mini', () => setMini(true)),
+        await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => setPinned(String(k))),
       );
     })();
@@ -178,15 +178,36 @@ export default function App() {
     win().then((w) => w?.setAlwaysOnTop(settings.alwaysOnTop));
   }, [ready]); // apply saved always-on-top once
 
-  const toggleMini = async () => {
+  // room-only mode: a borderless transparent window that floats just the room on the desktop
+  const windowSize = useRef<[number, number]>([980, 700]);
+  const toggleMini = async (force?: boolean) => {
+    const next = force ?? !mini;
+    if (next === mini) return;
     const w = await win();
-    const next = !mini;
+    document.documentElement.classList.toggle('room-only', next);
+    if (sceneRef.current) sceneRef.current.roomOnly = next;
     setMini(next);
     if (w) {
       const { LogicalSize } = await import('@tauri-apps/api/dpi');
       if (await w.isFullscreen()) await w.setFullscreen(false);
-      await w.setSize(next ? new LogicalSize(380, 330) : new LogicalSize(980, 700));
+      if (next) {
+        const sz = (await w.innerSize()).toLogical(await w.scaleFactor());
+        windowSize.current = [sz.width, sz.height];
+      }
+      await w.setDecorations(!next);
+      await w.setShadow(!next);
+      await w.setSize(next ? new LogicalSize(440, 360) : new LogicalSize(...windowSize.current));
     }
+  };
+  const toggleRef = useRef(toggleMini);
+  toggleRef.current = toggleMini;
+
+  // in room-only mode the room itself is the drag handle (except the character, which opens details)
+  const onCanvasDown = async (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!mini || e.button !== 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
+    (await win())?.startDragging();
   };
 
   const toggleFullscreen = async () => {
@@ -202,7 +223,7 @@ export default function App() {
     if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top) && selected) {
       setDetailTab('session');
       if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
-      if (mini) void toggleMini();
+      if (mini) void toggleMini(false);
     }
   };
 
@@ -219,8 +240,8 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
-      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} />
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
+      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} />
 
       {!IN_TAURI && !compact && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
       {(demoRunning || demoShown) && (
@@ -242,7 +263,7 @@ export default function App() {
         </div>
       )}
 
-      {compact && <MiniPill s={selected} now={now} onExpand={mini ? toggleMini : undefined} />}
+      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} />}
 
       {panelOpen && selected && (
         <DetailPanel
@@ -259,7 +280,7 @@ export default function App() {
 
       <div className="toolbar" style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
         {!mini && vw >= 720 && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
-        <ToolBtn icon="mini" label={mini ? '기본 창으로' : '미니 창'} on={mini} onClick={toggleMini} />
+        <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
         {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
         <ToolBtn icon="sound" label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />

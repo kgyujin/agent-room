@@ -116,7 +116,7 @@ export function MiniPill({ s, now, onExpand }: { s: Snapshot | null; now: number
         <span className="mini-state">연결된 Agent 없음</span>
       )}
       {onExpand && (
-        <button className="tool" onClick={onExpand} title="기본 창으로" aria-label="기본 창으로">
+        <button className="tool" onClick={onExpand} title="창으로 보기" aria-label="창으로 보기">
           <Icon name="expand" />
         </button>
       )}
