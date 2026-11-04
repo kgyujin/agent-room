@@ -175,9 +175,10 @@ export class Scene {
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
     const margin = this.roomOnly ? 2 : 8;
     const fit = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
-    // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size
+    // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size;
+    // the floating room always fits its window (the window-mode zoom is kept for later)
     this.zoom = Math.max(1 - fit, Math.min(4, this.zoom));
-    this.scale = fit + this.zoom;
+    this.scale = this.roomOnly ? fit : fit + this.zoom;
     if (this.zoom <= 0) this.pan = { x: 0, y: 0 };
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
@@ -270,8 +271,9 @@ export class Scene {
     // keep the room's centre inside the free area however far it is dragged
     this.pan.x = Math.max(-freeW / 2 - room.w / 2 + 24, Math.min(freeW / 2 + room.w / 2 - 24, this.pan.x));
     this.pan.y = Math.max(-freeH / 2 - room.h / 2 + 24, Math.min(freeH / 2 + room.h / 2 - 24, this.pan.y));
-    const ox = Math.floor((freeW - room.w) / 2 + this.pan.x) - room.dx;
-    const oy = Math.floor(top + (freeH - room.h) / 2 + this.pan.y) - room.dy;
+    const pan = this.roomOnly ? { x: 0, y: 0 } : this.pan;
+    const ox = Math.floor((freeW - room.w) / 2 + pan.x) - room.dx;
+    const oy = Math.floor(top + (freeH - room.h) / 2 + pan.y) - room.dy;
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);
