@@ -34,6 +34,8 @@ pub struct Settings {
     pub panel_open: bool,
     pub always_on_top: bool,
     pub show_tokens: bool,
+    /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
+    pub characters: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             panel_open: true,
             always_on_top: false,
             show_tokens: true,
+            characters: Default::default(),
         }
     }
 }
@@ -189,7 +192,7 @@ fn refresh_tray(app: &AppHandle) {
 fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     menu.append(&MenuItem::with_id(app, "open", "Agent Room 열기", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "mini", "미니 창으로 보기", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "mini", "룸만 띄우기", true, None::<&str>)?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     if sessions.is_empty() {
         menu.append(&MenuItem::with_id(app, "none", "연결된 Agent 세션 없음", false, None::<&str>)?)?;
@@ -344,6 +347,61 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+struct CharacterFile {
+    name: String,
+    bytes: Vec<u8>,
+}
+
+/// Custom character PNGs from ~/.agent-room/characters (local only; nothing is uploaded).
+#[tauri::command]
+fn list_characters() -> Vec<CharacterFile> {
+    let dir = agent_room_core::paths::data_dir().join("characters");
+    let _ = std::fs::create_dir_all(&dir);
+    let Ok(rd) = std::fs::read_dir(&dir) else { return vec![] };
+    let mut out = vec![];
+    for e in rd.flatten() {
+        let p = e.path();
+        let png = p.extension().and_then(|x| x.to_str()).is_some_and(|x| x.eq_ignore_ascii_case("png"));
+        let small = e.metadata().is_ok_and(|m| m.is_file() && m.len() <= 4 << 20);
+        let Some(name) = p.file_stem().and_then(|x| x.to_str()) else { continue };
+        if !png || !small {
+            continue;
+        }
+        if let Ok(bytes) = std::fs::read(&p) {
+            out.push(CharacterFile { name: name.into(), bytes });
+        }
+        if out.len() >= 64 {
+            break;
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
+#[tauri::command]
+fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
+    if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
+    }
+    let stem: String = name.trim_end_matches(".png").trim_end_matches(".PNG").chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .take(40)
+        .collect();
+    let stem = if stem.is_empty() { "character".to_string() } else { stem };
+    let dir = agent_room_core::paths::data_dir().join("characters");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut saved = stem.clone();
+    let mut n = 2;
+    while dir.join(format!("{saved}.png")).exists() {
+        saved = format!("{stem}-{n}");
+        n += 1;
+    }
+    std::fs::write(dir.join(format!("{saved}.png")), &bytes).map_err(|e| e.to_string())?;
+    Ok(saved)
+}
+
 #[tauri::command]
 fn data_dir() -> String {
     agent_room_core::paths::data_dir().display().to_string()
@@ -363,7 +421,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, quit_app
+            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, quit_app
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -411,7 +469,7 @@ pub fn run() {
             let menu = build_menu(&handle, &[])?;
             TrayIconBuilder::with_id("main")
                 .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
-                .icon_as_template(false)
+                .icon_as_template(true)
                 .tooltip("Agent Room")
                 .menu(&menu)
                 .on_menu_event(|app, ev| match ev.id().as_ref() {

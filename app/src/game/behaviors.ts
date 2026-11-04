@@ -25,7 +25,8 @@ const TYPE: Step[] = [['type_0', 2], ['type_1', 2], ['type_2', 2], ['type_1', 2]
 const THINK: Step[] = [['sitb_idle', 30], ['type_0', 3], ['sitb_idle', 26], ['type_1', 2], ['type_2', 2], ['sitb_idle', 20]];
 const BOARD: Step[] = [['browse_0', 10], ['stand_b0', 14], ['browse_1', 10], ['stand_b0', 20], ['reach_0', 8], ['stand_b0', 12]];
 const SHELF: Step[] = [['reach_0', 6], ['reach_1', 8], ['reach_0', 6], ['stand_b0', 6], ['read_0', 18, 'dl'], ['read_1', 12, 'dl'], ['read_0', 18, 'dl'], ['blink_f', 2, 'dl'], ['read_1', 14, 'dl'], ['stand_b0', 8], ['reach_1', 8]];
-const OPERATE: Step[] = [['op_0', 5], ['op_1', 5], ['op_0', 5], ['op_1', 8], ['blink_f', 2], ['op_0', 6], ['op_1', 6]];
+// the rig sits against the back of the room, so the character works on it facing away
+const OPERATE: Step[] = [['browse_0', 5], ['browse_1', 5], ['browse_0', 5], ['browse_1', 8], ['stand_b0', 4], ['browse_0', 6], ['browse_1', 6]];
 const WAVE: Step[] = [['wave_0', 4], ['wave_1', 4], ['wave_0', 4], ['wave_1', 4], ['wave_0', 4], ['wave_1', 4], ['stand_f0', 24], ['blink_f', 2], ['stand_f1', 24], ['look_l', 10], ['look_r', 10]];
 const CHEER: Step[] = [['stretch_0', 6], ['stretch_1', 6], ['cheer_0', 3], ['cheer_1', 3], ['cheer_0', 3], ['cheer_1', 3], ['stretch_1', 8], ['stand_f0', 10]];
 const PANIC: Step[] = [['panic_0', 3], ['panic_1', 3], ['panic_0', 3], ['panic_1', 3], ['look_l', 8], ['look_r', 8], ['panic_0', 6], ['stand_f0', 10]];

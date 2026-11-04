@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update } from './types';
+import type { CharacterFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -18,7 +18,7 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'day', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showTokens: true, characters: {},
 };
 
 export interface Backend {
@@ -38,6 +38,8 @@ export interface Backend {
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
+  listCharacters(): Promise<CharacterFile[]>;
+  saveCharacter(name: string, bytes: number[]): Promise<string>;
 }
 
 const tauriBackend: Backend = {
@@ -57,6 +59,8 @@ const tauriBackend: Backend = {
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
+  listCharacters: () => tauriInvoke('list_characters'),
+  saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
 };
 
 // ---------------------------------------------------------------- browser preview (design only)
@@ -135,6 +139,14 @@ function previewBackend(): Backend {
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
+    // design previews can inject test images; the preview never reads the disk
+    listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
+    saveCharacter: async (name, bytes) => {
+      const w = window as { __previewCharacters?: CharacterFile[] };
+      const stem = name.replace(/\.png$/i, '');
+      (w.__previewCharacters ??= []).push({ name: stem, bytes });
+      return stem;
+    },
   };
 }
 

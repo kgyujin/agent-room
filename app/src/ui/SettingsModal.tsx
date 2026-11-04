@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
+import { BUILTIN_CRITTERS, DEFAULT_CHARACTERS } from '../game/skin';
 import type { HookStatus, Settings } from '../types';
 import { Icon } from './icons';
 
-type Tab = 'general' | 'agents' | 'dev';
+type Tab = 'general' | 'characters' | 'agents' | 'dev';
 
 export function SettingsModal(props: {
   initialTab: Tab;
@@ -13,6 +14,8 @@ export function SettingsModal(props: {
   demoRunning: boolean;
   onToggleDemo: () => void;
   realCount: number;
+  characters: string[];
+  onCharactersChanged: () => Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const { settings: s, onChange } = props;
@@ -23,6 +26,7 @@ export function SettingsModal(props: {
         <header>
           <nav>
             <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>일반</button>
+            <button className={tab === 'characters' ? 'on' : ''} onClick={() => setTab('characters')}>캐릭터</button>
             <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agent 연동</button>
             <button className={tab === 'dev' ? 'on' : ''} onClick={() => setTab('dev')}>고급</button>
           </nav>
@@ -49,6 +53,7 @@ export function SettingsModal(props: {
               <AutostartToggle />
             </>
           )}
+          {tab === 'characters' && <Characters settings={s} onChange={onChange} names={props.characters} onAdded={props.onCharactersChanged} />}
           {tab === 'agents' && <Agents />}
           {tab === 'dev' && <Dev {...props} />}
         </div>
@@ -82,6 +87,71 @@ function AutostartToggle() {
     autostartEnabled().then(setOn).catch(() => setOn(false));
   }, []);
   return <Toggle label="로그인 시 자동 실행" v={on} disabled={!IN_TAURI} on={(v) => setAutostart(v).then(setOn).catch(() => undefined)} />;
+}
+
+const ROLES: [string, string][] = [['claude', 'Claude Code'], ['codex', 'Codex'], ['generic', '연결 없음·데모']];
+
+function Characters({ settings: s, onChange, names, onAdded }: { settings: Settings; onChange: (s: Settings) => void; names: string[]; onAdded: () => Promise<void> }) {
+  const [dir, setDir] = useState('~/.agent-room');
+  const [note, setNote] = useState<string | null>(null);
+  const add = async (files: FileList | null) => {
+    const added: string[] = [];
+    for (const f of Array.from(files ?? [])) {
+      try {
+        added.push(await backend.saveCharacter(f.name, Array.from(new Uint8Array(await f.arrayBuffer()))));
+      } catch (e) {
+        setNote(String(e));
+        return;
+      }
+    }
+    await onAdded();
+    if (added.length) setNote(`추가했어요: ${added.join(', ')} · 위 목록에서 고르면 바로 바뀌어요`);
+  };
+  useEffect(() => {
+    backend.dataDir().then(setDir).catch(() => undefined);
+  }, []);
+  const pick = (agent: string, name: string) => {
+    const next = { ...s.characters };
+    if (name) next[agent] = name;
+    else delete next[agent];
+    onChange({ ...s, characters: next });
+  };
+  return (
+    <>
+      {ROLES.map(([agent, label]) => (
+        <Field key={agent} label={label}>
+          <select value={s.characters[agent] ?? DEFAULT_CHARACTERS[agent]} onChange={(e) => pick(agent, e.target.value)}>
+            {BUILTIN_CRITTERS.map(([id, label]) => (
+              <option key={id} value={`builtin/${id}`}>{label}</option>
+            ))}
+            {names.length > 0 && (
+              <optgroup label="내 캐릭터">
+                {names.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </optgroup>
+            )}
+            {s.characters[agent] && !s.characters[agent].startsWith('builtin/') && !names.includes(s.characters[agent]) && <option value={s.characters[agent]} disabled>{s.characters[agent]} (파일 없음)</option>}
+          </select>
+        </Field>
+      ))}
+      <div className="char-add">
+        <div>
+          <b>포켓몬 도트도 넣을 수 있어요</b>
+          <p className="muted small">좋아하는 포켓몬 도트 PNG를 추가하면 위 목록의 "내 캐릭터"에 바로 나타나요. 확대된 이미지도 괜찮아요.</p>
+        </div>
+        <label className="btn primary">
+          PNG 추가
+          <input type="file" accept="image/png" multiple hidden onChange={(e) => { void add(e.target.files); e.target.value = ''; }} />
+        </label>
+      </div>
+      {note && <p className="small">{note}</p>}
+      <p className="muted small">
+        추가한 PNG는 <span className="mono">{dir}/characters/</span> 폴더에 저장되고, 이 폴더에 직접 넣어도 돼요. 확대된 도트는 1칸 = 1px
+        원래 크기로 줄이고 단색 배경은 투명하게 처리해요. 파일은 이 컴퓨터에만 있고 어디에도 올리지 않아요.
+      </p>
+    </>
+  );
 }
 
 const NAMES = { claude: 'Claude Code', codex: 'OpenAI Codex CLI' };

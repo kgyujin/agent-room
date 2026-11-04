@@ -2,8 +2,9 @@
 // the current behavior's frame sequence. A future multi-agent mode = several Actors.
 import type { Atlas, Facing, Layout } from './assets';
 import type { Behavior } from './behaviors';
+import type { Skin } from './skin';
 
-const SPEED = 7; // world units per second
+const SPEED = 36; // world units (= scene px) per second
 const MIN_DWELL_MS = 1600; // stay at a spot at least this long before a non-urgent move
 const SIT_APPROACH: Record<string, string> = { desk: 'deskA', sofa: 'sofaB' };
 
@@ -113,7 +114,7 @@ export class Actor {
     for (let c: string | null = target; c; c = prev[c]) nodes.unshift(c);
     const pts = nodes.map((n) => this.layout.nodes[n]);
     // skip the first node if we're basically on it
-    if (pts.length > 1 && Math.hypot(pts[0][0] - this.x, pts[0][1] - this.y) < 1.5) pts.shift();
+    if (pts.length > 1 && Math.hypot(pts[0][0] - this.x, pts[0][1] - this.y) < 6) pts.shift();
     return pts;
   }
 
@@ -127,10 +128,8 @@ export class Actor {
         const dx = tx - this.x;
         const dy = ty - this.y;
         const d = Math.hypot(dx, dy);
-        const sdx = 2 * (dx - dy);
-        const sdy = dx + dy;
-        if (Math.abs(sdx) > 0.01) this.lr = sdx > 0 ? 'r' : 'l';
-        this.walkView = sdy >= 0 ? 'f' : 'b';
+        if (Math.abs(dx) > 0.01) this.lr = dx > 0 ? 'r' : 'l';
+        this.walkView = dy >= -Math.abs(dx) ? 'f' : 'b';
         if (d <= budget) {
           this.x = tx;
           this.y = ty;
@@ -173,24 +172,34 @@ export class Actor {
     return ((this.frame.startsWith('walk_b') || BACK.some((p) => this.frame.startsWith(p)) ? 'u' : 'd') + this.lr) as Facing;
   }
 
-  draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number, dim = false) {
-    const L = atlas.layout;
-    const sx = ox + L.scene.ox + 2 * (this.x - this.y);
-    const sy = oy + L.scene.oy + (this.x + this.y) - L.scene.floorZ - this.z;
+  draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number, skin?: Skin) {
+    const sx = ox + this.x;
+    const sy = oy + this.y - this.z;
     if (this.z === 0) atlas.draw(ctx, 'shadow', sx - 4, sy - 1);
-    const name = `ch_${this.agent}_${this.frame}`;
-    if (dim) ctx.globalAlpha = 0.55;
-    atlas.draw(ctx, atlas.has(name) ? name : `ch_${this.agent}_stand_f0`, sx - L.char.ax, sy - L.char.ay, this.flip);
-    ctx.globalAlpha = 1;
+    if (skin) {
+      // hop while walking, 1px bob on each behavior step; source faces left.
+      // Built-in critters also have back views and walk frames.
+      const n = Number(this.frame.slice(-1)) || 0;
+      const lift = this.walking ? [0, 1, 2, 1][n % 4] : this.stepIdx % 2;
+      ctx.save();
+      if (this.lr === 'r') {
+        ctx.translate(Math.round(sx) * 2, 0);
+        ctx.scale(-1, 1);
+      }
+      const back = this.facing().startsWith('u');
+      const still = (back && skin.back) || skin.canvas;
+      const img = (this.walking && (back ? skin.walkB : skin.walkF)?.[n % 2]) || still;
+      ctx.drawImage(img, Math.round(sx) - (skin.w >> 1), Math.round(sy) - skin.h + 1 - lift);
+      ctx.restore();
+      return { x: sx, y: sy };
+    }
+    // no human fallback: until a critter skin has loaded only the shadow is drawn
     return { x: sx, y: sy };
   }
 
   /** screen position of the feet (scene coords, before offset) */
-  feet(layout: Layout) {
-    return {
-      x: layout.scene.ox + 2 * (this.x - this.y),
-      y: layout.scene.oy + (this.x + this.y) - layout.scene.floorZ - this.z,
-    };
+  feet() {
+    return { x: this.x, y: this.y - this.z };
   }
 }
 
