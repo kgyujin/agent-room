@@ -615,3 +615,4 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 /* settings keep one height while switching tabs, so the dialog does not jump */
 .modal { height: min(600px, calc(100vh - 40px)); }
 .modal-body { flex: 1; }
+.island.open .is-head, .island.open .is-right { animation: fade 0.22s 0.06s ease-out both; }
