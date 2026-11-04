@@ -46,7 +46,7 @@ export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: Rate
         <dt>진행</dt>
         <dd>
           {prog ? (
-            <span className="prog" title="Agent가 보고한 작업 목록 기준">
+            <span className="prog" title="에이전트가 보고한 작업 목록 기준">
               <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
               {prog.done}/{prog.total}
             </span>
@@ -71,14 +71,14 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
         {fmtAgo(now - s.lastEventAt)}부터 새 이벤트가 없어요. 오래 걸리는 명령을 실행 중일 수도 있지만, 지금 상태를 확정할 수 없어요.
       </div>
     );
-  if (s.connection === 'lost') return <div className="callout muted">Agent 프로세스가 종료 이벤트 없이 사라졌어요.</div>;
+  if (s.connection === 'lost') return <div className="callout muted">에이전트 프로세스가 종료 이벤트 없이 사라졌어요.</div>;
   if (s.connection === 'ended') return <div className="callout muted">세션이 종료됐어요.</div>;
   if (s.waiting)
     return (
       <div className="callout wait">
         {s.waiting.kind === 'approval'
           ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 터미널에서 확인해 주세요.`
-          : s.waiting.message ?? 'Agent가 입력을 기다리고 있어요.'}
+          : s.waiting.message ?? '에이전트가 입력을 기다리고 있어요.'}
         <span className="since">{fmtAgo(now - s.waiting.since)}</span>
       </div>
     );

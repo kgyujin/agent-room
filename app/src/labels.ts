@@ -17,7 +17,7 @@ export function stateLabel(s: Snapshot): string {
     case 'testing':
       if (s.tool === null && s.lastTest) return s.lastTest.ok === true ? '테스트 통과' : s.lastTest.ok === false ? '테스트 실패' : '테스트 종료';
       return '테스트 실행 중';
-    case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '사용자 입력 대기';
+    case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '답변 기다리는 중';
     case 'completed': return '작업 완료';
     case 'error': return s.error?.fatal ? '오류로 중단됨' : '오류 발생';
     case 'disconnected': return '연결 끊김';
@@ -59,7 +59,7 @@ export function timelineText(e: TimelineEntry): string {
     case 'turn_complete': return '작업 완료';
     case 'turn_failed': return `오류로 중단${d}`;
     case 'interrupted': return '사용자가 중단';
-    case 'compacting': return '대화 정리(컴팩트)';
+    case 'compacting': return '대화 요약 (컴팩트)';
     case 'subagent': return `하위 에이전트 시작${d}`;
     case 'plan': return `작업 목록 갱신${d}`;
     default: return e.kind;

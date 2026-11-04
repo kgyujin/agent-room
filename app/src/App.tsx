@@ -353,10 +353,10 @@ export default function App() {
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 12 }}>
-        {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
+        {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
-            {compact ? '데모 · 실제 Agent 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 Agent 아님)'}
+            {compact ? '데모 · 실제 에이전트 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)'}
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}

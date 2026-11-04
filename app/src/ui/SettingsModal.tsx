@@ -38,7 +38,7 @@ export function SettingsModal(props: {
             <button className={tab === 'look' ? 'on' : ''} onClick={() => setTab('look')}>꾸미기</button>
             <button className={tab === 'characters' ? 'on' : ''} onClick={() => setTab('characters')}>캐릭터</button>
             <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>알림·소리</button>
-            <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agent 연동</button>
+            <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>에이전트 연동</button>
             <button className={tab === 'dev' ? 'on' : ''} onClick={() => setTab('dev')}>고급</button>
           </nav>
           <button className="tool" onClick={props.onClose} aria-label="닫기"><Icon name="close" /></button>
@@ -301,7 +301,7 @@ function Agents() {
   return (
     <div className="agents">
       <p className="muted small">
-        Agent의 공식 Hook에 작은 전달 프로그램(agent-room-hook)을 등록해요. 이 프로그램은 아무것도 출력하지 않아서 Agent 대화에
+        에이전트의 공식 Hook에 작은 전달 프로그램(agent-room-hook)을 등록해요. 이 프로그램은 아무것도 출력하지 않아서 에이전트 대화에
         아무것도 추가되지 않고, 추가 토큰도 쓰지 않아요. 설정을 바꾸기 전에 원본을 백업합니다.
       </p>
       <p className="muted small">
@@ -371,7 +371,7 @@ function Dev(props: { settings: Settings; onChange: (s: Settings) => void; demoR
       ))}
       <h4>완전 제거</h4>
       <p className="muted small">
-        모든 Agent 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서
+        모든 에이전트 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서
         <span className="mono"> ~/.agent-room/bin/agent-room-hook --uninstall</span> 로 같은 작업을 할 수 있어요.
       </p>
       <button className="btn danger" onClick={() => backend.hooksRemoveAll().then(() => setMsg('모든 Hook을 제거했어요.'))}>

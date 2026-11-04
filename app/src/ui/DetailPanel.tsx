@@ -77,11 +77,11 @@ function Tasks({ s }: { s: Snapshot }) {
               </li>
             ))}
           </ul>
-          <p className="muted small">Agent가 직접 작성한 작업 목록 기준이에요.</p>
+          <p className="muted small">에이전트가 직접 작성한 작업 목록 기준이에요.</p>
         </>
       ) : (
         <p className="muted">
-          Agent가 작업 목록(TodoWrite / update_plan 등)을 만들지 않아서 전체 단계를 알 수 없어요. 임의의 진행률 대신 경과 시간만 표시합니다.
+          에이전트가 작업 목록(TodoWrite / update_plan 등)을 만들지 않아서 전체 단계를 알 수 없어요. 임의의 진행률 대신 경과 시간만 표시합니다.
         </p>
       )}
       {s.filesEdited.length > 0 && (
@@ -100,7 +100,7 @@ function Tasks({ s }: { s: Snapshot }) {
 
 function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?: () => void }) {
   const rows: [string, string][] = [
-    ['Agent', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],
+    ['에이전트', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],
     ['프로젝트', s.project ?? '—'],
     ['경로', s.cwd ?? '—'],
     ['모델', s.model ?? '—'],
