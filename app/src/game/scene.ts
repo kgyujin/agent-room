@@ -7,11 +7,11 @@ import { Actor } from './actor';
 import type { Atlas } from './assets';
 import { behaviorFor, REST_KEYS, restBehavior, type Behavior } from './behaviors';
 import type { Skin } from './skin';
+import { lightAt, paintSky, type Box } from './sky';
 
-export type Theme = 'day' | 'sunset' | 'night';
+/** room lighting; 'auto' follows the local clock continuously */
+export type Theme = 'day' | 'sunset' | 'night' | 'auto';
 
-// around the room: a soft deep-green garden tone so the cream stone pops
-const VOID = '#2f4a3e';
 
 interface Spark { x: number; y: number; t: number }
 
@@ -45,6 +45,8 @@ export class Scene {
   insetRight = 0;
   insetBottom = 0;
   insetTop = 0;
+  /** colour painted around the room (follows the UI theme) */
+  backdrop = '#2f4a3e';
   /** room-only mode: transparent around the room */
   roomOnly = false;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
@@ -53,12 +55,29 @@ export class Scene {
   prefs: Record<string, string[]> = {};
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
+  /** user zoom: integer steps added to the fitted scale (mouse wheel) */
+  zoom = 0;
+  /** user pan in art pixels while zoomed in */
+  private pan = { x: 0, y: 0 };
   private desks: number;
+  /** clock for the sky and 'auto' lighting (the browser preview can pin an hour) */
+  now = () => new Date();
+  private sky = document.createElement('canvas');
+  private skyKey = '';
+  private span: Box;
+  /** scratch canvas for the lighting pass (keeps transparent pixels transparent) */
+  private tmp = document.createElement('canvas');
 
   constructor(private canvas: HTMLCanvasElement, private atlas: Atlas) {
     this.ctx = canvas.getContext('2d')!;
     this.bctx = this.buf.getContext('2d')!;
     this.desks = atlas.layout.desks;
+    const wb = atlas.layout.windows ?? [];
+    const x0 = Math.min(...wb.map((b) => b[0]), 0);
+    const y0 = Math.min(...wb.map((b) => b[1]), 0);
+    this.span = wb.length ? [x0, y0, Math.max(...wb.map((b) => b[0] + b[2])) - x0, Math.max(...wb.map((b) => b[1] + b[3])) - y0] : [0, 0, 1, 1];
+    this.sky.width = this.span[2];
+    this.sky.height = this.span[3];
     this.resize();
   }
 
@@ -155,10 +174,46 @@ export class Scene {
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
     const margin = this.roomOnly ? 2 : 8;
-    this.scale = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
+    const fit = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
+    // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size;
+    // the floating room always fits its window (the window-mode zoom is kept for later)
+    this.zoom = Math.max(1 - fit, Math.min(4, this.zoom));
+    this.scale = this.roomOnly ? fit : fit + this.zoom;
+    if (this.zoom <= 0) this.pan = { x: 0, y: 0 };
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
     this.draw();
+  }
+
+  /** zoom one step in (dir 1) or out (-1), keeping the art pixel under the cursor in place */
+  zoomAt(dir: number, cssX: number, cssY: number) {
+    const dpr = window.devicePixelRatio || 1;
+    const ax = (cssX * dpr) / this.scale - this.off.x;
+    const ay = (cssY * dpr) / this.scale - this.off.y;
+    const before = this.scale;
+    this.zoom += dir;
+    this.resize();
+    if (this.scale === before || this.zoom <= 0) return this.draw();
+    // where the same art point lands now, and pan so it is back under the cursor
+    const nx = (cssX * dpr) / this.scale - ax;
+    const ny = (cssY * dpr) / this.scale - ay;
+    this.pan.x += nx - this.off.x;
+    this.pan.y += ny - this.off.y;
+    this.draw();
+  }
+
+  /** drag the zoomed room by a CSS-pixel delta */
+  panBy(dxCss: number, dyCss: number) {
+    if (this.zoom <= 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    this.pan.x += (dxCss * dpr) / this.scale;
+    this.pan.y += (dyCss * dpr) / this.scale;
+    this.draw();
+  }
+
+  resetZoom() {
+    this.zoom = 0;
+    this.resize();
   }
 
   /** session key of the critter under a click (CSS px relative to canvas), if any */
@@ -203,12 +258,9 @@ export class Scene {
     const A = this.atlas;
     const L = A.layout;
     g.imageSmoothingEnabled = false;
-    if (this.roomOnly) {
-      g.clearRect(0, 0, W, H);
-    } else {
-      g.fillStyle = VOID;
-      g.fillRect(0, 0, W, H);
-    }
+    // everything is drawn on a clear buffer first; the sky and the backdrop go *behind* it at the end,
+    // so they only show through the windows' clear glass and around the room
+    g.clearRect(0, 0, W, H);
 
     // centre the room in the free area
     const dpr = window.devicePixelRatio || 1;
@@ -216,8 +268,12 @@ export class Scene {
     const top = (this.insetTop * dpr) / this.scale;
     const freeH = H - top - (this.insetBottom * dpr) / this.scale;
     const room = A.frames.room;
-    const ox = Math.floor((freeW - room.w) / 2) - room.dx;
-    const oy = Math.floor(top + (freeH - room.h) / 2) - room.dy;
+    // keep the room's centre inside the free area however far it is dragged
+    this.pan.x = Math.max(-freeW / 2 - room.w / 2 + 24, Math.min(freeW / 2 + room.w / 2 - 24, this.pan.x));
+    this.pan.y = Math.max(-freeH / 2 - room.h / 2 + 24, Math.min(freeH / 2 + room.h / 2 - 24, this.pan.y));
+    const pan = this.roomOnly ? { x: 0, y: 0 } : this.pan;
+    const ox = Math.floor((freeW - room.w) / 2 + pan.x) - room.dx;
+    const oy = Math.floor(top + (freeH - room.h) / 2 + pan.y) - room.dy;
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);
@@ -265,21 +321,53 @@ export class Scene {
       }
     }
 
-    // lighting
-    if (this.theme !== 'day') {
-      g.save();
-      // source-atop keeps the transparent surroundings untouched in room-only mode
-      g.globalCompositeOperation = this.roomOnly ? 'source-atop' : 'multiply';
-      g.fillStyle = this.theme === 'night' ? 'rgba(70,72,140,0.55)' : 'rgba(255,200,180,0.18)';
-      g.fillRect(0, 0, W, H);
-      g.restore();
+    // lighting: multiply over the drawn pixels only (the sky has its own day/night colours)
+    const light = this.theme === 'auto' ? lightAt(this.now())
+      : this.theme === 'night' ? { color: 'rgb(70,72,140)', alpha: 0.55 }
+      : this.theme === 'sunset' ? { color: 'rgb(255,200,180)', alpha: 0.18 } : null;
+    if (light && light.alpha > 0.01) {
+      const t = this.tmp;
+      if (t.width !== W || t.height !== H) { t.width = W; t.height = H; }
+      const tc = t.getContext('2d')!;
+      tc.globalCompositeOperation = 'copy';
+      tc.drawImage(this.buf, 0, 0);
+      tc.globalCompositeOperation = 'multiply';
+      tc.globalAlpha = light.alpha;
+      tc.fillStyle = light.color;
+      tc.fillRect(0, 0, W, H);
+      tc.globalAlpha = 1;
+      tc.globalCompositeOperation = 'destination-in';
+      tc.drawImage(this.buf, 0, 0);
+      g.globalCompositeOperation = 'copy';
+      g.drawImage(t, 0, 0);
+      g.globalCompositeOperation = 'source-over';
     }
+
+    // sky behind the windows (repainted once a second at most), then the backdrop behind everything
+    g.globalCompositeOperation = 'destination-over';
+    this.paintSkyCache();
+    g.drawImage(this.sky, ox + this.span[0], oy + this.span[1]);
+    if (!this.roomOnly) {
+      g.fillStyle = this.backdrop;
+      g.fillRect(0, 0, W, H);
+    }
+    g.globalCompositeOperation = 'source-over';
 
     // blit
     const c = this.ctx;
     c.imageSmoothingEnabled = false;
     c.clearRect(0, 0, this.canvas.width, this.canvas.height);
     c.drawImage(this.buf, 0, 0, W * this.scale, H * this.scale);
+  }
+
+  private paintSkyCache() {
+    const wb = this.atlas.layout.windows ?? [];
+    if (!wb.length) return;
+    const d = this.now();
+    const key = `${Math.floor(d.getTime() / 1000)}`;
+    if (key === this.skyKey) return;
+    this.skyKey = key;
+    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN), 0, 0);
   }
 
   private screenFrame(desk: number, b: Behavior | null): string {

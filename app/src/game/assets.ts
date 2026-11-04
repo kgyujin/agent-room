@@ -11,6 +11,8 @@ export interface Layout {
   nodes: Record<string, [number, number]>;
   edges: [string, string][];
   steam: [number, number];
+  /** clear-glass box of each window [x, y, w, h] (scene coords); the sky is painted there */
+  windows: [number, number, number, number][];
 }
 export type Facing = 'dr' | 'dl' | 'ur' | 'ul';
 

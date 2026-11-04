@@ -38,12 +38,14 @@ pub struct Settings {
     pub characters: std::collections::BTreeMap<String, String>,
     /// built-in critter id -> fur colour ("#rrggbb")
     pub critter_colors: std::collections::BTreeMap<String, String>,
+    /// UI colour theme id ("peach", "mint", ...)
+    pub ui_theme: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: "day".into(),
+            theme: "auto".into(),
             sfx: true,
             bgm: false,
             notify_complete: true,
@@ -55,6 +57,7 @@ impl Default for Settings {
             show_tokens: true,
             characters: Default::default(),
             critter_colors: Default::default(),
+            ui_theme: "peach".into(),
         }
     }
 }

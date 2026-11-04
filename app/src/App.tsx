@@ -11,8 +11,11 @@ import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Icon } from './ui/icons';
 import { AGENT_NAME } from './labels';
+import { applyUiTheme, uiTheme } from './themes';
 
 const PANEL_W = 330;
+/** below this window width the side panel would squeeze the room, so it stays closed */
+const PANEL_MIN_VW = 900;
 
 function priority(s: Snapshot): number {
   if (s.connection === 'ended' || s.connection === 'lost') return 9;
@@ -58,13 +61,15 @@ export default function App() {
   const [dockRef, dockH] = useHeight();
   // banners stack above the room so they never cover its wall
   const [bannersRef, bannersH] = useHeight();
+  // the toolbar shares the top row with the session tabs
+  const [toolbarRef, , toolbarW] = useHeight();
   const [skins, setSkins] = useState<Record<string, Skin>>({});
 
   const list = useMemo(() => Object.values(sessions).sort((a, b) => priority(a) - priority(b) || b.lastEventAt - a.lastEventAt), [sessions]);
   const realSessions = list.filter((s) => !s.isDemo);
   const selected = (pinned && sessions[pinned]) || list[0] || null;
   const compact = mini || vw < 560;
-  const panelOpen = settings.panelOpen && !mini && !office && vw >= 720 && selected !== null;
+  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -120,6 +125,10 @@ export default function App() {
     loadAtlas().then((atlas) => {
       if (disposed || !canvasRef.current) return;
       const sc = new Scene(canvasRef.current, atlas);
+      try { sc.zoom = Number(localStorage.getItem('roomZoom')) || 0; } catch { /* storage unavailable */ }
+      // browser preview: ?hour=19.5 pins the clock for the sky and lighting
+      const pin = new URLSearchParams(location.search).get('hour');
+      if (!IN_TAURI && pin !== null) sc.now = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return new Date(d.getTime() + Number(pin) * 3600_000); };
       sceneRef.current = sc;
       sc.start();
       setReady(true);
@@ -168,7 +177,7 @@ export default function App() {
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
     sc.insetBottom = dockH ? dockH + 24 : 0;
-    sc.insetTop = mini ? 0 : bannersH ? bannersH + 56 : 44;
+    sc.insetTop = mini ? 0 : bannersH ? bannersH + 66 : 56;
     sc.resize();
   }, [panelOpen, ready, mini, dockH, bannersH]);
 
@@ -200,7 +209,10 @@ export default function App() {
   }, [settings.characters, skins, ready]);
 
   useEffect(() => {
-    sceneRef.current?.setTheme(themeFor(settings.theme));
+    const th = uiTheme(settings.uiTheme);
+    applyUiTheme(th);
+    if (sceneRef.current) sceneRef.current.backdrop = th.void;
+    sceneRef.current?.setTheme(settings.theme);
     const snd = soundRef.current;
     snd.sfxOn = settings.sfx;
     snd.setBgm(settings.bgm);
@@ -251,12 +263,51 @@ export default function App() {
   const toggleRef = useRef(toggleMini);
   toggleRef.current = toggleMini;
 
-  // in room-only mode the room itself is the drag handle (except the character, which opens details)
+  // in room-only mode the room itself is the drag handle (except the character, which opens details);
+  // in window mode dragging pans the room while it is zoomed in
   const onCanvasDown = async (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!mini || e.button !== 0) return;
+    if (e.button !== 0) return;
     const r = e.currentTarget.getBoundingClientRect();
     if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
-    (await win())?.startDragging();
+    if (mini) return void (await win())?.startDragging();
+    let last = [e.clientX, e.clientY];
+    const move = (ev: MouseEvent) => {
+      sceneRef.current?.panBy(ev.clientX - last[0], ev.clientY - last[1]);
+      last = [ev.clientX, ev.clientY];
+    };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  // mouse wheel / trackpad scroll: zooms the room in window mode, resizes the floating window in room-only mode
+  const wheelAcc = useRef(0);
+  const onWheel = async (e: React.WheelEvent<HTMLCanvasElement>) => {
+    wheelAcc.current += e.deltaY;
+    if (Math.abs(wheelAcc.current) < 40) return;
+    const dir = wheelAcc.current < 0 ? 1 : -1;
+    wheelAcc.current = 0;
+    if (!mini) {
+      const r = e.currentTarget.getBoundingClientRect();
+      const sc = sceneRef.current;
+      sc?.zoomAt(dir, e.clientX - r.left, e.clientY - r.top);
+      try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
+      return;
+    }
+    const w = await win();
+    if (!w) return;
+    const { LogicalSize } = await import('@tauri-apps/api/dpi');
+    const sz = (await w.innerSize()).toLogical(await w.scaleFactor());
+    const k = dir > 0 ? 1.15 : 1 / 1.15;
+    const nw = Math.max(300, Math.min(1600, Math.round(sz.width * k)));
+    await w.setSize(new LogicalSize(nw, Math.max(260, Math.round((sz.height * nw) / sz.width))));
+  };
+
+  const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    if (mini || sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
+    sceneRef.current?.resetZoom();
+    try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
   };
 
   const toggleFullscreen = async () => {
@@ -292,11 +343,11 @@ export default function App() {
 
   return (
     <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} onPointerDown={() => soundRef.current.unlock()}>
-      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} />
+      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 56 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 Agent와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -316,7 +367,7 @@ export default function App() {
       <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini} />
 
       {!compact && !office && (
-        <div className="topleft">
+        <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
       )}
@@ -345,13 +396,13 @@ export default function App() {
         />
       )}
 
-      <div className={`toolbar ${office ? 'faded' : ''}`} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
-        {!mini && vw >= 720 && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
+      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
         {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
-        <ToolBtn icon="sound" label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
+        <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('general')} />
       </div>
 
@@ -377,7 +428,7 @@ export default function App() {
 function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0]['name']; label: string; on?: boolean; onClick: () => void }) {
   return (
     <button className={`tool ${on ? 'on' : ''}`} onClick={onClick} title={label} aria-label={label}>
-      <Icon name={icon} size={12} />
+      <Icon name={icon} size={16} />
     </button>
   );
 }
@@ -400,7 +451,6 @@ function EmptyCard({ detected, onSetup, onDemo }: { detected: Overview['detected
   );
 }
 
-/** offsetHeight of the referenced element, kept current with a ResizeObserver (0 when unmounted) */
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
 function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
@@ -409,6 +459,12 @@ function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: Reac
     let last = '';
     const loop = () => {
       const a = scene.current?.anchors() ?? [];
+      // nudge tags up so neighbours never cover each other (tags are ~110 x 22 css px)
+      const placed: Anchor[] = [];
+      for (const p of [...a].sort((u, v) => v.y - u.y)) {
+        while (placed.some((q) => Math.abs(q.x - p.x) < 110 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        placed.push(p);
+      }
       const sig = a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
       if (sig !== last) {
         last = sig;
@@ -439,15 +495,16 @@ function NameTags({ scene, sessions, selected, onSelect, hidden }: { scene: Reac
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
 
-function useHeight(): [React.RefObject<HTMLDivElement | null>, number] {
+/** [ref, offsetHeight, offsetWidth] of the referenced element, kept current with a ResizeObserver (0 when unmounted) */
+function useHeight(): [React.RefObject<HTMLDivElement | null>, number, number] {
   const ref = useRef<HTMLDivElement>(null);
-  const [h, setH] = useState(0);
+  const [size, setSize] = useState<[number, number]>([0, 0]);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return setH(0);
-    const ro = new ResizeObserver(() => setH(el.offsetHeight));
+    if (!el) return setSize((p) => (p[0] || p[1] ? [0, 0] : p));
+    const ro = new ResizeObserver(() => setSize((p) => (p[0] === el.offsetHeight && p[1] === el.offsetWidth ? p : [el.offsetHeight, el.offsetWidth])));
     ro.observe(el);
     return () => ro.disconnect();
   });
-  return [ref, h];
+  return [ref, size[0], size[1]];
 }

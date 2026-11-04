@@ -124,8 +124,14 @@ def stone(u, z, lit):
     return c if lit else shade(c, 0.93)
 
 
+# clear glass: left transparent so the app can paint the real-time sky behind it
+HOLE = (0, 0, 0, 0)
+# screen pixels of each window's clear glass, filled by draw_walls (for the app's sky layer)
+WINDOW_PX = {}
+
+
 def window_color(u, z, u0, w, z0, h):
-    """arched stained-glass window; returns None outside"""
+    """arched window: stained glass in the arch, clear panes below; returns None outside"""
     cx = u0 + w / 2
     r = w / 2
     zt = z0 + h - r
@@ -140,19 +146,23 @@ def window_color(u, z, u0, w, z0, h):
         return C['lead']
     if z < z0 + 1:
         return C['st_d']
-    k = hsh(math.floor((u - u0) / 2.5), math.floor((z - z0) / 3), 11)
-    col = C['gl_1'] if k < 0.4 else C['gl_2'] if k < 0.7 else C['gl_3'] if k < 0.88 else C['gl_5']
-    if (u - u0) < w * 0.35 and z > z0 + h * 0.5:
-        col = shade(col, 1.25)     # glint
-    return col
+    if z >= zt and math.hypot(u - cx, z - zt) > r * 0.55:
+        # stained-glass band round the arch
+        k = hsh(math.floor((u - u0) / 2.5), math.floor((z - z0) / 3), 11)
+        return C['gl_1'] if k < 0.4 else C['gl_2'] if k < 0.7 else C['gl_3'] if k < 0.88 else C['gl_5']
+    return HOLE
 
 
-def wall_pixel(u, z, wall):
+def wall_pixel(u, z, wall, at=None):
     lit = wall == 'L'
     # window positions (wall-local u along the wall from the back corner)
     wins = [(34, 11, 14, 26)] if wall == 'L' else [(16, 10, 12, 24), (38, 10, 12, 24)]
-    for (u0, w, z0, h) in wins:
+    for i, (u0, w, z0, h) in enumerate(wins):
         c = window_color(u, z, u0, w, z0, h)
+        if c is HOLE:
+            if at:
+                WINDOW_PX.setdefault(f'{wall}{i}', set()).add(at)
+            return c
         if c is not None:
             return c if lit else shade(c, 0.95)
     # cornice band under the cap
@@ -164,10 +174,10 @@ def wall_pixel(u, z, wall):
 def draw_walls(s):
     # left wall: plane x = 0, u = y
     s.poly([P(0, 0, Z), P(0, Y, Z), P(0, Y, 0), P(0, 0, 0)],
-           lambda px, py: wall_pixel((OX - px - 0.5) / 2, OY + (OX - px - 0.5) / 2 - (py + 0.5), 'L'))
+           lambda px, py: wall_pixel((OX - px - 0.5) / 2, OY + (OX - px - 0.5) / 2 - (py + 0.5), 'L', (px, py)))
     # right wall: plane y = 0, u = x
     s.poly([P(0, 0, Z), P(X, 0, Z), P(X, 0, 0), P(0, 0, 0)],
-           lambda px, py: wall_pixel((px + 0.5 - OX) / 2, OY + (px + 0.5 - OX) / 2 - (py + 0.5), 'R'))
+           lambda px, py: wall_pixel((px + 0.5 - OX) / 2, OY + (px + 0.5 - OX) / 2 - (py + 0.5), 'R', (px, py)))
     # wall caps (thickness), lit tops
     cap = C['st_hi']
     s.poly([P(-CAP, -CAP, Z), P(0, -CAP, Z), P(0, Y, Z), P(-CAP, Y, Z)], cap)
@@ -492,6 +502,17 @@ def build():
     for name, s, base in FURN:
         s.outline(factor=0.5)
     return room, screens, rig_panel, tea
+
+
+def window_boxes():
+    """bounding box [x, y, w, h] of each window's clear glass that is still see-through"""
+    out = []
+    for key in sorted(WINDOW_PX):
+        pts = WINDOW_PX[key]
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        out.append([min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1])
+    return out
 
 
 def walk_graph(screens):
