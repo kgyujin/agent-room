@@ -63,6 +63,18 @@ pub struct Settings {
     pub pet_energy: String,
     /// the island opens on "hover" or only on "click"
     pub island_open: String,
+    /// seconds a finished turn still shows as "완료" (0 = until the next turn)
+    pub done_shown_sec: u32,
+    /// name tags of idle pets: "dim", "hide" or "show"
+    pub idle_tags: String,
+    /// little icons over the pets' heads (!, ?, ✓, …)
+    pub pet_bubbles: bool,
+    /// hide the island while no agent is working or waiting on the user
+    pub island_hide_idle: bool,
+    /// lowest remaining usage on the closed island
+    pub island_usage: bool,
+    /// "작업 완료" notifications only for turns at least this long (seconds, 0 = all)
+    pub notify_min_turn_sec: u32,
 }
 
 impl Default for Settings {
@@ -91,6 +103,12 @@ impl Default for Settings {
             show_tabs: true,
             pet_energy: "normal".into(),
             island_open: "hover".into(),
+            done_shown_sec: 60,
+            idle_tags: "dim".into(),
+            pet_bubbles: true,
+            island_hide_idle: false,
+            island_usage: true,
+            notify_min_turn_sec: 0,
         }
     }
 }
@@ -147,6 +165,33 @@ fn publish(app: &AppHandle, u: Update) {
         notify_low_limits(app, &u.snapshot, l);
     }
     refresh_tray(app);
+    sync_island(app);
+}
+
+/// With "일이 없을 땐 숨기기" on, the island shows only while an agent works, waits on the user,
+/// or has just finished (for as long as "완료" is shown). The window is hidden, not destroyed.
+fn sync_island(app: &AppHandle) {
+    let shared = app.state::<Shared>();
+    let st = shared.settings.lock().unwrap().clone();
+    let Some(w) = app.get_webview_window("island") else { return };
+    let busy = || {
+        let now = now_ms();
+        shared.store.lock().unwrap().snapshots().iter().any(|s| {
+            use agent_room_core::session::Connection;
+            if !matches!(s.connection, Connection::Live | Connection::Stale) {
+                return false;
+            }
+            match s.state {
+                AgentState::Idle | AgentState::Disconnected => false,
+                AgentState::Completed => st.done_shown_sec == 0 || s.turn_ended_at.is_some_and(|t| now.saturating_sub(t) < st.done_shown_sec as u64 * 1000),
+                _ => true,
+            }
+        })
+    };
+    let show = !st.island_hide_idle || busy();
+    if show != w.is_visible().unwrap_or(true) {
+        let _ = if show { w.show() } else { w.hide() };
+    }
 }
 
 /// One notification per usage window and reset period once 10% or less is left.
@@ -177,6 +222,13 @@ fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
     };
     if !wanted || s.is_demo {
         return;
+    }
+    // a quick answer is not worth a notification when the user asked for long turns only
+    if matches!(n, Notice::Completed) && st.notify_min_turn_sec > 0 {
+        let took = s.turn_started_at.zip(s.turn_ended_at).map(|(a, b)| b.saturating_sub(a)).unwrap_or(u64::MAX);
+        if took < st.notify_min_turn_sec as u64 * 1000 {
+            return;
+        }
     }
     if st.notify_only_when_hidden {
         if let Some(w) = app.get_webview_window("main") {
@@ -522,6 +574,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())?;
     show_island(&app, settings.island);
+    sync_island(&app);
     // the popover and island keep their pages alive, so they pick up the change from this event
     let _ = app.emit("settings-changed", &settings);
     Ok(())
@@ -984,8 +1037,51 @@ fn quit_app(app: AppHandle) {
 
 // ------------------------------------------------------------------ setup
 
+/// The macOS menu bar menus in Korean. Tauri's default menu is English only. The Edit menu also
+/// keeps ⌘C / ⌘V / ⌘A working in text fields.
+#[cfg(target_os = "macos")]
+fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    use tauri::menu::{PredefinedMenuItem as P, Submenu};
+    let sep = || P::separator(app);
+    let main = Submenu::with_items(app, "Agent Room", true, &[
+        &P::about(app, Some("Agent Room에 관하여"), None)?,
+        &sep()?,
+        &MenuItem::with_id(app, "app-settings", "설정…", true, Some("CmdOrCtrl+,"))?,
+        &sep()?,
+        &P::hide(app, Some("Agent Room 가리기"))?,
+        &P::hide_others(app, Some("기타 가리기"))?,
+        &P::show_all(app, Some("모두 보기"))?,
+        &sep()?,
+        &P::quit(app, Some("Agent Room 종료"))?,
+    ])?;
+    let edit = Submenu::with_items(app, "편집", true, &[
+        &P::undo(app, Some("실행 취소"))?,
+        &P::redo(app, Some("실행 복귀"))?,
+        &sep()?,
+        &P::cut(app, Some("오려두기"))?,
+        &P::copy(app, Some("복사하기"))?,
+        &P::paste(app, Some("붙여넣기"))?,
+        &P::select_all(app, Some("모두 선택"))?,
+    ])?;
+    let window = Submenu::with_items(app, "윈도우", true, &[
+        &P::minimize(app, Some("최소화"))?,
+        &P::maximize(app, Some("확대/축소"))?,
+        &sep()?,
+        &P::close_window(app, Some("윈도우 닫기"))?,
+    ])?;
+    Menu::with_items(app, &[&main, &edit, &window])
+}
+
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(app_menu).on_menu_event(|app, ev| {
+        if ev.id().as_ref() == "app-settings" {
+            show_main(app);
+            let _ = app.emit("open-settings", ());
+        }
+    });
+    builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -1029,6 +1125,8 @@ pub fn run() {
                         publish(&h, u);
                     }
                     if n % 5 == 0 {
+                        // "완료" runs out with time, not with an event
+                        sync_island(&h);
                         follow_logs(&h);
                         let d = shared.procs.lock().unwrap().scan_agents();
                         let changed = { let mut cur = shared.detected.lock().unwrap(); let c = *cur != d; *cur = d; c };
@@ -1074,6 +1172,7 @@ pub fn run() {
                 .build(app)?;
 
             show_island(&handle, island_on);
+            sync_island(&handle);
             watch_hover(handle.clone());
             Ok(())
         })
