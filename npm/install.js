@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `npx agent-room-app`: installs the latest Agent Room release into /Applications and opens it.
+// `npx github:kgyujin/agent-room`: installs the latest Agent Room release into /Applications and opens it.
 // It downloads the .dmg from GitHub Releases, copies the app out of it and nothing else.
 'use strict';
 const { execFileSync } = require('node:child_process');
