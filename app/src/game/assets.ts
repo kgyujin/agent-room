@@ -16,6 +16,10 @@ export interface Layout {
   steam: [number, number];
   /** clear-glass box of each window [x, y, w, h] (scene coords); the sky is painted there */
   windows: [number, number, number, number][];
+  /** wall of each window: 'L' (plane x = 0) or 'R' (plane y = 0) */
+  windowWalls?: ('L' | 'R')[];
+  /** screen point of the back floor corner (wall coordinates are measured from it) */
+  wallOrigin?: [number, number];
 }
 export type Facing = 'dr' | 'dl' | 'ur' | 'ul';
 

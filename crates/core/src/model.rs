@@ -129,6 +129,8 @@ pub enum EvKind {
     TaskUpdate { id: String, text: Option<String>, status: Option<String> },
     /// remaining plan usage (Claude status line / Codex rollout log)
     Limits { limits: RateLimits },
+    /// the agent is still busy (its session log keeps growing); only keeps the session fresh
+    StillWorking,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

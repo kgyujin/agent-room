@@ -247,6 +247,15 @@ export class Scene {
     return null;
   }
 
+  /** is there any room (wall, floor, furniture, pet) drawn under this CSS point? */
+  hitRoom(cssX: number, cssY: number): boolean {
+    const dpr = window.devicePixelRatio || 1;
+    const bx = Math.floor((cssX * dpr) / this.scale);
+    const by = Math.floor((cssY * dpr) / this.scale);
+    if (bx < 0 || by < 0 || bx >= this.buf.width || by >= this.buf.height) return false;
+    return this.bctx.getImageData(bx, by, 1, 1).data[3] > 0;
+  }
+
   /** CSS-pixel points above each critter's head, for the HTML name tags */
   anchors(): Anchor[] {
     const dpr = window.devicePixelRatio || 1;
@@ -390,7 +399,7 @@ export class Scene {
     const key = `${Math.floor(d.getTime() / 1000)}`;
     if (key === this.skyKey) return;
     this.skyKey = key;
-    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN), 0, 0);
+    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN, this.atlas.layout.windowWalls, this.atlas.layout.wallOrigin), 0, 0);
   }
 
   private screenFrame(desk: number, b: Behavior | null): string {
