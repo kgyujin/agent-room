@@ -18,7 +18,7 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], critterColors: {}, uiTheme: 'peach', island: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
   doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
@@ -56,6 +56,8 @@ export interface Backend {
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
   listCharacters(): Promise<CharacterFile[]>;
+  /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
+  setTrayFrames(frames: number[][]): Promise<void>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
   replaceCharacter(name: string, bytes: number[]): Promise<void>;
   renameCharacter(name: string, to: string): Promise<string>;
@@ -90,6 +92,7 @@ const tauriBackend: Backend = {
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
   listCharacters: () => tauriInvoke('list_characters'),
+  setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
   replaceCharacter: (name, bytes) => tauriInvoke('replace_character', { name, bytes }),
   renameCharacter: (name, to) => tauriInvoke('rename_character', { name, to }),
@@ -205,6 +208,7 @@ function previewBackend(): Backend {
     dataDir: async () => '~/.agent-room',
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
+    setTrayFrames: async () => {},
     saveCharacter: async (name, bytes) => {
       const w = window as { __previewCharacters?: CharacterFile[] };
       const stem = name.replace(/\.png$/i, '');

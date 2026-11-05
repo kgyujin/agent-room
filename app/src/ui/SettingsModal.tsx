@@ -204,6 +204,16 @@ export function SettingsModal(props: {
               </>
             )}
             {tab === 'bar' && (
+              <>
+              <Group title="메뉴바 아이콘">
+                <Field label="아이콘 펫" hint="일할 땐 걷고, 내 차례면 느낌표를 띄워요">
+                  <select value={props.characters.includes(s.trayPet) || s.trayPet?.startsWith('builtin/') ? s.trayPet : 'builtin/shiba'} onChange={(e) => set('trayPet', e.target.value)}>
+                    {BUILTIN_CRITTERS.map(([id, label]) => <option key={id} value={`builtin/${id}`}>{label}</option>)}
+                    {props.characters.map((n) => <option key={n} value={n}>{n} (내 PNG)</option>)}
+                  </select>
+                </Field>
+                <p className="muted small">펫 탭에서 바꾼 색과 추가한 PNG도 그대로 쓸 수 있어요.</p>
+              </Group>
               <Group title="다이나믹 아일랜드">
                 <Toggle label="화면 맨 위에 상태 표시" v={s.island} on={(v) => set('island', v)} />
                 {s.island && (
@@ -220,6 +230,7 @@ export function SettingsModal(props: {
                 )}
                 <p className="muted small">메뉴바 아이콘을 누르면 현황과 사용량을 볼 수 있어요.</p>
               </Group>
+              </>
             )}
             {tab === 'dev' && <Dev {...props} />}
           </div>
@@ -363,7 +374,8 @@ function Pets({ settings: s, onChange, names, onAdded }: { settings: Settings; o
     }
   };
   // a renamed or deleted file is renamed or dropped in the list too
-  const repoint = (from: string, to: string | null) => setPool(pool.flatMap((x) => (x === from ? (to ? [to] : []) : [x])));
+  const repoint = (from: string, to: string | null) =>
+    onChange({ ...s, petPool: pool.flatMap((x) => (x === from ? (to ? [to] : []) : [x])), trayPet: s.trayPet === from ? to ?? 'builtin/shiba' : s.trayPet });
   const checkedCount = pool.filter((x) => x.startsWith('builtin/') || names.includes(x)).length;
   return (
     <>
