@@ -122,32 +122,3 @@ def from_map(rows, pal):
             if ch != '.' and ch != ' ':
                 s.put(x, y, pal[ch])
     return s
-
-
-class Iso:
-    """2:1 dimetric projection. 1 world unit on x => (+2,+1)px, on y => (-2,+1)px, z => -1px."""
-
-    def __init__(self, ox, oy):
-        self.ox, self.oy = ox, oy
-
-    def p(self, x, y, z=0):
-        return (self.ox + 2 * (x - y), self.oy + (x + y) - z)
-
-    def box(self, s, x, y, z, lx, ly, lz, top, left, right, rim=True, faces=('top', 'left', 'right')):
-        P = self.p
-        res = {}
-        if 'left' in faces:
-            res['left'] = s.poly([P(x, y + ly, z + lz), P(x + lx, y + ly, z + lz), P(x + lx, y + ly, z), P(x, y + ly, z)], left)
-        if 'right' in faces:
-            res['right'] = s.poly([P(x + lx, y, z + lz), P(x + lx, y + ly, z + lz), P(x + lx, y + ly, z), P(x + lx, y, z)], right)
-        if 'top' in faces:
-            res['top'] = s.poly([P(x, y, z + lz), P(x + lx, y, z + lz), P(x + lx, y + ly, z + lz), P(x, y + ly, z + lz)], top)
-            if rim:
-                # light rim on the side faces just under the top face
-                for face, col in (('left', left), ('right', right)):
-                    for (px, py) in res.get(face, ()):
-                        if (px, py - 1) in res['top']:
-                            base = col(px, py) if callable(col) else col
-                            if base:
-                                s.put(px, py, shade(base, 1.25))
-        return res
