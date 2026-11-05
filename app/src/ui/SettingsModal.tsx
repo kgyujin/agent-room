@@ -9,12 +9,13 @@ import { BACKDROPS, UI_THEMES, backdropOf, uiTheme } from '../themes';
 /** settings panes, in the order they appear in the sidebar */
 const PANES = [
   { id: 'general', label: '일반', icon: 'cog' },
-  { id: 'agents', label: '에이전트 연결', icon: 'link' },
+  { id: 'agents', label: '에이전트', icon: 'link' },
   { id: 'notify', label: '알림', icon: 'bell' },
   { id: 'sound', label: '소리', icon: 'sound' },
   { id: 'pets', label: '펫', icon: 'paw' },
-  { id: 'look', label: '방과 화면', icon: 'eye' },
-  { id: 'bar', label: '메뉴바·아일랜드', icon: 'monitor' },
+  { id: 'look', label: '메인 창', icon: 'panel' },
+  { id: 'bar', label: '메뉴바', icon: 'menubar' },
+  { id: 'island', label: '다이나믹 아일랜드', icon: 'island' },
   { id: 'dev', label: '고급', icon: 'gear' },
 ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 export type SettingsPane = (typeof PANES)[number]['id'];
@@ -81,15 +82,33 @@ export function SettingsModal(props: {
           <div className="modal-body">
             {tab === 'general' && (
               <>
-                <Group title="시작과 창">
+                <Group title="시작">
                   <AutostartToggle />
-                  <Toggle label="항상 위에 표시 (기본 창)" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
-                  <Toggle label="항상 위에 표시 (룸만 띄우기)" v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
+                </Group>
+                <Group title="모양">
+                  <Field label="색 테마">
+                    <div className="swatches">
+                      {UI_THEMES.map((th) => (
+                        <button key={th.id} className={`swatch theme ${(s.uiTheme || 'peach') === th.id ? 'on' : ''}`} title={th.name} aria-label={th.name}
+                          style={{ background: `linear-gradient(135deg, ${th.vars['--accent']} 50%, ${th.vars['--frame-l']} 50%)` }} onClick={() => set('uiTheme', th.id)} />
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="글꼴">
+                    <select value={s.font} onChange={(e) => set('font', e.target.value as Settings['font'])}>
+                      <option value="mixed">기본 (제목만 도트)</option>
+                      <option value="system">읽기 쉬운 글꼴만</option>
+                      <option value="pixel">전부 도트</option>
+                    </select>
+                  </Field>
                   <Field label="화면 크기" hint="⌘+ ⌘− ⌘0">
                     <select value={s.uiZoom ?? 1} onChange={(e) => set('uiZoom', Number(e.target.value))} disabled={!IN_TAURI}>
                       {ZOOMS.map((z) => <option key={z} value={z}>{Math.round(z * 100)}%{z === 1 ? ' (기본)' : ''}</option>)}
                     </select>
                   </Field>
+                </Group>
+                <Group title="사용량">
+                  <Toggle label="남은 사용량 보이기" hint="5시간·주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요" v={s.showLimits} on={(v) => set('showLimits', v)} />
                 </Group>
                 <Group title="업데이트">
                   <div className="field">
@@ -100,7 +119,26 @@ export function SettingsModal(props: {
                 </Group>
               </>
             )}
-            {tab === 'agents' && <Agents />}
+            {tab === 'agents' && (
+              <>
+                <Agents />
+                <Group title="상태 판단">
+                  <Field label="응답 없음으로 볼 시간" hint="이 시간 동안 소식이 없으면 '응답 없음'으로 표시해요">
+                    <select value={s.staleMinutes} onChange={(e) => set('staleMinutes', Number(e.target.value))}>
+                      {[...new Set([1, 3, 5, 10, 30, s.staleMinutes])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m}분{m === 3 ? ' (기본)' : ''}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="'완료' 표시 유지">
+                    <select value={s.doneShownSec ?? 60} onChange={(e) => set('doneShownSec', Number(e.target.value))}>
+                      <option value={30}>30초</option>
+                      <option value={60}>1분</option>
+                      <option value={300}>5분</option>
+                      <option value={0}>다음 작업까지</option>
+                    </select>
+                  </Field>
+                </Group>
+              </>
+            )}
             {tab === 'notify' && (
               <Group>
                 <Toggle label="승인·입력 요청" hint="에이전트가 내 답을 기다릴 때" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
@@ -131,22 +169,9 @@ export function SettingsModal(props: {
             {tab === 'pets' && <Pets settings={s} onChange={onChange} names={props.characters} onAdded={props.onCharactersChanged} />}
             {tab === 'look' && (
               <>
-                <Group title="색과 글꼴">
-                  <Field label="색 테마">
-                    <div className="swatches">
-                      {UI_THEMES.map((th) => (
-                        <button key={th.id} className={`swatch theme ${(s.uiTheme || 'peach') === th.id ? 'on' : ''}`} title={th.name} aria-label={th.name}
-                          style={{ background: `linear-gradient(135deg, ${th.vars['--accent']} 50%, ${th.vars['--frame-l']} 50%)` }} onClick={() => set('uiTheme', th.id)} />
-                      ))}
-                    </div>
-                  </Field>
-                  <Field label="글꼴">
-                    <select value={s.font} onChange={(e) => set('font', e.target.value as Settings['font'])}>
-                      <option value="mixed">기본 (제목만 도트)</option>
-                      <option value="system">읽기 쉬운 글꼴만</option>
-                      <option value="pixel">전부 도트</option>
-                    </select>
-                  </Field>
+                <Group title="창">
+                  <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
+                  <Toggle label="룸만 띄울 때 항상 위에 표시" v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
                 </Group>
                 <Group title="방">
                   <Field label="조명">
@@ -187,24 +212,14 @@ export function SettingsModal(props: {
                       </select>
                     </Field>
                   )}
-                  <Field label="'완료' 표시 유지">
-                    <select value={s.doneShownSec ?? 60} onChange={(e) => set('doneShownSec', Number(e.target.value))}>
-                      <option value={30}>30초</option>
-                      <option value={60}>1분</option>
-                      <option value={300}>5분</option>
-                      <option value={0}>다음 작업까지</option>
-                    </select>
-                  </Field>
                 </Group>
                 <Group title="보일 요소">
-                  <Toggle label="남은 사용량" hint="5시간·주간 한도" v={s.showLimits} on={(v) => set('showLimits', v)} />
-                  <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />
+                  <Toggle label="아래쪽 상태 카드" hint="펫을 고르면 나와요" v={s.showDock} on={(v) => set('showDock', v)} />
                   <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
                 </Group>
               </>
             )}
             {tab === 'bar' && (
-              <>
               <Group title="메뉴바 아이콘">
                 <Field label="아이콘 펫" hint="일할 땐 걷고, 내 차례면 느낌표를 띄워요">
                   <select value={props.characters.includes(s.trayPet) || s.trayPet?.startsWith('builtin/') ? s.trayPet : 'builtin/shiba'} onChange={(e) => set('trayPet', e.target.value)}>
@@ -212,8 +227,10 @@ export function SettingsModal(props: {
                     {props.characters.map((n) => <option key={n} value={n}>{n} (내 PNG)</option>)}
                   </select>
                 </Field>
-                <p className="muted small">펫 탭에서 바꾼 색과 추가한 PNG도 그대로 쓸 수 있어요.</p>
+                <p className="muted small">펫 탭에서 바꾼 색과 추가한 PNG도 그대로 쓸 수 있어요. 아이콘을 누르면 현황과 사용량을 볼 수 있어요.</p>
               </Group>
+            )}
+            {tab === 'island' && (
               <Group title="다이나믹 아일랜드">
                 <Toggle label="화면 맨 위에 상태 표시" v={s.island} on={(v) => set('island', v)} />
                 {s.island && (
@@ -228,9 +245,7 @@ export function SettingsModal(props: {
                     {s.showLimits && <Toggle label="접혔을 때 남은 사용량" sub v={s.islandUsage ?? true} on={(v) => set('islandUsage', v)} />}
                   </>
                 )}
-                <p className="muted small">메뉴바 아이콘을 누르면 현황과 사용량을 볼 수 있어요.</p>
               </Group>
-              </>
             )}
             {tab === 'dev' && <Dev {...props} />}
           </div>
@@ -540,7 +555,7 @@ function Agents() {
   );
 }
 
-function Dev(props: { settings: Settings; onChange: (s: Settings) => void; demoRunning: boolean; onToggleDemo: () => void; realCount: number }) {
+function Dev(props: { demoRunning: boolean; onToggleDemo: () => void; realCount: number }) {
   const [dir, setDir] = useState('');
   const [hooks, setHooks] = useState<HookStatus[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
@@ -548,40 +563,42 @@ function Dev(props: { settings: Settings; onChange: (s: Settings) => void; demoR
     backend.dataDir().then(setDir);
     backend.hooksStatus().then(setHooks);
   }, []);
-  const s = props.settings;
   return (
-    <div>
-      <Toggle label="데모 모드 (가상 이벤트 재생)" v={props.demoRunning} on={() => props.onToggleDemo()} disabled={!IN_TAURI} />
-      <p className="muted small">데모 세션에는 DEMO 표시가 붙고, 실제 세션과 섞이지 않아요. 실제 연결된 세션 {props.realCount}개.</p>
-      <Field label="응답 없음으로 표시할 시간(분)">
-        <input type="number" min={1} max={60} value={s.staleMinutes} onChange={(e) => props.onChange({ ...s, staleMinutes: Math.max(1, Number(e.target.value) || 1) })} />
-      </Field>
-      <h4>데이터</h4>
-      <p className="muted small">
-        이벤트는 메모리에만 보관하고 디스크에 저장하지 않아요. 프롬프트, 응답, 파일 내용, 명령 출력은 Hook 단계에서 버려집니다. 앱 데이터 폴더: <span className="mono">{dir}</span>
-      </p>
-      <h4>설정 백업 복원</h4>
-      {hooks.map((h) => (
-        <div key={h.agent} className="row between small">
-          <span>{h.agent === 'claude' ? 'Claude Code' : 'Codex'} · 백업 {h.backups.length}개</span>
-          <button
-            className="btn"
-            disabled={!h.backups.length}
-            onClick={() => backend.hooksRestore(h.agent).then((p) => setMsg(`복원했어요: ${p}`)).catch((e) => setMsg(String(e)))}
-          >
-            가장 최근 백업으로 복원
-          </button>
+    <>
+      <Group title="데모">
+        <Toggle label="데모 모드" hint="가상 세션으로 화면을 미리 봐요" v={props.demoRunning} on={() => props.onToggleDemo()} disabled={!IN_TAURI} />
+        <p className="muted small">데모 세션에는 DEMO 표시가 붙고, 실제 세션과 섞이지 않아요. 실제 연결된 세션 {props.realCount}개.</p>
+      </Group>
+      <Group title="데이터">
+        <p className="muted small">
+          이벤트는 메모리에만 보관하고 디스크에 저장하지 않아요. 프롬프트, 응답, 파일 내용, 명령 출력은 Hook 단계에서 버려집니다. 앱 데이터 폴더: <span className="mono">{dir}</span>
+        </p>
+      </Group>
+      <Group title="에이전트 설정 백업 복원">
+        {hooks.map((h) => (
+          <div key={h.agent} className="field">
+            <span>{h.agent === 'claude' ? 'Claude Code' : 'Codex'}<small>백업 {h.backups.length}개</small></span>
+            <button
+              className="btn"
+              disabled={!h.backups.length}
+              onClick={() => backend.hooksRestore(h.agent).then((p) => setMsg(`복원했어요: ${p}`)).catch((e) => setMsg(String(e)))}
+            >
+              가장 최근 백업으로 복원
+            </button>
+          </div>
+        ))}
+      </Group>
+      <Group title="완전 제거">
+        <p className="muted small">
+          모든 에이전트 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서
+          <span className="mono"> ~/.agent-room/bin/agent-room-hook --uninstall</span> 로 같은 작업을 할 수 있어요.
+        </p>
+        <div className="field">
+          <span>모든 Hook 제거</span>
+          <button className="btn danger" onClick={() => backend.hooksRemoveAll().then(() => setMsg('모든 Hook을 제거했어요.'))}>제거</button>
         </div>
-      ))}
-      <h4>완전 제거</h4>
-      <p className="muted small">
-        모든 에이전트 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서
-        <span className="mono"> ~/.agent-room/bin/agent-room-hook --uninstall</span> 로 같은 작업을 할 수 있어요.
-      </p>
-      <button className="btn danger" onClick={() => backend.hooksRemoveAll().then(() => setMsg('모든 Hook을 제거했어요.'))}>
-        모든 Hook 제거
-      </button>
+      </Group>
       {msg && <div className="callout small">{msg}</div>}
-    </div>
+    </>
   );
 }
