@@ -275,12 +275,14 @@ def ivy(s, pts, seed=0):
 
 
 # ---------------------------------------------------------------- furniture
-FURN = []    # (name, Spr, base_y)
+FURN = []    # (name, Spr, base_y, floor box [x0, y0, x1, y1] in world units)
 
 
-def piece(name, base_xy):
+def piece(name, base_xy, box):
+    """`base_xy` is the front corner (its screen y orders drawing); `box` the floor area the piece
+    covers, so the app can tell whether a critter stands in front of it or behind it"""
     s = Spr(SW, SH)
-    FURN.append((name, s, P(*base_xy)[1]))
+    FURN.append((name, s, P(*base_xy)[1], [round(v, 2) for v in box]))
     return s
 
 
@@ -291,7 +293,7 @@ def wbox(s, x, y, z, lx, ly, lz, top, left, right):
 def desk(i, x, y):
     """wooden desk with a paper drawing board facing +y (towards the sitter, who faces the back wall);
     the critters write and draw on paper, no computers"""
-    s = piece(f'desk{i}', (x + 14, y + 7))
+    s = piece(f'desk{i}', (x + 14, y + 7), (x - 1, y - 1, x + 15, y + 8))
     # legs
     for (lx, ly) in ((0, 0), (12, 0), (0, 5), (12, 5)):
         wbox(s, x + lx, y + ly, 0, 2, 2, 7, C['w_d'], C['w_dd'], C['w_d'])
@@ -314,7 +316,7 @@ def desk(i, x, y):
     wbox(s, x + 0.5, y + 4.5, 9, 1.5, 1.5, 1.5, C['w'], C['w_d'], C['w_dd'])
     wbox(s, x + 0.5, y + 4.5, 10.5, 1.5, 1.5, 0.6, C['w_dd'], C['w_dd'], C['w_dd'])
     # stool for the sitter
-    st = piece(f'stool{i}', (x + 8, y + 13))
+    st = piece(f'stool{i}', (x + 8, y + 13), (x + 6, y + 10, x + 9, y + 13))
     wbox(st, x + 6, y + 10, 0, 3, 3, 3, C['sofa_l'], C['sofa_d'], C['sofa'])
     return (x + 2, y + 4, 10.5, 8, 7)   # paper: +y face of the drawing board
 
@@ -325,7 +327,7 @@ def screen_poly(x, y, z, lx, lz):
 
 
 def bookshelf(x0, y0):
-    s = piece('shelf', (3, y0 + 14))
+    s = piece('shelf', (3, y0 + 14), (0, y0, 4, y0 + 14))
     wbox(s, 0, y0, 0, 4, 14, 26, C['w'], C['w_d'], C['w_l'])
     # shelves on the +x face: books
     for row in range(4):
@@ -347,7 +349,7 @@ def bookshelf(x0, y0):
 def rig(y0):
     """wooden test contraption against the left wall: a cabinet with brass trim, a bell and a
     hopper of acorns on top; firefly lamps and a slate on the +x face show the run"""
-    s = piece('rig', (4, y0 + 10))
+    s = piece('rig', (4, y0 + 10), (0, y0, 5, y0 + 10))
     wbox(s, 0, y0, 0, 5, 10, 20, C['w_l'], C['w'], lambda px, py: C['w_l'] if (px // 2 + py) % 6 else C['w'])
     wbox(s, 1, y0 + 2, 20, 3, 3, 3, C['w_hi'], C['w_d'], C['w'])                 # hopper
     for (ay, az) in ((2.5, 23), (3.5, 23.5), (3, 24)):
@@ -368,7 +370,7 @@ def rig(y0):
 
 def board():
     """notice board on the right wall (drawn as part of the wall)"""
-    s = piece('board', (90, 1))
+    s = piece('board', (90, 1), (76, 0, 90, 1))
     u0, u1, z0, z1 = 76, 90, 14, 30
     for u in range(u0 * 2, u1 * 2):
         for z in range(z0, z1):
@@ -409,7 +411,7 @@ def banner(s, wall, u, z0):
 
 
 def lamp(x, y, name):
-    s = piece(name, (x + 2, y + 2))
+    s = piece(name, (x + 2, y + 2), (x - 1, y - 1, x + 3, y + 3))
     wbox(s, x, y, 0, 2, 2, 2, C['iron_l'], C['iron'], C['iron_d'])
     for z in range(2, 20):
         px, py = P(x + 1, y + 1, z)
@@ -424,7 +426,7 @@ def lamp(x, y, name):
 
 
 def planter(name, x, y, kind, w=7):
-    s = piece(name, (x + w, y + w))
+    s = piece(name, (x + w, y + w), (x - 0.5, y - 0.5, x + w + 0.5, y + w + 0.5))
     wbox(s, x, y, 0, w, w, 5, C['st_m'], C['st'], C['st_d'])
     wbox(s, x - 0.5, y - 0.5, 5, w + 1, w + 1, 1, C['st_hi'], C['st_l'], C['st_m'])
     cx, cy = P(x + w / 2, y + w / 2, 7)
@@ -445,7 +447,7 @@ def planter(name, x, y, kind, w=7):
 
 def sofa(x, y):
     """two-seat sofa facing +x (towards the viewer's lower right) in the lounge"""
-    s = piece('sofa', (x + 8, y + 16))
+    s = piece('sofa', (x + 8, y + 16), (x, y, x + 8, y + 16))
     wbox(s, x, y, 0, 8, 16, 4, C['sofa'], C['sofa_d'], C['sofa_d'])          # base
     wbox(s, x, y, 4, 3, 16, 7, C['sofa_l'], C['sofa_d'], C['sofa'])           # back
     wbox(s, x + 3, y, 4, 5, 2, 4, C['sofa_l'], C['sofa_d'], C['sofa'])        # arms
@@ -456,7 +458,7 @@ def sofa(x, y):
 
 
 def table(x, y):
-    s = piece('table', (x + 6, y + 6))
+    s = piece('table', (x + 6, y + 6), (x, y, x + 6, y + 6))
     wbox(s, x + 2, y + 2, 0, 2, 2, 4, C['w_d'], C['w_dd'], C['w_d'])
     wbox(s, x, y, 4, 6, 6, 1.5, C['w_l'], C['w_d'], C['w'])
     wbox(s, x + 2, y + 2, 5.5, 2, 2, 2, C['fl_w'], C['cr'], C['cr_d'])        # tea cup
@@ -465,7 +467,7 @@ def table(x, y):
 
 def coffee(x, y):
     """wooden cart with a coffee machine and two cups, against the left wall"""
-    s = piece('coffee', (x + 5, y + 7))
+    s = piece('coffee', (x + 5, y + 7), (x - 0.5, y - 0.5, x + 4.5, y + 6.5))
     for (lx, ly) in ((0, 0), (3, 0), (0, 5), (3, 5)):
         wbox(s, x + lx, y + ly, 0, 1, 1, 6, C['w_d'], C['w_dd'], C['w_d'])
     wbox(s, x, y, 2, 4, 6, 1, C['w'], C['w_d'], C['w'])                          # lower shelf
@@ -483,7 +485,7 @@ def coffee(x, y):
 
 def beanbag(x, y):
     """mustard beanbag facing +x; the critter sits in its hollow"""
-    s = piece('beanbag', (x + 5, y + 5))
+    s = piece('beanbag', (x + 5, y + 5), (x, y, x + 5, y + 5))
     wbox(s, x, y, 0, 5, 5, 2, C['gold'], C['gold_d'], C['gold_d'])
     wbox(s, x + 0.5, y + 0.5, 2, 4, 4, 1, C['fl_y'], C['gold_d'], C['gold'])
     wbox(s, x, y + 0.5, 3, 1.5, 4, 3, C['fl_y'], C['gold_d'], C['gold'])          # back rest
@@ -541,7 +543,7 @@ def build():
     lamp(X - 4, 26, 'lampA')
     lamp(13, Y - 3, 'lampB')
 
-    for name, s, base in FURN:
+    for name, s, base, _box in FURN:
         s.outline(factor=0.5)
     return room, screens, rig_panel, tea
 

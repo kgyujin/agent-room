@@ -1,6 +1,7 @@
 // Loads the generated sprite atlas (tools/art/gen_art.py) and draws frames.
 export interface Frame { x: number; y: number; w: number; h: number; dx: number; dy: number }
-export interface Piece { name: string; base: number }
+/** `box`: floor area the piece covers in world units [x0, y0, x1, y1] (x runs down-right, y down-left) */
+export interface Piece { name: string; base: number; box?: [number, number, number, number] }
 export interface Layout {
   scene: { w: number; h: number };
   /** furniture sprites in draw order; `base` = screen y of the piece's front edge (for depth sorting) */
