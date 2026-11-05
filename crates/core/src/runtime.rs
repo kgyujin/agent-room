@@ -109,16 +109,45 @@ impl ProcWatch {
     /// The app the agent runs inside (Terminal, iTerm, VS Code, the Claude or Codex app…): the
     /// outermost `.app` bundle on the executable path of the agent or of the nearest parent that has one.
     pub fn host_app(&mut self, pid: u32) -> Option<std::path::PathBuf> {
+        let start = pid;
         let mut pid = Pid::from_u32(pid);
         for _ in 0..16 {
             self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet));
-            let p = self.sys.process(pid)?;
+            let Some(p) = self.sys.process(pid) else { break };
             if let Some(app) = p.exe().and_then(outer_app) {
                 return Some(app);
             }
-            pid = p.parent()?;
+            let Some(parent) = p.parent() else { break };
+            pid = parent;
         }
-        None
+        // a terminal starts the shell through `login`, which runs as root: its details can't be read
+        // directly, but `ps` still lists every process's parent and command
+        #[cfg(target_os = "macos")]
+        {
+            let out = std::process::Command::new("/bin/ps").args(["-axo", "pid=,ppid=,comm="]).output().ok()?;
+            return host_from_ps(&String::from_utf8_lossy(&out.stdout), start);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = start;
+            None
+        }
+    }
+
+    /// A running agent of this kind working in `cwd`: sessions found only from their logs have no
+    /// process yet, so their app is found through the agent process in the same folder.
+    pub fn agent_in(&mut self, kind: AgentKind, cwd: &str) -> Option<u32> {
+        let refresh = ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet).with_cwd(UpdateKind::Always);
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
+        let want = std::path::Path::new(cwd);
+        self.sys
+            .processes()
+            .values()
+            .find(|p| {
+                let exe = p.exe().map(|e| e.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+                agent_of(&p.name().to_string_lossy(), &exe) == Some(kind) && p.cwd() == Some(want)
+            })
+            .map(|p| p.pid().as_u32())
     }
 
     /// Counts running agent processes by executable name and path (no inspection of their content):
@@ -159,6 +188,33 @@ pub fn agent_of(name: &str, exe: &str) -> Option<AgentKind> {
     }
 }
 
+/// Walks up a `ps -axo pid=,ppid=,comm=` listing from `pid` to the first command inside an `.app`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn host_from_ps(table: &str, pid: u32) -> Option<std::path::PathBuf> {
+    let rows: std::collections::HashMap<u32, (u32, &str)> = table
+        .lines()
+        .filter_map(|l| {
+            let mut it = l.trim_start().splitn(2, char::is_whitespace);
+            let pid = it.next()?.parse().ok()?;
+            let rest = it.next()?.trim_start();
+            let (ppid, comm) = rest.split_once(char::is_whitespace)?;
+            Some((pid, (ppid.parse().ok()?, comm.trim())))
+        })
+        .collect();
+    let mut pid = pid;
+    for _ in 0..16 {
+        let &(ppid, comm) = rows.get(&pid)?;
+        if let Some(app) = outer_app(std::path::Path::new(comm)) {
+            return Some(app);
+        }
+        if ppid <= 1 {
+            return None;
+        }
+        pid = ppid;
+    }
+    None
+}
+
 /// `/Applications/Visual Studio Code.app` from `/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/…`
 fn outer_app(exe: &std::path::Path) -> Option<std::path::PathBuf> {
     let s = exe.to_str()?;
@@ -176,6 +232,13 @@ mod tests {
         assert_eq!(outer_app(Path::new("/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)")).as_deref(), Some(Path::new("/Applications/Visual Studio Code.app")));
         assert_eq!(outer_app(Path::new("/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal")).as_deref(), Some(Path::new("/System/Applications/Utilities/Terminal.app")));
         assert_eq!(outer_app(Path::new("/Users/kim/.local/share/claude/versions/2.0.1")), None);
+    }
+
+    #[test]
+    fn host_app_through_root_login() {
+        let ps = "    1     0 /sbin/launchd\n  500     1 /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\n  610   500 login\n  611   610 -zsh\n  700   611 claude\n";
+        assert_eq!(host_from_ps(ps, 700).as_deref(), Some(std::path::Path::new("/System/Applications/Utilities/Terminal.app")));
+        assert_eq!(host_from_ps("  9     1 /usr/sbin/tmux\n 10     9 claude\n", 10), None);
     }
 
     #[test]

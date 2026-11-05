@@ -464,13 +464,22 @@ fn remove_session(app: AppHandle, key: String) {
 #[tauri::command]
 fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
     let shared = app.state::<Shared>();
-    let pid = shared.store.lock().unwrap().pid_of(&key);
-    let host = pid.and_then(|p| shared.procs.lock().unwrap().host_app(p)).or_else(|| {
+    let (pid, agent, cwd) = {
+        let store = shared.store.lock().unwrap();
+        let snap = store.snapshots().into_iter().find(|s| s.key == key);
+        (store.pid_of(&key), snap.as_ref().map(|s| s.agent), snap.and_then(|s| s.cwd))
+    };
+    let mut procs = shared.procs.lock().unwrap();
+    // a session seen only in its log (e.g. after Agent Room restarted) has no process yet:
+    // the agent running in the same folder is the one
+    let pid = pid.or_else(|| procs.agent_in(agent?, cwd.as_deref()?));
+    let host = pid.and_then(|p| procs.host_app(p)).or_else(|| {
         let name = if key.starts_with("codex:") { "Codex.app" } else { "Claude.app" };
         let p = std::path::Path::new("/Applications").join(name);
         p.exists().then_some(p)
     });
-    let host = host.ok_or("이 세션이 실행 중인 앱 창을 찾지 못했어요")?;
+    drop(procs);
+    let host = host.ok_or(if pid.is_some() { "이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)" } else { "이 세션의 에이전트 프로세스를 찾지 못했어요" })?;
     open_app(&host)
 }
 
@@ -637,6 +646,12 @@ fn float_over_menu_bar(win: &WebviewWindow) {
 
 /// Shows the island at the top centre of the primary screen, or removes it. The island's web
 /// view only exists while the setting is on, so a turned-off island costs no memory.
+/// The island's window never changes size (resizing it on hover made the pill flicker); it is
+/// as large as the open card and lets clicks through everywhere outside the pill.
+const ISLAND_WIN: (f64, f64) = (640.0, 560.0);
+/// The pill's current size in points, reported by the page; the hover check uses it.
+static ISLAND_PILL: Mutex<(f64, f64)> = Mutex::new((366.0, 34.0));
+
 fn show_island(app: &AppHandle, on: bool) {
     let existing = app.get_webview_window("island");
     if !on {
@@ -645,11 +660,10 @@ fn show_island(app: &AppHandle, on: bool) {
         }
         return;
     }
-    let Some(w) = existing.or_else(|| extra_window(app, "island", 340.0, 34.0, true).ok()) else { return };
-    let size = w.inner_size().ok().map(|s| s.to_logical::<f64>(w.scale_factor().unwrap_or(1.0)));
-    if let Some(s) = size {
-        place_island(app, &w, s.width, s.height);
-    }
+    let Some(w) = existing.or_else(|| extra_window(app, "island", ISLAND_WIN.0, ISLAND_WIN.1, true).ok()) else { return };
+    place_island(app, &w, ISLAND_WIN.0, ISLAND_WIN.1);
+    // the hover watcher turns clicks back on while the pointer is over the pill
+    let _ = w.set_ignore_cursor_events(true);
     let _ = w.show();
 }
 
@@ -774,9 +788,17 @@ fn watch_hover(app: AppHandle) {
                 let (x, y) = (c.x - p.x as f64, c.y - p.y as f64);
                 (x >= 0.0 && y >= 0.0 && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
             };
-            let island = at("island").is_some();
+            // only the pill counts: it sits at the top centre of its (larger, see-through) window
+            let island = at("island").is_some_and(|(x, y)| {
+                let (pw, ph) = *ISLAND_PILL.lock().unwrap();
+                let left = (ISLAND_WIN.0 - pw) / 2.0;
+                (x as f64) >= left && (x as f64) < left + pw && (y as f64) < ph
+            });
             if last_island != Some(island) {
                 last_island = Some(island);
+                if let Some(w) = app.get_webview_window("island") {
+                    let _ = w.set_ignore_cursor_events(!island);
+                }
                 let _ = app.emit_to("island", "hover-island", island);
             }
             let main = at("main");
@@ -804,12 +826,10 @@ fn set_room_only(app: AppHandle, on: bool) {
     let _ = (app, on);
 }
 
-/// The island grows when hovered/clicked and shrinks back; it stays centred at the top.
+/// The pill's size as drawn (it grows when hovered/clicked and shrinks back); the window itself stays put.
 #[tauri::command]
-fn island_layout(app: AppHandle, width: f64, height: f64) {
-    if let Some(w) = app.get_webview_window("island") {
-        place_island(&app, &w, width.clamp(120.0, 640.0), height.clamp(24.0, 640.0));
-    }
+fn island_layout(width: f64, height: f64) {
+    *ISLAND_PILL.lock().unwrap() = (width.clamp(120.0, ISLAND_WIN.0), height.clamp(24.0, ISLAND_WIN.1));
 }
 
 /// Opens the popover under the menu bar icon (or closes it when it is already open).
