@@ -11,6 +11,7 @@ pub mod sanitize;
 pub mod session;
 pub mod limits;
 pub mod logs;
+pub mod usage;
 
 #[cfg(feature = "runtime")]
 pub mod runtime;

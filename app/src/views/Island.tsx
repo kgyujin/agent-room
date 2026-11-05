@@ -9,9 +9,12 @@ import { AgentMark, Icon, type IconName } from '../ui/icons';
 import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
+import { LimitCards, fmtTokens, useUsageHistory } from '../ui/Usage';
 import { useLive } from './useLive';
 
 const ROW = 40;
+/** height of the usage section in the open card (header line + one row of limit cards) */
+const USAGE_H = 182;
 /** one small icon per state, next to the words */
 const STATE_ICON: Record<Snapshot['state'], IconName> = {
   waiting: 'bell', error: 'cross', starting: 'cog', planning: 'note', reading: 'book', editing: 'pencil',
@@ -52,9 +55,12 @@ export function Island() {
   const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];
   // lowest remaining share across agents, always shown on the collapsed pill (red at 10% or less)
   const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
+  const usage = useUsageHistory(7);
+  const lastDay = usage?.days[usage.days.length - 1];
+  const today = lastDay ? lastDay.claude + lastDay.codex : 0;
   const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
-  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (limits.length ? 30 + limits.length * 22 : 0)];
+  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (showLimits ? USAGE_H : 0)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
@@ -157,22 +163,13 @@ export function Island() {
           })}
         </ul>
       )}
-      {open && limits.length > 0 && (
-        <div className="is-lim" title="남은 사용량 (에이전트가 알려준 요금제 한도)">
-          <b><Icon name="bolt" />남은 사용량</b>
-          {limits.map(([a, l]) => (
-            <span key={a}>
-              <AgentMark agent={a} size={13} />
-              {l!.windows.map((w) => {
-                const left = Math.max(0, Math.round(100 - w.usedPct));
-                return (
-                  <em key={w.minutes} className={left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}>
-                    {windowLabel(w.minutes)} <i className="is-lim-bar"><i style={{ width: `${left}%` }} /></i> {left}%
-                  </em>
-                );
-              })}
-            </span>
-          ))}
+      {open && showLimits && (
+        <div className="is-use">
+          <div className="is-use-head">
+            <b><Icon name="bolt" />사용량</b>
+            {usage && <span>오늘 {fmtTokens(today)} 토큰 · 최근 10분 {fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/분</span>}
+          </div>
+          <LimitCards sessions={list} now={now} dark />
         </div>
       )}
     </div>

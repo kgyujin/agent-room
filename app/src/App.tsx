@@ -120,7 +120,7 @@ export default function App() {
   const compact = mini || vw < 560;
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
-  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
+  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW;
   // with room to spare the room, the info card and banners stay centred on the whole window when the
   // panel opens (the room does the same in scene.ts), instead of jumping left
   const centred = vw - 2 * PANEL_W >= 740;
@@ -521,7 +521,7 @@ export default function App() {
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -542,7 +542,7 @@ export default function App() {
       <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && settings.showTabs && (
-        <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
+        <div className="topleft" style={{ right: (panelOpen ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
       )}
@@ -551,7 +551,7 @@ export default function App() {
         <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
       )}
       {!compact && !office && settings.showDock && (
-        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected && !centred ? PANEL_W + 12 : 12 }}>
+        <div className="dock" ref={dockRef} style={{ right: panelOpen && !centred ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
@@ -560,26 +560,28 @@ export default function App() {
         </div>
       )}
 
-      {panelOpen && selected && (
+      {panelOpen && (
         <DetailPanel
           width={PANEL_W}
           s={selected}
           sessions={list}
           onSelect={setPinned}
           showLimits={settings.showLimits}
-          timeline={timelines[selected.key] ?? []}
+          timeline={selected ? timelines[selected.key] ?? [] : []}
           tab={detailTab}
           setTab={setDetailTab}
           now={now}
           onClose={() => saveSettings({ ...settings, panelOpen: false })}
-          onForget={selected.connection === 'ended' || selected.connection === 'lost' ? () => backend.removeSession(selected.key) : undefined}
+          onForget={selected && (selected.connection === 'ended' || selected.connection === 'lost') ? () => backend.removeSession(selected.key) : undefined}
         />
       )}
 
-      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? PANEL_W + 12 : 12 }}>
         {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
-        {!compact && !office && !mini && settings.showLimits && <UsageStrip sessions={list} now={now} />}
-        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
+        {!compact && !office && !mini && settings.showLimits && (
+          <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
+        )}
+        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
           else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });

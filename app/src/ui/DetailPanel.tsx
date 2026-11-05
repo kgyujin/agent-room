@@ -3,13 +3,16 @@ import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, timelineText } from '../labe
 import { Icon } from './icons';
 import { progressOf } from './Hud';
 import { Overview } from './Overview';
+import { UsageBoard } from './Usage';
 
-export type Tab = 'overview' | 'timeline' | 'tasks' | 'session';
-const TAB_NAME: Record<Tab, string> = { overview: '현황', timeline: '타임라인', tasks: '작업 목록', session: '세션 정보' };
+export type Tab = 'overview' | 'usage' | 'timeline' | 'tasks' | 'session';
+const TAB_NAME: Record<Tab, string> = { overview: '현황', usage: '사용량', timeline: '타임라인', tasks: '작업', session: '세션' };
+/** tabs about one session; without a selected session only the others show */
+const PER_SESSION: Tab[] = ['timeline', 'tasks', 'session'];
 
 export function DetailPanel(props: {
   width: number;
-  s: Snapshot;
+  s: Snapshot | null;
   sessions: Snapshot[];
   onSelect: (k: string) => void;
   showLimits: boolean;
@@ -25,7 +28,7 @@ export function DetailPanel(props: {
     <aside className="panel" style={{ width: props.width }}>
       <header>
         <nav>
-          {(Object.keys(TAB_NAME) as Tab[]).map((t) => (
+          {(Object.keys(TAB_NAME) as Tab[]).filter((t) => s || !PER_SESSION.includes(t)).map((t) => (
             <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
               {TAB_NAME[t]}
             </button>
@@ -36,10 +39,11 @@ export function DetailPanel(props: {
         </button>
       </header>
       <div className="panel-body">
-        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} showLimits={props.showLimits} />}
-        {tab === 'timeline' && <Timeline entries={props.timeline} />}
-        {tab === 'tasks' && <Tasks s={s} />}
-        {tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
+        {(tab === 'overview' || (!s && PER_SESSION.includes(tab))) && <Overview sessions={props.sessions} now={props.now} selected={s?.key ?? null} onSelect={props.onSelect} showLimits={props.showLimits} />}
+        {tab === 'usage' && <div className="pad"><UsageBoard sessions={props.sessions} now={props.now} /></div>}
+        {s && tab === 'timeline' && <Timeline entries={props.timeline} />}
+        {s && tab === 'tasks' && <Tasks s={s} />}
+        {s && tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
       </div>
     </aside>
   );
