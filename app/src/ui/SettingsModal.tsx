@@ -109,6 +109,7 @@ export function SettingsModal(props: {
                 </Group>
                 <Group title="사용량">
                   <Toggle label="남은 사용량 보이기" hint="5시간·주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요" v={s.showLimits} on={(v) => set('showLimits', v)} />
+                  {s.showLimits && <Toggle label="Claude 계정에서 받아오기" hint="데스크톱 앱·VS Code 세션의 한도도 보여요. 키체인의 Claude Code 로그인으로 Anthropic에만 묻고, 저장하지 않아요" sub v={s.claudeAccountLimits ?? true} on={(v) => set('claudeAccountLimits', v)} />}
                 </Group>
                 <Group title="업데이트">
                   <div className="field">
@@ -239,6 +240,13 @@ export function SettingsModal(props: {
                       <select value={s.islandOpen ?? 'hover'} onChange={(e) => set('islandOpen', e.target.value as Settings['islandOpen'])}>
                         <option value="hover">마우스를 올리면</option>
                         <option value="click">클릭할 때만</option>
+                      </select>
+                    </Field>
+                    <Field label="표시할 화면" sub>
+                      <select value={s.islandScreen ?? 'auto'} onChange={(e) => set('islandScreen', e.target.value as Settings['islandScreen'])}>
+                        <option value="auto">노치 있는 화면 (없으면 메뉴 막대 화면)</option>
+                        <option value="main">메뉴 막대가 있는 화면</option>
+                        <option value="pointer">마우스가 있는 화면</option>
                       </select>
                     </Field>
                     <Toggle label="일이 없을 땐 숨기기" sub v={s.islandHideIdle ?? false} on={(v) => set('islandHideIdle', v)} />

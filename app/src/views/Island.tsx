@@ -30,7 +30,13 @@ export function Island() {
   const hoverOpens = (settings?.islandOpen ?? 'hover') === 'hover';
   // the bar is as tall as the notch and leaves the notch itself empty
   const [[notchW, barH], setNotch] = useState<[number, number]>([190, 34]);
-  useEffect(() => { void backend.notchSize().then((n) => setNotch(n ? [Math.round(n[0]), Math.round(n[1])] : NO_NOTCH)); }, []);
+  // asked again whenever the island moves to another display (it may have another notch, or none)
+  useEffect(() => {
+    const ask = () => void backend.notchSize().then((n) => setNotch(n ? [Math.round(n[0]), Math.round(n[1])] : NO_NOTCH));
+    ask();
+    const off = backend.onTrayEvent('island-screen', ask);
+    return () => void off.then((f) => f());
+  }, []);
   const COLLAPSED: [number, number] = [notchW + SIDE * 2, barH];
   // `open` is how the pill is drawn; `big` is how large its window is. Opening grows the window
   // first and then morphs the pill; closing morphs the pill back and then shrinks the window,

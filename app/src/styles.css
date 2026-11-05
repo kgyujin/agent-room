@@ -539,7 +539,9 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .ov-lim-reset { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 
 /* ------------------------------------------------ first run */
-.dock .welcome { width: min(100%, 620px); padding: 16px 18px; display: block; }
+.dock .welcome { width: min(100%, 620px); padding: 16px 18px; display: block; position: relative; }
+.welcome .wl-close { position: absolute; top: 8px; right: 8px; }
+.wl-head { padding-right: 32px; }
 .wl-head { display: flex; flex-direction: column; gap: 4px; }
 .wl-head b { font-size: 16px; font-family: var(--font-display); }
 .wl-head .muted { font-size: 12.5px; line-height: 1.5; }
@@ -827,6 +829,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .lc-row.mid .lc-bar i { background: var(--wait); }
 .lc-row.low .lc-bar i { background: var(--bad); }
 .lc-row.low .lc-foot b { color: var(--bad); }
+.lc-pace { font-size: 10.5px; color: var(--wait-ink, var(--wait)); font-weight: 600; }
 .lc-none { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ink-soft); }
 .lc-grid.dark .lc { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08); }
 .lc-grid.dark .lc-head, .lc-grid.dark .lc-foot b { color: #ece8e4; }

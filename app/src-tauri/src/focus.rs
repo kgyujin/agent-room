@@ -11,8 +11,13 @@ pub enum Reach {
     Tab { app: &'static str, tty: String },
     /// an editor: open the session's folder, which raises the window that has it open
     Folder,
-    /// the Codex app: its link to one chat
+    /// the Claude Code extension in an editor: raise the folder's window, then this link focuses
+    /// the session's tab (it resumes the session there when no tab has it)
+    EditorTab(String),
+    /// the Codex app or Claude's desktop app: their link to one chat
     Link(String),
+    /// Ghostty: focus the terminal whose working folder is the session's (it has no tty property)
+    Ghostty,
     /// only the app itself (no way to point at the session)
     App,
 }
@@ -23,16 +28,42 @@ const EDITORS: &[&str] = &[
     "IntelliJ IDEA", "PyCharm", "WebStorm", "GoLand", "RustRover", "CLion", "Rider", "PhpStorm", "RubyMine", "Android Studio", "Fleet",
 ];
 
-pub fn reach(host: &Path, codex: bool, session_id: &str, tty: Option<String>, has_cwd: bool) -> Reach {
+/// `desktop` is the Claude desktop app's own id for a Code-tab session (`local_…`), when its hook sent one.
+pub fn reach(host: &Path, codex: bool, session_id: &str, desktop: Option<&str>, tty: Option<String>, has_cwd: bool) -> Reach {
     let name = host.file_stem().and_then(|n| n.to_str()).unwrap_or("");
     match name {
         "Terminal" if tty.is_some() => Reach::Tab { app: "Terminal", tty: tty.unwrap() },
         "iTerm" | "iTerm2" if tty.is_some() => Reach::Tab { app: "iTerm2", tty: tty.unwrap() },
         // thread ids are uuids; anything else is not put in a link
         "Codex" if codex && is_uuid(session_id) => Reach::Link(format!("codex://threads/{session_id}")),
+        // the desktop app opens one Code-tab session by its own id (not the CLI's session id), the
+        // link its Dock menu uses too
+        "Claude" if !codex && desktop.is_some_and(is_desktop_id) => Reach::Link(format!("claude://code/continue?session={}", desktop.unwrap())),
+        "Ghostty" if has_cwd => Reach::Ghostty,
+        // no terminal device: the extension's own panel, not a `claude` typed in the editor's terminal
+        _ if has_cwd && !codex && tty.is_none() && is_uuid(session_id) && editor_scheme(name).is_some() => {
+            Reach::EditorTab(format!("{}://anthropic.claude-code/open?session={session_id}", editor_scheme(name).unwrap()))
+        }
         _ if has_cwd && EDITORS.iter().any(|e| name.starts_with(e)) => Reach::Folder,
         _ => Reach::App,
     }
+}
+
+/// URL scheme of the editors that run VS Code extensions (the Claude Code extension's link handler)
+fn editor_scheme(app: &str) -> Option<&'static str> {
+    Some(match app {
+        "Visual Studio Code" => "vscode",
+        "Visual Studio Code - Insiders" | "Code - Insiders" => "vscode-insiders",
+        "VSCodium" => "vscodium",
+        "Cursor" => "cursor",
+        "Windsurf" => "windsurf",
+        _ => return None,
+    })
+}
+
+/// The shape the desktop app accepts for a session: `local_` and up to 64 letters, digits or `-`.
+fn is_desktop_id(s: &str) -> bool {
+    s.strip_prefix("local_").is_some_and(|b| (1..=64).contains(&b.len()) && b.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
 }
 
 fn is_uuid(s: &str) -> bool {
@@ -78,6 +109,24 @@ end tell"#
     })
 }
 
+/// AppleScript that focuses the Ghostty terminal working in this folder, then raises Ghostty.
+/// A folder with quotes or backslashes is not put in a script.
+pub fn ghostty_script(cwd: &str) -> Option<String> {
+    let cwd = cwd.trim_end_matches('/');
+    if cwd.is_empty() || cwd.contains(['"', '\\', '\n']) {
+        return None;
+    }
+    Some(format!(
+        r#"tell application "Ghostty"
+  try
+    set m to (every terminal whose working directory is "{cwd}")
+    if (count of m) > 0 then focus (item 1 of m)
+  end try
+  activate
+end tell"#
+    ))
+}
+
 /// `/dev/ttys003` for a process on a terminal, None for one without (an app, a daemon).
 #[cfg(target_os = "macos")]
 pub fn tty_of(pid: u32) -> Option<String> {
@@ -94,14 +143,24 @@ mod tests {
     fn picks_the_way_to_the_session() {
         let tty = || Some("/dev/ttys003".to_string());
         let id = "019a2b3c-4d5e-6f70-8192-a3b4c5d6e7f8";
-        assert_eq!(reach(Path::new("/System/Applications/Utilities/Terminal.app"), false, "x", tty(), true), Reach::Tab { app: "Terminal", tty: "/dev/ttys003".into() });
-        assert_eq!(reach(Path::new("/Applications/iTerm.app"), false, "x", tty(), true), Reach::Tab { app: "iTerm2", tty: "/dev/ttys003".into() });
-        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, "x", tty(), true), Reach::Folder);
-        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, "x", None, false), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, id, None, true), Reach::Link(format!("codex://threads/{id}")));
-        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, true), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, true), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), true), Reach::App);
+        assert_eq!(reach(Path::new("/System/Applications/Utilities/Terminal.app"), false, "x", None, tty(), true), Reach::Tab { app: "Terminal", tty: "/dev/ttys003".into() });
+        assert_eq!(reach(Path::new("/Applications/iTerm.app"), false, "x", None, tty(), true), Reach::Tab { app: "iTerm2", tty: "/dev/ttys003".into() });
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, "x", None, tty(), true), Reach::Folder);
+        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, "x", None, None, false), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, id, None, None, true), Reach::Link(format!("codex://threads/{id}")));
+        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, None, true), Reach::App);
+        let local = "local_0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, Some(local), None, true), Reach::Link(format!("claude://code/continue?session={local}")));
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, Some("local_a&b"), None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, "x", None, None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", None, tty(), true), Reach::Ghostty);
+        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", None, tty(), false), Reach::App);
+        // the extension's panel has no terminal; `claude` in the editor's own terminal does
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, None, true), Reach::EditorTab(format!("vscode://anthropic.claude-code/open?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, id, None, None, true), Reach::EditorTab(format!("cursor://anthropic.claude-code/open?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, tty(), true), Reach::Folder);
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), true, id, None, None, true), Reach::Folder);
     }
 
     #[test]
@@ -110,5 +169,7 @@ mod tests {
         assert!(tab_script("iTerm2", "/dev/ttys003").unwrap().contains("sessions of t"));
         assert_eq!(tab_script("Terminal", "/dev/ttys0\" & do shell script \"x"), None);
         assert_eq!(tab_script("Terminal", "/tmp/x"), None);
+        assert!(ghostty_script("/Users/kim/web-app/").unwrap().contains(r#"working directory is "/Users/kim/web-app""#));
+        assert_eq!(ghostty_script("/x\" & do shell script \"y"), None);
     }
 }

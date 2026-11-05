@@ -76,12 +76,18 @@ pub struct Settings {
     pub island_hide_idle: bool,
     /// lowest remaining usage on the closed island
     pub island_usage: bool,
+    /// which display holds the island: "auto" (the one with the camera notch, else the menu bar's),
+    /// "main" (the menu bar's) or "pointer" (the one the pointer is on)
+    pub island_screen: String,
     /// "작업 완료" notifications only for turns at least this long (seconds, 0 = all)
     pub notify_min_turn_sec: u32,
     /// look for a new version at launch and every few hours, and ask before installing it
     pub auto_update_check: bool,
     /// size of the whole main window's contents (text, panels, room), 1.0 = 100%
     pub ui_zoom: f64,
+    /// Claude usage from the account (macOS): the login Claude Code keeps in the Keychain is read
+    /// in memory and sent only to Anthropic's usage endpoint; nothing is stored
+    pub claude_account_limits: bool,
 }
 
 impl Default for Settings {
@@ -116,9 +122,11 @@ impl Default for Settings {
             pet_bubbles: true,
             island_hide_idle: false,
             island_usage: true,
+            island_screen: "auto".into(),
             notify_min_turn_sec: 0,
             auto_update_check: true,
             ui_zoom: 1.0,
+            claude_account_limits: true,
         }
     }
 }
@@ -142,6 +150,8 @@ struct Shared {
     /// menu bar frames drawn by the app from the chosen pet (run0..3, wait, done, idle, off);
     /// None until then, and the bundled shiba frames are used. The number counts the updates.
     tray_frames: Mutex<Option<(u64, Arc<Vec<Vec<u8>>>)>>,
+    /// session key -> the Claude desktop app's own id for it (Code-tab sessions only)
+    desktop_ids: Mutex<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -262,12 +272,60 @@ fn animate_tray(app: AppHandle) {
                 let builtin = [TRAY_RUN[0], TRAY_RUN[1], TRAY_RUN[2], TRAY_RUN[3], TRAY_WAIT, TRAY_DONE, TRAY_IDLE, TRAY_OFF];
                 let bytes = custom.as_ref().map_or(builtin[idx], |f| f.1[idx].as_slice());
                 if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
+                    #[cfg(target_os = "macos")]
+                    mac_tray_image(&tray, bytes.to_vec(), img.width(), img.height());
+                    #[cfg(not(target_os = "macos"))]
                     let _ = tray.set_icon(Some(img));
                 }
             }
             std::thread::sleep(Duration::from_millis(wait_ms));
         }
     });
+}
+
+/// tray-icon draws every icon 18pt tall. The frames are drawn at 2 px per point, so each one is put
+/// on the menu bar button at its own size (a 44 px frame shows 22pt tall and the pet fills the menu
+/// bar like other icons), in one step on the main thread: setting the icon through tray-icon first
+/// and resizing it after showed some frames at 18pt and others at 22pt.
+#[cfg(target_os = "macos")]
+fn mac_tray_image(tray: &tauri::tray::TrayIcon, png: Vec<u8>, w_px: u32, h_px: u32) {
+    use objc2::rc::{Allocated, Retained};
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let _ = tray.with_inner_tray_icon(move |t| unsafe {
+        let Some(item) = t.ns_status_item() else { return };
+        let item = objc2::rc::Retained::as_ptr(&item) as *mut AnyObject;
+        let button: *mut AnyObject = msg_send![item, button];
+        if button.is_null() {
+            return;
+        }
+        let data: *mut AnyObject = msg_send![class!(NSData), dataWithBytes: png.as_ptr().cast::<std::ffi::c_void>(), length: png.len()];
+        let alloc: Allocated<AnyObject> = msg_send![class!(NSImage), alloc];
+        let Some(image): Option<Retained<AnyObject>> = msg_send![alloc, initWithData: data] else { return };
+        let _: () = msg_send![&*image, setSize: MacSize(w_px as f64 / 2.0, h_px as f64 / 2.0)];
+        let _: () = msg_send![button, setImage: &*image];
+        // tray-icon's click target sits over the button at the button's size; keep it matching
+        let frame: MacRect = msg_send![button, frame];
+        let subviews: *mut AnyObject = msg_send![button, subviews];
+        let count: usize = if subviews.is_null() { 0 } else { msg_send![subviews, count] };
+        for i in 0..count {
+            let v: *mut AnyObject = msg_send![subviews, objectAtIndex: i];
+            let name: *const std::ffi::c_char = objc2::ffi::object_getClassName(v);
+            if !name.is_null() && std::ffi::CStr::from_ptr(name).to_bytes() == b"TaoTrayTarget" {
+                let _: () = msg_send![v, setFrame: frame];
+            }
+        }
+    });
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MacSize(f64, f64);
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::encode::Encode for MacSize {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGSize", &[objc2::encode::Encoding::Double, objc2::encode::Encoding::Double]);
 }
 
 /// One notification per usage window and reset period once 10% or less is left.
@@ -427,6 +485,9 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
         if shared.hooked.lock().unwrap().insert(key.clone()) {
             shared.log_only.lock().unwrap().remove(&key);
         }
+        if let Some(h) = &env.host_session {
+            shared.desktop_ids.lock().unwrap().insert(key.clone(), h.clone());
+        }
         let update = {
             // same lock order as the tick thread (procs, then store)
             let mut procs = shared.procs.lock().unwrap();
@@ -463,6 +524,13 @@ fn follow_logs(app: &AppHandle) {
     let ev = |agent: AgentKind, id: &str, ts: u64, cwd: Option<String>, kind: EvKind| NormEvent {
         agent, session_id: id.to_string(), ts, cwd, model: None, transcript_path: None, permission_mode: None, kind,
     };
+    // Codex sessions seen only in their log (the desktop app, VS Code) read their remaining usage from it
+    let with_log = |mut e: NormEvent, f: &logs::LogSession| {
+        if f.agent == AgentKind::Codex {
+            e.transcript_path = Some(f.path.clone());
+        }
+        e
+    };
     let mut out = Vec::new();
     {
         let hooked = shared.hooked.lock().unwrap();
@@ -482,14 +550,14 @@ fn follow_logs(app: &AppHandle) {
             known.insert(key.clone(), f.modified);
             // new, or back after it ended: the session is there
             if matches!(state, None | Some(AgentState::Disconnected)) {
-                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, f.cwd.clone(), EvKind::SessionStart { source: Some("log".into()) })));
+                out.extend(store.apply(with_log(ev(f.agent, &f.session_id, f.modified, f.cwd.clone(), EvKind::SessionStart { source: Some("log".into()) }), &f)));
             }
             // the log is being written: the agent is working (a log first seen counts if it is fresh)
             let busy = matches!(state, Some(st) if !matches!(st, AgentState::Idle | AgentState::Completed | AgentState::Disconnected));
             if busy {
-                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::StillWorking)));
+                out.extend(store.apply(with_log(ev(f.agent, &f.session_id, f.modified, None, EvKind::StillWorking), &f)));
             } else if last.is_some() || now.saturating_sub(f.modified) < TURN_OVER_AFTER {
-                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::PromptSubmitted)));
+                out.extend(store.apply(with_log(ev(f.agent, &f.session_id, f.modified, None, EvKind::PromptSubmitted), &f)));
             }
         }
         // quiet logs: the turn is over, and after a long while the session is gone
@@ -568,14 +636,15 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
         p.exists().then_some(p)
     });
     drop(procs);
+    let desktop = shared.desktop_ids.lock().unwrap().get(&key).cloned();
     let host = host.ok_or(if pid.is_some() { "이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)" } else { "이 세션의 에이전트 프로세스를 찾지 못했어요" })?;
-    open_session(&host, &key, pid, cwd.as_deref())
+    open_session(&host, &key, pid, cwd.as_deref(), desktop.as_deref())
 }
 
 /// Opens the session itself where possible (its terminal tab, its editor window, its Codex chat),
 /// otherwise just the app it runs in.
 #[cfg(target_os = "macos")]
-fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option<&str>) -> Result<(), String> {
+fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option<&str>, desktop: Option<&str>) -> Result<(), String> {
     use focus::Reach;
     use std::process::Command;
     // Since macOS 14 an app that is not frontmost can't hand the focus to another app, and a click
@@ -591,14 +660,116 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
     }
     let ok = |c: &mut Command| c.status().is_ok_and(|s| s.success());
     let (agent, id) = key.split_once(':').unwrap_or(("", key));
-    let done = match focus::reach(host, agent == "codex", id, pid.and_then(focus::tty_of), cwd.is_some()) {
+    let done = match focus::reach(host, agent == "codex", id, desktop, pid.and_then(focus::tty_of), cwd.is_some()) {
         // asks once for permission to control Terminal / iTerm2; without it the app still comes up below
         Reach::Tab { app, tty } => focus::tab_script(app, &tty).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
         Reach::Folder => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default())),
+        Reach::Ghostty => focus::ghostty_script(cwd.unwrap_or_default()).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
+        // the link goes to the editor's front window, so the session's folder comes to the front first
+        Reach::EditorTab(url) => {
+            let raised = ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default()));
+            std::thread::sleep(Duration::from_millis(400));
+            ok(Command::new("/usr/bin/open").arg(url)) || raised
+        }
         Reach::Link(url) => ok(Command::new("/usr/bin/open").arg(url)),
         Reach::App => false,
     };
     if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+}
+
+/// Codex's remaining usage from its newest log, so it shows even with no session open in Agent Room
+/// (limits are per account; the desktop app and VS Code write the same logs).
+#[tauri::command]
+async fn codex_limits() -> Option<agent_room_core::model::RateLimits> {
+    agent_room_core::logs::newest_codex_limits(&agent_room_core::logs::LogDirs::from_env())
+}
+
+/// Claude's remaining usage from the account, for sessions whose status line never reports it
+/// (the desktop app, VS Code). At most one request per 5 minutes, longer after failures.
+#[tauri::command]
+async fn claude_limits(app: AppHandle) -> Option<agent_room_core::model::RateLimits> {
+    static LAST: Mutex<(u64, Option<agent_room_core::model::RateLimits>, u32)> = Mutex::new((0, None, 0));
+    if !app.state::<Shared>().settings.lock().unwrap().claude_account_limits {
+        return None;
+    }
+    let now = now_ms();
+    {
+        let last = LAST.lock().unwrap();
+        if now < last.0 {
+            return last.1.clone();
+        }
+    }
+    let got = claude_account_usage(now);
+    let mut last = LAST.lock().unwrap();
+    match got {
+        Some(l) => *last = (now + 5 * 60_000, Some(l), 0),
+        None => {
+            last.2 = (last.2 + 1).min(4);
+            last.0 = now + (60_000u64 << last.2).min(15 * 60_000);
+        }
+    }
+    last.1.clone()
+}
+
+#[cfg(target_os = "macos")]
+fn claude_account_usage(now: u64) -> Option<agent_room_core::model::RateLimits> {
+    use std::process::{Command, Stdio};
+    // the Keychain item Claude Code writes; `security` is on its access list, so this reads it
+    // without a prompt. The token stays in memory and is dropped after the one request.
+    let out = run_for(Command::new("/usr/bin/security").args(["find-generic-password", "-s", "Claude Code-credentials", "-w"]), None)?;
+    let cred: serde_json::Value = serde_json::from_slice(&out).ok()?;
+    let oauth = cred.get("claudeAiOauth")?;
+    let token = oauth.get("accessToken")?.as_str()?;
+    if token.is_empty() || !token.chars().all(|c| c.is_ascii_graphic() && c != '"' && c != '\\') {
+        return None;
+    }
+    // an expired token is refreshed by Claude Code on its next run, never here
+    if oauth.get("expiresAt").and_then(|v| v.as_u64()).is_some_and(|t| t <= now) {
+        return None;
+    }
+    // the token goes to curl on stdin, not its arguments, so other processes cannot see it
+    let config = format!(
+        "url = \"https://api.anthropic.com/api/oauth/usage\"\nheader = \"Authorization: Bearer {token}\"\nheader = \"anthropic-beta: oauth-2025-04-20\"\nheader = \"Accept: application/json\"\nuser-agent = \"AgentRoom\"\n"
+    );
+    let mut cmd = Command::new("/usr/bin/curl");
+    cmd.args(["-sS", "--fail", "--max-time", "15", "--proto", "=https", "--max-redirs", "0", "-K", "-"]).stdin(Stdio::piped());
+    let body = run_for(&mut cmd, Some(config.as_bytes()))?;
+    agent_room_core::limits::from_claude_usage(&serde_json::from_slice(&body).ok()?, now)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn claude_account_usage(_now: u64) -> Option<agent_room_core::model::RateLimits> {
+    None
+}
+
+/// stdout of a command that exits 0 within 20 seconds (killed after that)
+#[cfg(target_os = "macos")]
+fn run_for(cmd: &mut std::process::Command, stdin: Option<&[u8]>) -> Option<Vec<u8>> {
+    use std::io::{Read, Write};
+    use std::process::Stdio;
+    let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    if let Some(input) = stdin {
+        child.stdin.take()?.write_all(input).ok()?;
+    }
+    let mut stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        stdout.read_to_end(&mut buf).ok().map(|_| buf)
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let status = loop {
+        if let Some(st) = child.try_wait().ok()? {
+            break st;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    let out = reader.join().ok()??;
+    status.success().then_some(out)
 }
 
 /// Tokens per local day for the last `days` days, recent rate and streaks, from local logs only.
@@ -622,7 +793,7 @@ fn double_click_ms() -> u32 {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn open_session(_: &std::path::Path, _: &str, _: Option<u32>, _: Option<&str>) -> Result<(), String> {
+fn open_session(_: &std::path::Path, _: &str, _: Option<u32>, _: Option<&str>, _: Option<&str>) -> Result<(), String> {
     Err("앱 창 열기는 아직 macOS에서만 돼요".into())
 }
 
@@ -794,8 +965,11 @@ fn show_island(app: &AppHandle, on: bool) {
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
     #[cfg(target_os = "macos")]
-    if mac_set_frame(w, width, height) {
-        return;
+    {
+        let mode = app.state::<Shared>().settings.lock().unwrap().island_screen.clone();
+        if mac_set_frame(app, w, width, height, mode) {
+            return;
+        }
     }
     let Ok(Some(mon)) = app.primary_monitor() else { return };
     let k = mon.scale_factor();
@@ -811,20 +985,19 @@ fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
 /// second display, a changed resolution or a different scale can't put the island mid-screen.
 /// Does nothing when the island is already there.
 #[cfg(target_os = "macos")]
-fn mac_set_frame(w: &WebviewWindow, width: f64, height: f64) -> bool {
+fn mac_set_frame(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64, mode: String) -> bool {
     use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send};
+    use objc2::msg_send;
     let Ok(ptr) = w.ns_window() else { return false };
     let ns = ptr as usize;
+    let app = app.clone();
     w.run_on_main_thread(move || unsafe {
         let ns = ns as *mut AnyObject;
-        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
-        let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
-        if ns.is_null() || count == 0 {
+        let Some((_, screen)) = mac_island_screen(&mode) else { return };
+        if ns.is_null() {
             return;
         }
         // Cocoa puts the origin at the bottom-left of the first screen
-        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
         let frame: MacRect = msg_send![screen, frame];
         let r = MacRect((frame.0 + (frame.2 - width) / 2.0).round(), frame.1 + frame.3 - height, width, height);
         let now: MacRect = msg_send![ns, frame];
@@ -832,8 +1005,63 @@ fn mac_set_frame(w: &WebviewWindow, width: f64, height: f64) -> bool {
             return;
         }
         let _: () = msg_send![ns, setFrame: r, display: true];
+        // another display may have another notch (or none): the page sizes the pill again
+        let _ = app.emit_to("island", "island-screen", ());
     })
     .is_ok()
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MacInsets(f64, f64, f64, f64);
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::encode::Encode for MacInsets {
+    const ENCODING: objc2::encode::Encoding = {
+        use objc2::encode::Encoding;
+        Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double])
+    };
+}
+
+/// Height of the camera notch on a screen in points, or 0 without one (or before macOS 12).
+#[cfg(target_os = "macos")]
+unsafe fn mac_notch_h(screen: *mut objc2::runtime::AnyObject) -> f64 {
+    use objc2::{msg_send, sel};
+    let has: bool = msg_send![screen, respondsToSelector: sel!(auxiliaryTopLeftArea)];
+    if !has {
+        return 0.0;
+    }
+    let inset: MacInsets = msg_send![screen, safeAreaInsets];
+    inset.0.max(0.0)
+}
+
+/// The display that holds the island (index in NSScreen.screens, screen) for the island_screen
+/// setting. With several displays the notch is often on the laptop while the menu bar is on the
+/// big monitor, so "auto" follows the notch and falls back to the menu bar's display.
+#[cfg(target_os = "macos")]
+unsafe fn mac_island_screen(mode: &str) -> Option<(usize, *mut objc2::runtime::AnyObject)> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+    let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
+    if count == 0 {
+        return None;
+    }
+    let at = |i: usize| -> *mut AnyObject { msg_send![screens, objectAtIndex: i] };
+    let pick = match mode {
+        "main" => None,
+        "pointer" => {
+            let p: MacPoint = msg_send![class!(NSEvent), mouseLocation];
+            (0..count).find(|&i| {
+                let f: MacRect = msg_send![at(i), frame];
+                p.0 >= f.0 && p.0 < f.0 + f.2 && p.1 >= f.1 && p.1 <= f.1 + f.3
+            })
+        }
+        _ => (0..count).find(|&i| mac_notch_h(at(i)) > 0.0),
+    }
+    .unwrap_or(0);
+    Some((pick, at(pick)))
 }
 
 #[cfg(target_os = "macos")]
@@ -851,9 +1079,16 @@ unsafe impl objc2::encode::Encode for MacPoint {
     const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGPoint", &[objc2::encode::Encoding::Double, objc2::encode::Encoding::Double]);
 }
 
-/// Runs `f` on the main thread (AppKit) and waits briefly for its answer.
+/// Runs `f` on the main thread (AppKit) and waits briefly for its answer. Called on the main
+/// thread itself (sync commands, tray clicks) it runs `f` right away: waiting there for the main
+/// thread would only time out.
 #[cfg(target_os = "macos")]
 fn mac_on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    use objc2::{class, msg_send};
+    let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+    if on_main {
+        return Some(f());
+    }
     let (tx, rx) = std::sync::mpsc::channel();
     app.run_on_main_thread(move || {
         let _ = tx.send(f());
@@ -928,49 +1163,33 @@ unsafe impl objc2::encode::Encode for MacRect {
 /// Size of the camera notch on the primary screen in points (width, height); None without a notch.
 /// The island is drawn around it, so its collapsed height and empty middle match the notch.
 #[tauri::command]
-fn notch_size() -> Option<(f64, f64)> {
+fn notch_size(app: AppHandle) -> Option<(f64, f64)> {
     #[cfg(target_os = "macos")]
-    return mac_notch();
+    {
+        let mode = app.state::<Shared>().settings.lock().unwrap().island_screen.clone();
+        return mac_on_main(&app, move || mac_notch(&mode)).flatten();
+    }
     #[cfg(not(target_os = "macos"))]
-    None
+    {
+        let _ = app;
+        None
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn mac_notch() -> Option<(f64, f64)> {
-    use objc2::encode::{Encode, Encoding};
-    use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send, sel};
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct Insets(f64, f64, f64, f64);
-    unsafe impl Encode for Insets {
-        const ENCODING: Encoding = Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double]);
-    }
+fn mac_notch(mode: &str) -> Option<(f64, f64)> {
+    use objc2::msg_send;
     unsafe {
-        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
-        if screens.is_null() {
-            return None;
-        }
-        let count: usize = msg_send![screens, count];
-        if count == 0 {
-            return None;
-        }
-        // the first screen holds the menu bar, which is where the island is placed
-        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
-        // safeAreaInsets and the auxiliary areas exist from macOS 12
-        let has: bool = msg_send![screen, respondsToSelector: sel!(auxiliaryTopLeftArea)];
-        if !has {
-            return None;
-        }
-        let inset: Insets = msg_send![screen, safeAreaInsets];
-        if inset.0 <= 0.0 {
+        let (_, screen) = mac_island_screen(mode)?;
+        let h = mac_notch_h(screen);
+        if h <= 0.0 {
             return None;
         }
         let frame: MacRect = msg_send![screen, frame];
         let left: MacRect = msg_send![screen, auxiliaryTopLeftArea];
         let right: MacRect = msg_send![screen, auxiliaryTopRightArea];
         let width = frame.2 - left.2 - right.2;
-        (width > 0.0).then_some((width, inset.0))
+        (width > 0.0).then_some((width, h))
     }
 }
 
@@ -983,6 +1202,8 @@ fn watch_hover(app: AppHandle) {
     let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
         let mut last_island: Option<bool> = None;
         let mut last_main: Option<Option<(i32, i32)>> = None;
+        #[cfg(target_os = "macos")]
+        let mut last_screen: Option<usize> = None;
         loop {
             std::thread::sleep(Duration::from_millis(120));
             #[cfg(not(target_os = "macos"))]
@@ -1015,6 +1236,15 @@ fn watch_hover(app: AppHandle) {
                     let _ = w.set_ignore_cursor_events(!island);
                 }
                 let _ = app.emit_to("island", "hover-island", island);
+            }
+            // "pointer": move the island when the pointer goes to another display
+            #[cfg(target_os = "macos")]
+            if app.get_webview_window("island").is_some() && app.state::<Shared>().settings.lock().unwrap().island_screen == "pointer" {
+                let idx = mac_on_main(&app, || unsafe { mac_island_screen("pointer").map(|s| s.0) }).flatten();
+                if idx.is_some() && idx != last_screen {
+                    last_screen = idx;
+                    sync_island(&app);
+                }
             }
             let main = at("main");
             if last_main != Some(main) {
@@ -1370,7 +1600,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only
+            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits
         ])
         .setup(|app| {
             let handle = app.handle().clone();

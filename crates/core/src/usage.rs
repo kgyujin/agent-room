@@ -250,7 +250,7 @@ fn hash(s: &str) -> u64 {
 }
 
 /// `2026-11-05T06:12:00.123Z` (or with an offset like `+09:00`) as unix ms.
-fn iso_ms(s: &str) -> Option<i64> {
+pub(crate) fn iso_ms(s: &str) -> Option<i64> {
     let b = s.as_bytes();
     if b.len() < 19 || b[4] != b'-' || b[7] != b'-' || b[10] != b'T' {
         return None;

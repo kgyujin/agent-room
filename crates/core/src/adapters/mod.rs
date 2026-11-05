@@ -20,6 +20,10 @@ pub struct Envelope {
     /// parent pid of the hook process (used only to check if the agent is still alive)
     pub ppid: Option<u32>,
     pub event: Value,
+    /// the Claude desktop app's own id for a Code-tab session (`CLAUDE_CODE_HOST_SESSION_ID`),
+    /// the only id its link to that session accepts
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_session: Option<String>,
 }
 
 pub fn normalize(env: &Envelope) -> Vec<NormEvent> {
