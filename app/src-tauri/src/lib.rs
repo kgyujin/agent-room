@@ -424,6 +424,17 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn open_app(path: &std::path::Path) -> Result<(), String> {
+    // Since macOS 14 an app that is not frontmost can't hand the focus to another app, and a click
+    // on the island or the room-only window leaves Agent Room in the background. Taking the focus
+    // first (the user just clicked us) lets `open` bring the agent's app to the front.
+    unsafe {
+        use objc2::runtime::AnyObject;
+        use objc2::{class, msg_send};
+        let ns_app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        if !ns_app.is_null() {
+            let _: () = msg_send![ns_app, activateIgnoringOtherApps: true];
+        }
+    }
     let ok = std::process::Command::new("/usr/bin/open").arg(path).status().map_err(|e| e.to_string())?.success();
     if ok { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
 }
@@ -582,8 +593,50 @@ fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
     let k = mon.scale_factor();
     let x = mon.position().x as f64 / k + (mon.size().width as f64 / k - width) / 2.0;
     let y = mon.position().y as f64 / k;
+    #[cfg(target_os = "macos")]
+    if mac_set_frame(w, x.round(), width, height) {
+        return;
+    }
     let _ = w.set_size(tauri::LogicalSize::new(width, height));
     let _ = w.set_position(tauri::LogicalPosition::new(x.round(), y));
+}
+
+/// Moves and resizes the island in one step at the top of the first screen. Two separate calls
+/// (size, then position) showed a frame of the pill off-centre, which looked like flicker on hover.
+#[cfg(target_os = "macos")]
+fn mac_set_frame(w: &WebviewWindow, x: f64, width: f64, height: f64) -> bool {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let Ok(ptr) = w.ns_window() else { return false };
+    let ns = ptr as usize;
+    w.run_on_main_thread(move || unsafe {
+        let ns = ns as *mut AnyObject;
+        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+        let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
+        if ns.is_null() || count == 0 {
+            return;
+        }
+        // Cocoa puts the origin at the bottom-left of the first screen
+        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
+        let frame: MacRect = msg_send![screen, frame];
+        let r = MacRect(x, frame.1 + frame.3 - height, width, height);
+        let _: () = msg_send![ns, setFrame: r, display: true];
+    })
+    .is_ok()
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MacRect(f64, f64, f64, f64);
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::encode::Encode for MacRect {
+    const ENCODING: objc2::encode::Encoding = {
+        use objc2::encode::Encoding;
+        const PAIR: [Encoding; 2] = [Encoding::Double, Encoding::Double];
+        Encoding::Struct("CGRect", &[Encoding::Struct("CGPoint", &PAIR), Encoding::Struct("CGSize", &PAIR)])
+    };
 }
 
 /// Size of the camera notch on the primary screen in points (width, height); None without a notch.
@@ -607,13 +660,6 @@ fn mac_notch() -> Option<(f64, f64)> {
     unsafe impl Encode for Insets {
         const ENCODING: Encoding = Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double]);
     }
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct Rect(f64, f64, f64, f64);
-    const PAIR: [Encoding; 2] = [Encoding::Double, Encoding::Double];
-    unsafe impl Encode for Rect {
-        const ENCODING: Encoding = Encoding::Struct("CGRect", &[Encoding::Struct("CGPoint", &PAIR), Encoding::Struct("CGSize", &PAIR)]);
-    }
     unsafe {
         let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
         if screens.is_null() {
@@ -634,9 +680,9 @@ fn mac_notch() -> Option<(f64, f64)> {
         if inset.0 <= 0.0 {
             return None;
         }
-        let frame: Rect = msg_send![screen, frame];
-        let left: Rect = msg_send![screen, auxiliaryTopLeftArea];
-        let right: Rect = msg_send![screen, auxiliaryTopRightArea];
+        let frame: MacRect = msg_send![screen, frame];
+        let left: MacRect = msg_send![screen, auxiliaryTopLeftArea];
+        let right: MacRect = msg_send![screen, auxiliaryTopRightArea];
         let width = frame.2 - left.2 - right.2;
         (width > 0.0).then_some((width, inset.0))
     }

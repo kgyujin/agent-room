@@ -84,8 +84,10 @@ export function Island() {
   }, []);
 
   return (
+    // hover comes only from Rust: the page's own mouseenter/leave also fired while the window was
+    // being resized under a still pointer, and the two sources together opened and closed it in a loop
     <div className={`island ${open ? 'open' : ''} ${todos.length ? 'alert' : ''}`} style={{ width: w, height: h, ['--bar-h' as string]: `${barH}px`, ['--notch-w' as string]: `${notchW}px` }}
-      onMouseEnter={hoverOpens ? enter : stay} onMouseLeave={exit} onClick={enter}>
+      onClick={enter}>
       <div className="is-bar">
         <div className="is-left">
           {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
