@@ -22,10 +22,10 @@ AI 코딩 에이전트(Claude Code, OpenAI Codex CLI)가 지금 무엇을 하는
 
 ### 앱 받기 (macOS, Apple Silicon)
 
-터미널에서 한 줄로 설치할 수 있습니다(Node.js 18 이상). 최신 릴리스를 받아 `/Applications`에 넣고 실행합니다.
+터미널에서 한 줄로 설치할 수 있습니다(Node.js 18 이상, git 필요). 최신 릴리스를 받아 `/Applications`에 넣고 실행합니다.
 
 ```sh
-npx agent-room-app
+npx github:kgyujin/agent-room
 ```
 
 직접 받으려면 [Releases](https://github.com/kgyujin/agent-room/releases)에서 `.dmg`를 받습니다. 앱은 Apple 공증을 받지 않았습니다. 처음 열 때는 Finder에서 우클릭 → 열기를 누르세요. 그래도 열리지 않으면 아래를 실행합니다.

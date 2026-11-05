@@ -1,0 +1,24 @@
+{
+  "name": "agent-room-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Installs Agent Room (a macOS menu bar app that shows Claude Code and Codex sessions as pixel pets) from its GitHub Releases: npx github:kgyujin/agent-room",
+  "bin": {
+    "agent-room-app": "npm/install.js"
+  },
+  "files": [
+    "npm/install.js"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kgyujin/agent-room.git"
+  },
+  "homepage": "https://github.com/kgyujin/agent-room"
+}
