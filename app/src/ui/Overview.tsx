@@ -2,7 +2,7 @@
 // Everything shown comes from hook events; the only derived number is the remaining-time
 // estimate, which is labelled as one and only appears once a plan step has finished.
 import type { LimitWindow, RateLimits, Snapshot } from '../types';
-import { doingLabel, fmtAgo, fmtDuration, fmtUntil, stateLabel, stateTone, windowLabel } from '../labels';
+import { doingLabel, fmtAgo, fmtDuration, fmtUntil, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 
@@ -39,7 +39,9 @@ export function etaMs(s: Snapshot, now: number): number | null {
 /** sessions grouped by what they need: the user's turn first, then work, then the quiet ones */
 export function Overview({ sessions, now, selected, onSelect, showLimits = true, limitsFirst = false }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; showLimits?: boolean; limitsFirst?: boolean }) {
   const live = sessions.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
-  const todo = live.filter((s) => userTodo(s, now));
+  const names = sessionNames(live);
+  // the longest-waiting first
+  const todo = live.filter((s) => userTodo(s, now)).sort((a, b) => userTodo(a, now)!.since - userTodo(b, now)!.since);
   const work = live.filter((s) => isActive(s) && !userTodo(s, now));
   const done = live.filter((s) => !isActive(s) && s.state === 'completed' && s.connection === 'live');
   const quiet = live.filter((s) => !todo.includes(s) && !work.includes(s) && !done.includes(s));
@@ -60,7 +62,7 @@ export function Overview({ sessions, now, selected, onSelect, showLimits = true,
             <ul className="ov-list">
               {g.list.map((s) => (
                 <li key={s.key}>
-                  <AgentRow s={s} now={now} on={selected === s.key} onClick={() => onSelect(s.key)} todo={userTodo(s, now)} slim={g.id === 'done' || g.id === 'quiet'} />
+                  <AgentRow s={s} name={names[s.key]} now={now} on={selected === s.key} onClick={() => onSelect(s.key)} todo={userTodo(s, now)} slim={g.id === 'done' || g.id === 'quiet'} />
                 </li>
               ))}
             </ul>
@@ -165,15 +167,15 @@ export function LimitBar({ w, now }: { w: LimitWindow; now: number }) {
   );
 }
 
-function AgentRow({ s, now, on, onClick, todo, slim }: { s: Snapshot; now: number; on: boolean; onClick: () => void; todo: { text: string; since: number } | null; slim: boolean }) {
+function AgentRow({ s, name, now, on, onClick, todo, slim }: { s: Snapshot; name: string; now: number; on: boolean; onClick: () => void; todo: { text: string; since: number } | null; slim: boolean }) {
   const prog = progressOf(s);
   const step = s.plan.find((p) => p.status === 'in_progress');
   const t = turnMs(s, now);
   const eta = etaMs(s, now);
   const tone = stateTone(s);
   const busy = isActive(s);
-  const doing = busy ? doingLabel(s) : null;
-  const name = s.project ?? '프로젝트 미확인';
+  // the pill already says what it does; the line under it names only the file or command
+  const doing = busy ? doingLabel(s)?.split(' · ')[1] ?? null : null;
   if (slim)
     return (
       <button className={`ov-row slim ${on ? 'on' : ''} t-${tone}`} onClick={onClick} title={`${name}${s.cwd ? `\n${s.cwd}` : ''}`}>
@@ -203,7 +205,7 @@ function AgentRow({ s, now, on, onClick, todo, slim }: { s: Snapshot; now: numbe
           </span>
         )}
       </div>
-      {doing && doing !== stateLabel(s) && <div className="ov-doing">{doing}</div>}
+      {doing && <div className="ov-doing">{doing}</div>}
       {busy ? (
         <div className="ov-meta">
           {prog ? (

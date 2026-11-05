@@ -198,8 +198,8 @@ export function SettingsModal(props: {
                 <Group title="이름표">
                   <Field label="펫 이름표">
                     <select value={s.tagStyle} onChange={(e) => set('tagStyle', e.target.value as Settings['tagStyle'])}>
-                      <option value="compact">간단히</option>
-                      <option value="full">프로젝트 이름까지</option>
+                      <option value="compact">프로젝트 이름만</option>
+                      <option value="full">프로젝트와 하는 일</option>
                       <option value="off">숨기기</option>
                     </select>
                   </Field>

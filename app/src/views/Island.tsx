@@ -4,7 +4,7 @@
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtDuration, justDone, stateLabel, stateTone, windowLabel } from '../labels';
+import { fmtAgo, fmtDuration, justDone, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon, type IconName } from '../ui/icons';
 import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
@@ -47,6 +47,7 @@ export function Island() {
   const leave = useRef(0);
   const shrink = useRef(0);
   const todos = list.filter((s) => userTodo(s, now));
+  const names = sessionNames(list);
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
   // only a turn that just finished shows the check; after that the agent is simply idle
   const done = list.filter((s) => justDone(s, now, settings?.doneShownSec ?? 60));
@@ -105,7 +106,15 @@ export function Island() {
       <div className="is-bar">
         <div className="is-left">
           {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
-          {!open && (todos.length ? todos : working.length ? working : list).slice(0, 3).map((s) => (
+          {/* someone needs you: say who (the longest-waiting), not just three look-alike icons */}
+          {!open && todos.length > 0 && (
+            <span className="is-who t-wait">
+              <AgentMark agent={todos[0].isDemo ? 'demo' : todos[0].agent} size={13} />
+              <b className="is-who-name">{names[todos[0].key]}</b>
+              {todos.length > 1 && <small>+{todos.length - 1}</small>}
+            </span>
+          )}
+          {!open && !todos.length && (working.length ? working : list).slice(0, 3).map((s) => (
             <span key={s.key} className={`is-who t-${stateTone(s)}`}>
               <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={13} />
             </span>
@@ -116,7 +125,7 @@ export function Island() {
         <div className="is-right">
           {low && (settings?.islandUsage ?? true) && (
             <span className={`is-low ${low.left <= 10 ? 'low' : low.left <= 30 ? 'mid' : ''}`} title={`가장 적게 남은 사용량: ${low.name} ${low.left}%`}>
-              <Icon name="bolt" />{low.left}%
+              남음 {low.left}%
             </span>
           )}
           {todos.length ? (
@@ -134,13 +143,13 @@ export function Island() {
         <ul className="is-list">
           {note && <li className="is-empty is-note">{note}</li>}
           {list.length === 0 && <li className="is-empty">{running ? '에이전트가 실행 중이에요 · 다음 작업부터 여기에 보여요' : '진행 중인 작업이 없어요'}</li>}
-          {list.slice(0, 8).map((s) => {
+          {(list.length > 8 ? list.slice(0, 7) : list).map((s) => {
             const p = progressOf(s);
             const todo = userTodo(s, now);
             const t = s.turnStartedAt ? (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt : null;
             return (
               <li key={s.key}>
-                <button title={`${s.project ?? '프로젝트'}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`} onClick={(e) => {
+                <button title={`${names[s.key]}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`} onClick={(e) => {
                   e.stopPropagation();
                   // jump to the agent's own app; when it can't be found, say why here instead of
                   // bringing up the main window (which looked like a flash and no app)
@@ -148,19 +157,26 @@ export function Island() {
                   else backend.focusAgent(s.key).then(() => setNote(null), (err) => setNote(String(err)));
                 }}>
                   <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-                  <span className="is-proj">{s.project ?? '프로젝트'}</span>
+                  <span className="is-proj">{names[s.key]}</span>
                   <span className={`is-state t-${stateTone(s)}`}><Icon name={todo ? 'bell' : STATE_ICON[s.state]} />{todo ? todo.text : stateLabel(s)}</span>
-                  {p && (
+                  {/* a request shows how long it has waited; work shows its progress and turn time */}
+                  {todo && <span className="is-time"><Icon name="clock" />{fmtAgo(now - todo.since)}</span>}
+                  {!todo && p && (
                     <span className="is-prog">
                       <span className="bar"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span>
                       {p.done}/{p.total}
                     </span>
                   )}
-                  {t !== null && <span className="is-time"><Icon name="clock" />{fmtDuration(t)}</span>}
+                  {!todo && t !== null && <span className="is-time"><Icon name="clock" />{fmtDuration(t)}</span>}
                 </button>
               </li>
             );
           })}
+          {list.length > 8 && (
+            <li className="is-empty">
+              <button className="is-more" onClick={(e) => { e.stopPropagation(); void backend.trayAction('open'); }}>+{list.length - 7}개 더 · 방에서 보기</button>
+            </li>
+          )}
         </ul>
       )}
       {open && showLimits && (

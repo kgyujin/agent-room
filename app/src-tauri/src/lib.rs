@@ -239,7 +239,8 @@ fn animate_tray(app: AppHandle) {
             let now = now_ms();
             let live: Vec<Snapshot> = shared.store.lock().unwrap().snapshots().into_iter().filter(|s| matches!(s.connection, Connection::Live | Connection::Stale)).collect();
             let working = live.iter().filter(|s| matches!(s.state, AgentState::Starting | AgentState::Planning | AgentState::Reading | AgentState::Editing | AgentState::Running | AgentState::Testing)).count();
-            let waiting = live.iter().any(|s| matches!(s.state, AgentState::Waiting | AgentState::Error));
+            // same rule as the number beside the icon: only sessions still sending events count as asking
+            let waiting = live.iter().any(|s| s.connection == Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error));
             let done = live.iter().any(|s| s.state == AgentState::Completed && (done_ms == 0 || s.turn_ended_at.is_some_and(|t| now.saturating_sub(t) < done_ms)));
             // frame index: run0..3, wait, done, idle, off
             let (idx, wait_ms): (usize, u64) = if waiting {
@@ -312,16 +313,15 @@ fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
             }
         }
     }
+    // the project leads the title, so a glance at the banner says which session it is
     let agent = agent_label(s);
-    let project = s.project.clone().unwrap_or_default();
+    let project = s.project.clone().unwrap_or_else(|| agent.into());
+    let tool = s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| "도구".into());
     let (title, body) = match n {
-        Notice::Completed => (format!("{agent} 작업 완료"), format!("{project} 작업이 끝났어요.")),
-        Notice::Failed => (format!("{agent} 오류"), s.error.as_ref().map(|e| e.message.clone()).unwrap_or_default()),
-        Notice::NeedsApproval => (
-            format!("{agent} 승인 필요"),
-            format!("{project}: {} 실행 승인을 기다리고 있어요.", s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| "도구".into())),
-        ),
-        Notice::NeedsInput => (format!("{agent} 입력 대기"), format!("{project}: 입력을 기다리고 있어요.")),
+        Notice::Completed => (format!("{project} · 작업 완료"), format!("{agent} 작업이 끝났어요.")),
+        Notice::Failed => (format!("{project} · 오류"), s.error.as_ref().map(|e| e.message.clone()).unwrap_or_else(|| format!("{agent}에서 오류가 났어요."))),
+        Notice::NeedsApproval => (format!("{project} · {tool} 승인 필요"), format!("{agent}가 {tool} 실행 승인을 기다리고 있어요.")),
+        Notice::NeedsInput => (format!("{project} · 입력 대기"), format!("{agent}가 답을 기다리고 있어요.")),
     };
     let _ = app.notification().builder().title(title).body(body).show();
 }
@@ -357,6 +357,12 @@ fn state_label(s: &Snapshot) -> &'static str {
 }
 
 /// Most important session first: waiting > error > working > rest.
+/// menu order: what needs the user first (the longest-waiting at the top), then work, then the rest newest first
+fn order_key(s: &Snapshot) -> (u8, u64) {
+    let asked = s.waiting.as_ref().map(|w| w.since).or_else(|| (s.state == AgentState::Error).then(|| s.error.as_ref().map_or(s.last_event_at, |e| e.at)));
+    (priority(s), asked.unwrap_or(u64::MAX - s.last_event_at))
+}
+
 fn priority(s: &Snapshot) -> u8 {
     match s.state {
         AgentState::Waiting => 0,
@@ -371,7 +377,7 @@ fn priority(s: &Snapshot) -> u8 {
 fn refresh_tray(app: &AppHandle) {
     let Some(tray) = app.tray_by_id("main") else { return };
     let mut sessions: Vec<Snapshot> = app.state::<Shared>().store.lock().unwrap().snapshots().into_iter().filter(|s| !s.is_demo).collect();
-    sessions.sort_by_key(priority);
+    sessions.sort_by_key(order_key);
     let summary = sessions.first().map(|s| {
         let extra = if sessions.len() > 1 { format!(" +{}", sessions.len() - 1) } else { String::new() };
         format!("{}{}", state_label(s), extra)
@@ -1101,6 +1107,16 @@ fn tray_action(app: AppHandle, action: String, key: Option<String>) {
                 let _ = app.emit("select-session", k);
             }
         }
+        // a session row: straight to that session's own terminal tab, editor or chat;
+        // when it can't be found, show it in the room instead
+        "focus" => {
+            if let Some(k) = key {
+                if focus_agent(app.clone(), k.clone()).is_err() {
+                    show_main(&app);
+                    let _ = app.emit("select-session", k);
+                }
+            }
+        }
         "quit" => app.exit(0),
         _ => {}
     }
@@ -1430,10 +1446,7 @@ pub fn run() {
                         let _ = app.emit_to("main", "check-update", ());
                     }
                     "quit" => app.exit(0),
-                    id if id.starts_with("session:") => {
-                        show_main(app);
-                        let _ = app.emit("select-session", id.trim_start_matches("session:"));
-                    }
+                    id if id.starts_with("session:") => tray_action(app.clone(), "focus".into(), Some(id.trim_start_matches("session:").into())),
                     _ => {}
                 })
                 .build(app)?;
