@@ -250,7 +250,6 @@ fn animate_tray(app: AppHandle) {
                 last = bytes.as_ptr();
                 if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
                     let _ = tray.set_icon(Some(img));
-                    let _ = tray.set_icon_as_template(true);
                 }
             }
             std::thread::sleep(Duration::from_millis(wait_ms));
@@ -1378,8 +1377,7 @@ pub fn run() {
             // menu bar
             let menu = build_menu(&handle, &[])?;
             TrayIconBuilder::with_id("main")
-                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
-                .icon_as_template(true)
+                .icon(tauri::image::Image::from_bytes(TRAY_OFF)?)
                 .tooltip("Agent Room")
                 .menu(&menu)
                 // left click opens the popover; right click still shows the menu
