@@ -5,12 +5,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
 import { fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
-import { AgentMark } from '../ui/icons';
+import { AgentMark, Icon, type IconName } from '../ui/icons';
+import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { useLive } from './useLive';
 
 const ROW = 40;
+/** one small icon per state, next to the words */
+const STATE_ICON: Record<Snapshot['state'], IconName> = {
+  waiting: 'bell', error: 'cross', starting: 'cog', planning: 'note', reading: 'book', editing: 'pencil',
+  running: 'play', testing: 'flask', completed: 'check', idle: 'moon', disconnected: 'moon',
+};
 /** room beside the notch for the agent icons (left) and the status (right) */
 const SIDE = 75;
 /** used when the screen has no notch: [empty middle, bar height] */
@@ -68,7 +74,7 @@ export function Island() {
   useEffect(() => {
     let off: (() => void) | undefined;
     let dead = false;
-    void backend.onTrayEvent('hover', (inside) => {
+    void backend.onTrayEvent('hover-island', (inside) => {
       const r = hoverRef.current;
       if (!inside) r.exit();
       else if (r.hoverOpens) r.enter();
@@ -88,7 +94,7 @@ export function Island() {
               <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={13} />
             </span>
           ))}
-          {!list.length && <span className="is-dim">대기</span>}
+          {!list.length && <span className="is-dim"><Icon name="moon" /> 대기</span>}
         </div>
         <div className="is-notch" />
         <div className="is-right">
@@ -98,13 +104,13 @@ export function Island() {
             </span>
           )}
           {todos.length ? (
-            <span className="is-alert">{open ? `확인 필요 ${todos.length}` : `! ${todos.length}`}</span>
+            <span className="is-alert"><Icon name="bell" />{open ? `확인 필요 ${todos.length}` : todos.length}</span>
           ) : working.length ? (
-            <span className="is-work"><i />{open ? `작업 중 ${working.length}` : working.length}</span>
+            <span className="is-work"><Icon name="cog" />{open ? `작업 중 ${working.length}` : working.length}</span>
           ) : done.length ? (
-            <span className="is-ok">✓ {done.length}</span>
+            <span className="is-ok"><Icon name="check" />{open ? `완료 ${done.length}` : done.length}</span>
           ) : (
-            <span className="is-dim">—</span>
+            <span className="is-dim"><Icon name="moon" /></span>
           )}
         </div>
       </div>
@@ -120,14 +126,14 @@ export function Island() {
                 <button onClick={(e) => { e.stopPropagation(); void backend.trayAction('select', s.key); }}>
                   <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
                   <span className="is-proj">{s.project ?? '프로젝트'}</span>
-                  <span className={`is-state t-${stateTone(s)}`}>{todo ? todo.text : stateLabel(s)}</span>
+                  <span className={`is-state t-${stateTone(s)}`}><Icon name={todo ? 'bell' : STATE_ICON[s.state]} />{todo ? todo.text : stateLabel(s)}</span>
                   {p && (
                     <span className="is-prog">
                       <span className="bar"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span>
                       {p.done}/{p.total}
                     </span>
                   )}
-                  {t !== null && <span className="is-time">{fmtDuration(t)}</span>}
+                  {t !== null && <span className="is-time"><Icon name="clock" />{fmtDuration(t)}</span>}
                 </button>
               </li>
             );
@@ -136,7 +142,7 @@ export function Island() {
       )}
       {open && limits.length > 0 && (
         <div className="is-lim" title="남은 사용량 (에이전트가 알려준 요금제 한도)">
-          <b>남은 사용량</b>
+          <b><Icon name="bolt" />남은 사용량</b>
           {limits.map(([a, l]) => (
             <span key={a}>
               <AgentMark agent={a} size={13} />

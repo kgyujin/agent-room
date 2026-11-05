@@ -426,6 +426,7 @@ impl SessionStore {
             EvKind::Limits { limits } => {
                 s.limits = Some(limits);
             }
+            EvKind::StillWorking => {}
         }
 
         let mut appended = Vec::with_capacity(entries.len());

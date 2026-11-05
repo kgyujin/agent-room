@@ -139,21 +139,25 @@ def desk_screens(i, scr):
         ou, ov = (W - gw) // 2, (H - gh) // 2
         return lambda u, v: col if 0 <= v - ov < gh and 0 <= u - ou < gw and rows[v - ov][u - ou] == 'x' else bg
 
+    # paper on the drawing board: pencil and ink marks instead of a screen
     C2 = office.C
-    out = {'off': lambda u, v: C2['scr_l'] if u + v < 3 else C2['scr'],
-           'idle': glyph(['xx'], C2['code1'], C2['scr_l']),
-           'err': glyph(['x.x', '.x.', 'x.x'], C2['led_r'], shade(C2['led_r'], 0.4)),
-           'ok': glyph(['..x', 'xx.', '.x.'], C2['led_g'], shade(C2['led_g'], 0.35)),
-           'wait': glyph(['x', 'x', '.', 'x'], C2['led_a'], shade(C2['led_a'], 0.4))}
+    paper, ink, fold = C2['paper'], C2['nv_d'], C2['cr_d']
+    out = {'off': lambda u, v: fold if u + v < 2 else paper,
+           'idle': glyph(['x.x', 'xxx', '.x.'], C2['fl_r'], paper),
+           'err': glyph(['x.x', '.x.', 'x.x'], C2['fl_rd'], paper),
+           'ok': glyph(['..x', 'x.x', '.x.'], C2['g_d'], paper),
+           'wait': glyph(['x', 'x', '.', 'x'], C2['gold_d'], paper)}
+    # writing: lines of pencil and ink appear one by one, a little more each frame
     for f in range(4):
-        def code(u, v, f=f):
-            line = v + f
-            ind = 1 + (line * 7) % 3
-            ln = 3 + (line * 5) % 7
-            return (C2['code1'], C2['code2'], C2['code3'])[line % 3] if ind <= u < ind + ln else C2['scr']
-        out[f'code{f}'] = code
+        def write(u, v, f=f):
+            if v % 2 == 1 or v // 2 > f:
+                return paper
+            ind = 1 + (v * 7) % 3
+            ln = 3 + (v * 5) % 7
+            return (ink, C2['w_dd'], C2['fl_rd'])[(v // 2) % 3] if ind <= u < ind + ln else paper
+        out[f'code{f}'] = write
     for f in range(2):
-        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and (v + f) % 2 == 0 else C2['paper']
+        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and (v + f) % 2 == 0 else paper
     return {f'scr{i}_{k}': face_frames(poly, to_uv, fn) for k, fn in out.items()}
 
 
@@ -179,14 +183,15 @@ def rig_overlays(panel):
     for name, cols in states.items():
         fill = {'rig_idle': 0, 'rig_run0': 1, 'rig_run1': 2, 'rig_run2': 3, 'rig_pass': 3, 'rig_fail': 3}[name]
         bar = C2['led_r'] if name == 'rig_fail' else C2['led_g']
+        slate, dark = C2['w_dd'], C2['w_d']
 
         def fn(u, v, cols=cols, fill=fill, bar=bar):
             k = (u - 1) // 4
             if 1 <= v <= 2 and 0 <= k < 3 and (u - 1) % 4 < 2:
-                return cols[k]
+                return dark if cols[k] == C2['led_off'] else cols[k]
             if v == 4 and 0 <= k < 3 and (u - 1) % 4 < 3:
-                return bar if k < fill else C2['led_off']
-            return C2['scr']
+                return bar if k < fill else dark
+            return slate
         out[name] = face_frames(poly, to_uv, fn)
     return out
 
@@ -248,6 +253,10 @@ def main():
         'edges': edges,
         'steam': list(tea),
         'windows': office.window_boxes(),
+        # wall of each window ('L' = plane x = 0, 'R' = plane y = 0) and the screen point of the back floor corner,
+        # so the app can place the view outside at a fixed height along each wall
+        'windowWalls': [k[0] for k in sorted(office.WINDOW_PX)],
+        'wallOrigin': [office.OX, office.OY],
     }
     with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
         json.dump({'frames': frames, 'layout': layout}, f, separators=(',', ':'))

@@ -289,7 +289,8 @@ def wbox(s, x, y, z, lx, ly, lz, top, left, right):
 
 
 def desk(i, x, y):
-    """wooden desk with a cream CRT facing +y (towards the sitter, who faces the back wall)"""
+    """wooden desk with a paper drawing board facing +y (towards the sitter, who faces the back wall);
+    the critters write and draw on paper, no computers"""
     s = piece(f'desk{i}', (x + 14, y + 7))
     # legs
     for (lx, ly) in ((0, 0), (12, 0), (0, 5), (12, 5)):
@@ -298,18 +299,24 @@ def desk(i, x, y):
     wbox(s, x - 1, y - 1, 7, 16, 9, 2, lambda px, py: C['w_l'] if (py + px // 6) % 4 else C['w'], C['w_d'], C['w'])
     # drawer block on the right
     wbox(s, x + 10, y, 2, 4, 7, 5, C['w'], lambda px, py: C['w_d'] if py % 3 else C['w_dd'], C['w'])
-    # monitor on a little stand; the screen is on its +y face, towards the sitter
-    wbox(s, x + 5, y + 2, 9, 2, 2, 1.5, C['iron'], C['iron_d'], C['iron'])
-    wbox(s, x + 2, y + 2, 10.5, 8, 2, 7, C['cr_l'], C['cr'], C['cr_d'])
-    s.poly(screen_poly(x + 2, y + 4, 10.5, 8, 7), lambda px, py: C['scr_l'] if (px + py) % 9 == 0 else C['scr'])
-    # keyboard + mug + paper stack
-    wbox(s, x + 3, y + 5, 9, 6, 2, 0.6, C['cr'], C['cr_d'], C['cr_d'])
+    # drawing board on two little feet; the paper is on its +y face, towards the sitter
+    for fx in (x + 3, x + 8):
+        wbox(s, fx, y + 2.5, 9, 1, 1.5, 1.5, C['w_d'], C['w_dd'], C['w_d'])
+    wbox(s, x + 2, y + 2, 10.5, 8, 2, 7, C['w_l'], C['w'], C['w_d'])
+    s.poly(screen_poly(x + 2, y + 4, 10.5, 8, 7), C['paper'])
+    # open notebook + pencil, mug, acorn
+    wbox(s, x + 3, y + 5, 9, 6, 2, 0.6, C['paper'], C['cr_d'], C['cr_d'])
+    for k in range(3, 9, 2):
+        px, py = P(x + 3 + k / 2 + 1, y + 6, 9.6)
+        s.put(px, py, C['cr_d'])
+    wbox(s, x + 9.5, y + 5.5, 9, 1, 1, 1, C['fl_y'], C['gold_d'], C['fl_y'])
     wbox(s, x + 11, y + 4, 9, 2, 2, 2, C['fl_w'], C['fl_r'], C['fl_rd'])
-    wbox(s, x + 0, y + 4, 9, 2, 3, 1, C['paper'], C['cr_d'], C['cr'])
+    wbox(s, x + 0.5, y + 4.5, 9, 1.5, 1.5, 1.5, C['w'], C['w_d'], C['w_dd'])
+    wbox(s, x + 0.5, y + 4.5, 10.5, 1.5, 1.5, 0.6, C['w_dd'], C['w_dd'], C['w_dd'])
     # stool for the sitter
     st = piece(f'stool{i}', (x + 8, y + 13))
     wbox(st, x + 6, y + 10, 0, 3, 3, 3, C['sofa_l'], C['sofa_d'], C['sofa'])
-    return (x + 2, y + 4, 10.5, 8, 7)   # screen: +y face of the monitor
+    return (x + 2, y + 4, 10.5, 8, 7)   # paper: +y face of the drawing board
 
 
 def screen_poly(x, y, z, lx, lz):
@@ -338,21 +345,24 @@ def bookshelf(x0, y0):
 
 
 def rig(y0):
-    """test machine against the left wall; status panel on the +x face"""
+    """wooden test contraption against the left wall: a cabinet with brass trim, a bell and a
+    hopper of acorns on top; firefly lamps and a slate on the +x face show the run"""
     s = piece('rig', (4, y0 + 10))
-    wbox(s, 0, y0, 0, 5, 10, 20, C['iron_l'], C['iron'], lambda px, py: C['iron_l'] if (px + py) % 7 else C['iron'])
-    wbox(s, 1, y0 + 2, 20, 2, 2, 3, C['led_off'], C['iron_d'], C['iron'])
-    wbox(s, 1, y0 + 6, 20, 3, 3, 1, C['iron_l'], C['iron_d'], C['iron'])
+    wbox(s, 0, y0, 0, 5, 10, 20, C['w_l'], C['w'], lambda px, py: C['w_l'] if (px // 2 + py) % 6 else C['w'])
+    wbox(s, 1, y0 + 2, 20, 3, 3, 3, C['w_hi'], C['w_d'], C['w'])                 # hopper
+    for (ay, az) in ((2.5, 23), (3.5, 23.5), (3, 24)):
+        wbox(s, 1.5, y0 + ay, az, 1, 1, 1, C['w_d'], C['w_dd'], C['w_d'])       # acorns
+    wbox(s, 2, y0 + 7, 20, 2, 2, 1, C['gold'], C['gold_d'], C['gold'])          # bell
+    wbox(s, 2.5, y0 + 7.5, 21, 1, 1, 1, C['gold'], C['gold_d'], C['gold'])
     for z in range(1, 20):
-        px, py = P(5, y0 + 1, z)
-        s.put(px, py, C['iron_d'])
-        px, py = P(5, y0 + 9, z)
-        s.put(px, py, C['iron_d'])
-    # vents
-    for z in (3, 5, 7):
-        for yy in range(int((y0 + 2) * 2), int((y0 + 8) * 2)):
+        for yy in (y0 + 1, y0 + 9):
+            px, py = P(5, yy, z)
+            s.put(px, py, C['gold_d'])
+    # drawer pulls under the slate
+    for z in (3, 6):
+        for yy in range(int((y0 + 4) * 2), int((y0 + 6) * 2)):
             px, py = P(5, yy / 2, z)
-            s.put(px, py, C['iron_d'])
+            s.put(px, py, C['gold'])
     return (5, y0 + 2, 11)     # panel origin on the +x face
 
 

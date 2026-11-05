@@ -102,6 +102,10 @@ struct Shared {
     demo_stop: Mutex<Option<Arc<AtomicBool>>>,
     /// (agent, window minutes) -> reset time already warned about (low remaining usage)
     limit_warned: Mutex<std::collections::HashMap<(String, u32), u64>>,
+    /// sessions that sent hook events (their logs are not followed)
+    hooked: Mutex<std::collections::HashSet<String>>,
+    /// sessions known only from their log: key -> last write seen
+    log_only: Mutex<std::collections::HashMap<String, u64>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -280,6 +284,9 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
     let pid = env.ppid.and_then(|p| shared.procs.lock().unwrap().resolve_agent_pid(p));
     for ev in normalize(&env) {
         let key = format!("{}:{}", ev.agent.as_str(), ev.session_id);
+        if shared.hooked.lock().unwrap().insert(key.clone()) {
+            shared.log_only.lock().unwrap().remove(&key);
+        }
         let update = {
             let mut store = shared.store.lock().unwrap();
             let u = store.apply(ev);
@@ -293,6 +300,74 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
         if let Some(u) = update {
             publish(app, u);
         }
+    }
+}
+
+/// Sessions that only show up in the agents' own logs: started before Agent Room, run by the
+/// desktop apps, or by a schedule (Codex automations, `codex exec`). A log being written means the
+/// agent is working; a quiet log means its turn is over; long quiet ends the session. Only the log
+/// files' times and their `cwd` are read (see agent_room_core::logs).
+fn follow_logs(app: &AppHandle) {
+    use agent_room_core::logs;
+    use agent_room_core::model::{AgentKind, EvKind};
+    const FIND_WITHIN: u64 = 10 * 60_000;
+    const TURN_OVER_AFTER: u64 = 60_000;
+    const END_AFTER: u64 = 30 * 60_000;
+    let shared = app.state::<Shared>();
+    let now = now_ms();
+    let found = logs::recent(&logs::LogDirs::from_env(), now, FIND_WITHIN);
+    let ev = |agent: AgentKind, id: &str, ts: u64, cwd: Option<String>, kind: EvKind| NormEvent {
+        agent, session_id: id.to_string(), ts, cwd, model: None, transcript_path: None, permission_mode: None, kind,
+    };
+    let mut out = Vec::new();
+    {
+        let hooked = shared.hooked.lock().unwrap();
+        let mut known = shared.log_only.lock().unwrap();
+        let mut store = shared.store.lock().unwrap();
+        for f in found {
+            let key = format!("{}:{}", f.agent.as_str(), f.session_id);
+            if hooked.contains(&key) {
+                continue;
+            }
+            let state = store.snapshots().into_iter().find(|s| s.key == key).map(|s| s.state);
+            let last = known.get(&key).copied();
+            let written = last.is_none_or(|l| f.modified > l);
+            if !written {
+                continue;
+            }
+            known.insert(key.clone(), f.modified);
+            // new, or back after it ended: the session is there
+            if matches!(state, None | Some(AgentState::Disconnected)) {
+                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, f.cwd.clone(), EvKind::SessionStart { source: Some("log".into()) })));
+            }
+            // the log is being written: the agent is working (a log first seen counts if it is fresh)
+            let busy = matches!(state, Some(st) if !matches!(st, AgentState::Idle | AgentState::Completed | AgentState::Disconnected));
+            if busy {
+                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::StillWorking)));
+            } else if last.is_some() || now.saturating_sub(f.modified) < TURN_OVER_AFTER {
+                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::PromptSubmitted)));
+            }
+        }
+        // quiet logs: the turn is over, and after a long while the session is gone
+        // (the key stays in `known` after the session ends, so an unchanged old log never brings it back)
+        for (key, &m) in known.iter() {
+            let Some(snap) = store.snapshots().into_iter().find(|s| &s.key == key) else { continue };
+            if snap.state == AgentState::Disconnected {
+                continue;
+            }
+            let (agent, id) = (snap.agent, snap.session_id.clone());
+            let quiet = now.saturating_sub(m);
+            if quiet > END_AFTER {
+                out.extend(store.apply(ev(agent, &id, now, None, EvKind::SessionEnd { reason: Some("log quiet".into()) })));
+            } else if quiet > TURN_OVER_AFTER && !matches!(snap.state, AgentState::Idle | AgentState::Completed) {
+                out.extend(store.apply(ev(agent, &id, m, None, EvKind::TurnComplete)));
+            }
+        }
+    }
+    for mut u in out {
+        // guessed from file times only: no notifications for these
+        u.notice = None;
+        publish(app, u);
     }
 }
 
@@ -538,31 +613,55 @@ fn mac_notch() -> Option<(f64, f64)> {
     }
 }
 
-/// Tells the main window and the island when the pointer is over them. macOS sends no hover
-/// events to a window of an app that is not frontmost, so without this the island only opened
-/// and the room-only controls only showed after a click. Only the pointer position is read.
+/// Tells the main window and the island where the pointer is. macOS sends no hover events to a
+/// window of an app that is not frontmost, so without this the island only opened and the
+/// room-only controls only showed after a click. Only the pointer position is read.
+/// Each window gets its own event name: a page's `listen` hears events sent to any window.
+/// "hover-island": true / false. "hover-main": the pointer in window (CSS px) or null outside.
 fn watch_hover(app: AppHandle) {
     let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
-        let mut last: std::collections::HashMap<&str, bool> = Default::default();
+        let mut last_island: Option<bool> = None;
+        let mut last_main: Option<Option<(i32, i32)>> = None;
         loop {
             std::thread::sleep(Duration::from_millis(120));
             let Ok(c) = app.cursor_position() else { continue };
-            for label in ["main", "island"] {
-                let inside = app.get_webview_window(label).is_some_and(|w| {
-                    w.is_visible().unwrap_or(false)
-                        && match (w.outer_position(), w.outer_size()) {
-                            (Ok(p), Ok(s)) => {
-                                c.x >= p.x as f64 && c.y >= p.y as f64 && c.x < p.x as f64 + s.width as f64 && c.y < p.y as f64 + s.height as f64
-                            }
-                            _ => false,
-                        }
-                });
-                if last.insert(label, inside) != Some(inside) {
-                    let _ = app.emit_to(label, "hover", inside);
+            let at = |label: &str| -> Option<(i32, i32)> {
+                let w = app.get_webview_window(label)?;
+                if !w.is_visible().unwrap_or(false) {
+                    return None;
                 }
+                let (p, s, k) = (w.inner_position().ok()?, w.inner_size().ok()?, w.scale_factor().ok()?);
+                let (x, y) = (c.x - p.x as f64, c.y - p.y as f64);
+                (x >= 0.0 && y >= 0.0 && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
+            };
+            let island = at("island").is_some();
+            if last_island != Some(island) {
+                last_island = Some(island);
+                let _ = app.emit_to("island", "hover-island", island);
+            }
+            let main = at("main");
+            if last_main != Some(main) {
+                last_main = Some(main);
+                let _ = app.emit_to("main", "hover-main", main);
             }
         }
     });
+}
+
+/// Room-only mode keeps Agent Room out of the Dock and the ⌘Tab switcher, so moving the little
+/// room around or switching apps never brings the app forward. Window mode puts it back.
+#[tauri::command]
+fn set_room_only(app: AppHandle, on: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = if on { tauri::ActivationPolicy::Accessory } else { tauri::ActivationPolicy::Regular };
+        let _ = app.set_activation_policy(policy);
+        if !on {
+            show_main(&app);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, on);
 }
 
 /// The island grows when hovered/clicked and shrinks back; it stays centred at the top.
@@ -761,7 +860,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size
+            tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -796,6 +895,7 @@ pub fn run() {
                         publish(&h, u);
                     }
                     if n % 5 == 0 {
+                        follow_logs(&h);
                         let d = shared.procs.lock().unwrap().scan_agents();
                         let changed = { let mut cur = shared.detected.lock().unwrap(); let c = *cur != d; *cur = d; c };
                         if changed {

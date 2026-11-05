@@ -15,6 +15,7 @@ import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
+import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
@@ -106,7 +107,7 @@ export default function App() {
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', () => setSettingsOpen('look')),
-        await backend.onTrayEvent('hover', (v) => setHovered(v === true)),
+        await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
     })();
     return () => unsub.forEach((u) => u());
@@ -247,8 +248,9 @@ export default function App() {
     win().then((w) => w?.setAlwaysOnTop(settings.alwaysOnTop));
   }, [ready]); // apply saved always-on-top once
 
-  // room-only mode: a borderless transparent window that floats just the room on the desktop
-  const windowSize = useRef<[number, number]>([980, 700]);
+  // room-only mode: a borderless transparent window that floats just the room on the desktop.
+  // Leaving it puts the window back where it was; inside it the window stays on its screen.
+  const windowFrame = useRef<Rect | null>(null);
   const toggleMini = async (force?: boolean) => {
     const next = force ?? !mini;
     if (next === mini) return;
@@ -256,20 +258,59 @@ export default function App() {
     document.documentElement.classList.toggle('room-only', next);
     if (sceneRef.current) sceneRef.current.roomOnly = next;
     setMini(next);
+    setHovered(false);
+    void backend.setRoomOnly(next);
     if (w) {
-      const { LogicalSize } = await import('@tauri-apps/api/dpi');
       if (await w.isFullscreen()) await w.setFullscreen(false);
-      if (next) {
-        const sz = (await w.innerSize()).toLogical(await w.scaleFactor());
-        windowSize.current = [sz.width, sz.height];
-      }
+      if (next) windowFrame.current = await windowRect();
       await w.setDecorations(!next);
       // macOS: keep the grey title bar hidden (traffic lights float over the app) when decorations return
       if (!next && IS_MAC) await w.setTitleBarStyle('overlay').catch(() => undefined);
       await w.setShadow(!next);
-      await w.setSize(next ? new LogicalSize(440, 360) : new LogicalSize(...windowSize.current));
+      if (next) await resizeOnScreen(440, 360);
+      else await placeOnScreen(windowFrame.current ?? { x: 80, y: 80, w: 980, h: 700 });
     }
   };
+
+  // room-only: the controls show while the pointer is over the room itself (or the buttons),
+  // not over the clear part of the window
+  const pointAt = useRef<(p: [number, number] | null) => void>(() => undefined);
+  pointAt.current = (p) => {
+    if (!p) return setHovered(false);
+    if (!mini) return setHovered(true);
+    const t = toolbarRef.current?.getBoundingClientRect();
+    const onBar = !!t && p[0] >= t.left - 8 && p[0] <= t.right + 8 && p[1] >= t.top - 8 && p[1] <= t.bottom + 8;
+    setHovered(onBar || !!sceneRef.current?.hitRoom(p[0], p[1]));
+  };
+
+  // room-only: a window dragged partly off the screen slides back once it is let go
+  useEffect(() => {
+    if (!mini) return;
+    let off: (() => void) | undefined;
+    let t = 0;
+    void win().then(async (w) => {
+      if (!w) return;
+      off = await w.onMoved(() => { clearTimeout(t); t = window.setTimeout(() => void keepOnScreen(), 400); });
+    });
+    return () => { clearTimeout(t); off?.(); };
+  }, [mini]);
+
+  // room-only: settings get a window large enough for them, and the room size comes back after
+  const beforeSettings = useRef<Rect | null>(null);
+  useEffect(() => {
+    if (!IN_TAURI) return;
+    if (mini && settingsOpen && !beforeSettings.current) {
+      void windowRect().then((r) => {
+        if (!r) return;
+        beforeSettings.current = r;
+        void resizeOnScreen(Math.max(r.w, 720), Math.max(r.h, 600));
+      });
+    } else if (!settingsOpen && beforeSettings.current) {
+      const r = beforeSettings.current;
+      beforeSettings.current = null;
+      if (mini) void placeOnScreen(r);
+    } else if (!mini) beforeSettings.current = null;
+  }, [settingsOpen, mini]);
   const toggleRef = useRef(toggleMini);
   toggleRef.current = toggleMini;
 
@@ -304,13 +345,12 @@ export default function App() {
       try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
       return;
     }
-    const w = await win();
-    if (!w) return;
-    const { LogicalSize } = await import('@tauri-apps/api/dpi');
-    const sz = (await w.innerSize()).toLogical(await w.scaleFactor());
+    const r = await windowRect();
+    if (!r) return;
     const k = dir > 0 ? 1.15 : 1 / 1.15;
-    const nw = Math.max(300, Math.min(1600, Math.round(sz.width * k)));
-    await w.setSize(new LogicalSize(nw, Math.max(260, Math.round((sz.height * nw) / sz.width))));
+    const nw = Math.max(300, Math.min(1600, Math.round(r.w * k)));
+    // grows from the corner it sits in, so a room in a screen corner stays fully visible
+    await resizeOnScreen(nw, Math.max(260, Math.round((r.h * nw) / r.w)));
   };
 
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -360,7 +400,8 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}>
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
+      onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
