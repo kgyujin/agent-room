@@ -10,11 +10,15 @@ export function useLive() {
   const [sessions, setSessions] = useState<Record<string, Snapshot>>({});
   const [settings, setSettings] = useState<Settings | null>(null);
   const [now, setNow] = useState(Date.now());
+  // running agent processes; an agent that has not done anything since the app started has no session yet
+  const [running, setRunning] = useState(0);
   useEffect(() => {
     const unsub: (() => void)[] = [];
     (async () => {
       const [ov, st] = await Promise.all([backend.overview(), backend.getSettings()]);
       setSessions(Object.fromEntries(ov.sessions.map((s) => [s.key, s])));
+      setRunning(ov.detected.claude + ov.detected.codex);
+      unsub.push(await backend.onDetected((d) => setRunning(d.claude + d.codex)));
       const apply = (s: Settings) => {
         setSettings(s);
         applyUiTheme(uiTheme(s.uiTheme));
@@ -44,5 +48,5 @@ export function useLive() {
       .sort((a, b) => RANK[a.state] - RANK[b.state] || b.lastEventAt - a.lastEventAt),
     [sessions],
   );
-  return { list, settings, now };
+  return { list, settings, now, running };
 }

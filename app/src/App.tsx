@@ -5,7 +5,7 @@ import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
-import { Hud, MiniPill } from './ui/Hud';
+import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
@@ -43,6 +43,9 @@ export default function App() {
   const [pinned, setPinned] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [mini, setMini] = useState(false);
+  // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
+  // so the room-only controls would otherwise only appear after a click
+  const [hovered, setHovered] = useState(false);
   // update available on GitHub Releases (checked at launch and every 6 hours)
   const [update, setUpdate] = useState<AppUpdate | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
@@ -103,6 +106,7 @@ export default function App() {
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', () => setSettingsOpen('look')),
+        await backend.onTrayEvent('hover', (v) => setHovered(v === true)),
       );
     })();
     return () => unsub.forEach((u) => u());
@@ -218,6 +222,7 @@ export default function App() {
     document.documentElement.classList.remove('font-mixed', 'font-system', 'font-pixel');
     document.documentElement.classList.add(`font-${settings.font ?? 'mixed'}`);
     sceneRef.current?.setTheme(settings.theme);
+    if (sceneRef.current) sceneRef.current.energy = settings.petEnergy ?? 'normal';
     const snd = soundRef.current;
     snd.sfxOn = settings.sfx;
     snd.setBgm(settings.bgm);
@@ -268,13 +273,13 @@ export default function App() {
   const toggleRef = useRef(toggleMini);
   toggleRef.current = toggleMini;
 
-  // in room-only mode the room itself is the drag handle (except the character, which opens details);
-  // in window mode dragging pans the room while it is zoomed in
+  // in room-only mode the whole room, pets included, is the drag handle (double-click a pet for its
+  // details); in window mode dragging pans the room while it is zoomed in
   const onCanvasDown = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
+    if (mini) return void (await win())?.startDragging();
     const r = e.currentTarget.getBoundingClientRect();
     if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
-    if (mini) return void (await win())?.startDragging();
     let last = [e.clientX, e.clientY];
     const move = (ev: MouseEvent) => {
       sceneRef.current?.panBy(ev.clientX - last[0], ev.clientY - last[1]);
@@ -310,7 +315,12 @@ export default function App() {
 
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    if (mini || sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
+    const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
+    if (mini) {
+      if (hit && sessions[hit]) openDetails(hit);
+      return;
+    }
+    if (hit) return;
     sceneRef.current?.resetZoom();
     try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
   };
@@ -322,16 +332,19 @@ export default function App() {
     else void document.exitFullscreen?.();
   };
 
+  const openDetails = (key: string) => {
+    setPinned(key);
+    setDetailTab('session');
+    if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
+    if (mini) void toggleMini(false);
+  };
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     soundRef.current.unlock();
+    // room-only: a click (or the end of a drag) never pops the window open
+    if (mini) return;
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
-    if (hit && sessions[hit]) {
-      setPinned(hit);
-      setDetailTab('session');
-      if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
-      if (mini) void toggleMini(false);
-    }
+    if (hit && sessions[hit]) openDetails(hit);
   };
 
   const toggleDemo = async () => {
@@ -347,7 +360,7 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}>
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
@@ -385,8 +398,6 @@ export default function App() {
           )}
         </div>
       )}
-
-      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} onConnect={() => setSettingsOpen('agents')} />}
 
       {panelOpen && selected && (
         <DetailPanel

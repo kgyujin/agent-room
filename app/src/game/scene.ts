@@ -5,7 +5,7 @@
 import type { Snapshot } from '../types';
 import { Actor } from './actor';
 import type { Atlas } from './assets';
-import { behaviorFor, REST_KEYS, restBehavior, type Behavior } from './behaviors';
+import { behaviorFor, NAP_AFTER, REST_HOLD, REST_POOL, restBehavior, type Behavior, type Energy } from './behaviors';
 import type { Skin } from './skin';
 import { lightAt, paintSky, type Box } from './sky';
 
@@ -16,7 +16,7 @@ export type Theme = 'day' | 'sunset' | 'night' | 'auto';
 interface Spark { x: number; y: number; t: number }
 
 /** what a shared spot falls back to when another critter is already there */
-const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center']);
+const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center', 'coffee', 'beanbag']);
 
 interface Mate {
   key: string;
@@ -27,7 +27,8 @@ interface Mate {
   skin: string;
   sparks: Spark[];
   restVariant: string;
-  restSince: number;
+  /** when the current rest variant ends */
+  restUntil: number;
 }
 
 export interface Anchor { key: string; agent: string; x: number; y: number }
@@ -50,6 +51,8 @@ export class Scene {
   backdrop: string | null = null;
   /** room-only mode: transparent around the room */
   roomOnly = false;
+  /** how much idle pets roam (setting) */
+  energy: Energy = 'normal';
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
   /** preferred skin order per agent ('claude', 'codex', 'generic'); first unused one wins */
@@ -100,7 +103,7 @@ export class Scene {
         const slot = order.find((i) => !used.has(i)) ?? 0;
         const agent = s ? (s.agent === 'demo' ? 'generic' : s.agent) : 'generic';
         const actor = new Actor(agent, this.atlas.layout, `sofa${slot}`);
-        m = { key: k, agent, slot, actor, session: s, skin: '', sparks: [], restVariant: REST_KEYS[slot % REST_KEYS.length], restSince: Date.now() };
+        m = { key: k, agent, slot, actor, session: s, skin: '', sparks: [], restVariant: 'tea', restUntil: 0 };
         this.mates.push(m);
       }
       m.session = s;
@@ -134,15 +137,26 @@ export class Scene {
 
   private applyBehavior(m: Mate) {
     const now = Date.now();
-    if (now - m.restSince > 30_000 + Math.random() * 20_000) {
-      m.restVariant = REST_KEYS[Math.floor(Math.random() * REST_KEYS.length)];
-      m.restSince = now;
+    if (now >= m.restUntil) {
+      m.restVariant = this.pickRest(m);
+      const [lo, hi] = REST_HOLD[this.energy];
+      m.restUntil = now + lo + Math.random() * (hi - lo);
     }
     const s = m.session;
-    const b: Behavior = s ? behaviorFor(s, now, m.restVariant) : restBehavior(m.restVariant, true);
+    // with no session at all, the one critter in the room just idles (and dozes off when calm)
+    const b: Behavior = s ? behaviorFor(s, now, m.restVariant, NAP_AFTER[this.energy]) : restBehavior(m.restVariant, this.energy === 'calm');
     const prev = m.actor.current?.key;
     m.actor.setBehavior({ ...b, spot: b.spot ? this.spotFor(m, b.spot) : '' }, now);
     if (prev !== b.key && b.fx === 'sparkle') this.burst(m);
+  }
+
+  /** a new idle activity, different from the last; 'stroll' becomes a random free floor point */
+  private pickRest(m: Mate): string {
+    const pool = REST_POOL[this.energy].filter((v) => v !== m.restVariant.split(':')[0] || v === 'stroll');
+    const v = pool[Math.floor(Math.random() * pool.length)];
+    if (v !== 'stroll') return v;
+    const floor = Object.keys(this.atlas.layout.nodes).filter((k) => k.startsWith('g'));
+    return `stroll:${floor[Math.floor(Math.random() * floor.length)]}`;
   }
 
   /** frames per second target; 0 pauses rendering entirely */

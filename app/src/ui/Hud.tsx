@@ -1,6 +1,6 @@
 import type { RateLimits, Snapshot } from '../types';
 import { activityLabel, AGENT_NAME, fmtAgo, fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
-import { AgentMark, Icon } from './icons';
+import { AgentMark } from './icons';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
   if (!s.plan.length) return null;
@@ -92,33 +92,4 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
       </div>
     );
   return null;
-}
-
-export function MiniPill({ s, now, onExpand, onConnect }: { s: Snapshot | null; now: number; onExpand?: () => void; onConnect?: () => void }) {
-  const prog = s ? progressOf(s) : null;
-  return (
-    <div className="mini-pill">
-      {s ? (
-        <>
-          <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-          <span className={`tone-${stateTone(s)} mini-state`}>{stateLabel(s)}</span>
-          {s.detail && s.connection === 'live' && <span className="mini-detail">{s.detail}</span>}
-          <span className="mini-time">
-            {prog ? `${prog.done}/${prog.total} · ` : ''}
-            {s.turnStartedAt ? fmtDuration((s.turnEndedAt && s.state === 'completed' ? s.turnEndedAt : now) - s.turnStartedAt) : ''}
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="mini-state">연결된 에이전트 없음</span>
-          {onConnect && <button className="btn small primary" onClick={onConnect}>연결하기</button>}
-        </>
-      )}
-      {onExpand && (
-        <button className="tool" onClick={onExpand} title="창으로 보기" aria-label="창으로 보기">
-          <Icon name="expand" />
-        </button>
-      )}
-    </div>
-  );
 }

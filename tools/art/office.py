@@ -453,6 +453,33 @@ def table(x, y):
     return P(x + 3, y + 3, 8)
 
 
+def coffee(x, y):
+    """wooden cart with a coffee machine and two cups, against the left wall"""
+    s = piece('coffee', (x + 5, y + 7))
+    for (lx, ly) in ((0, 0), (3, 0), (0, 5), (3, 5)):
+        wbox(s, x + lx, y + ly, 0, 1, 1, 6, C['w_d'], C['w_dd'], C['w_d'])
+    wbox(s, x, y, 2, 4, 6, 1, C['w'], C['w_d'], C['w'])                          # lower shelf
+    wbox(s, x + 1, y + 1, 3, 1.5, 1.5, 2, C['book3'], C['gold_d'], C['book3'])  # bean jars
+    wbox(s, x + 1, y + 3.5, 3, 1.5, 1.5, 2, C['book1'], C['fl_rd'], C['book1'])
+    wbox(s, x - 0.5, y - 0.5, 6, 5, 7, 1.5, C['w_l'], C['w_d'], C['w'])         # top
+    wbox(s, x + 0.5, y + 0.5, 7.5, 3, 3, 6, C['iron_l'], C['iron'], C['iron_d'])  # machine
+    wbox(s, x + 0.5, y + 0.5, 13.5, 3, 3, 1, C['iron_d'], C['iron_d'], C['iron_d'])
+    px, py = P(x + 3.5, y + 2, 11)
+    s.put(px, py, C['led_g'])
+    for cy in (4, 5.5):
+        wbox(s, x + 1.5, y + cy, 7.5, 1, 1, 1.5, C['fl_w'], C['cr'], C['cr_d'])  # cups
+    return s
+
+
+def beanbag(x, y):
+    """mustard beanbag facing +x; the critter sits in its hollow"""
+    s = piece('beanbag', (x + 5, y + 5))
+    wbox(s, x, y, 0, 5, 5, 2, C['gold'], C['gold_d'], C['gold_d'])
+    wbox(s, x + 0.5, y + 0.5, 2, 4, 4, 1, C['fl_y'], C['gold_d'], C['gold'])
+    wbox(s, x, y + 0.5, 3, 1.5, 4, 3, C['fl_y'], C['gold_d'], C['gold'])          # back rest
+    return s
+
+
 def rug(s, cx, cy, rx, ry):
     for py in range(SH):
         for px in range(SW):
@@ -469,6 +496,8 @@ DESK_ORDER = [1, 4, 2, 5, 0, 3]   # who sits where first: middle and right befor
 SHELF_Y = 6
 RIG_Y = 24
 LOUNGE = (68, 44)
+COFFEE = (1, 47)
+BEANBAG = (77, 31)
 
 
 def build():
@@ -497,6 +526,8 @@ def build():
     planter('flowerB', 1, 38, 'b', 5)
     planter('flowerC', X - 8, Y - 8, 'r', 6)
     planter('flowerD', 22, Y - 6, 'b', 5)
+    coffee(*COFFEE)
+    beanbag(*BEANBAG)
     lamp(X - 4, 26, 'lampA')
     lamp(13, Y - 3, 'lampB')
 
@@ -524,7 +555,8 @@ def walk_graph(screens):
         blocked.append((x + 4, y + 9, x + 11, y + 15))       # stool + the critter sitting on it
     blocked += [(0, SHELF_Y - 1, 6, SHELF_Y + 15), (0, RIG_Y - 1, 7, RIG_Y + 11), (LOUNGE[0] - 1, LOUNGE[1] - 1, LOUNGE[0] + 9, LOUNGE[1] + 17),
                 (LOUNGE[0] + 10, LOUNGE[1] + 4, LOUNGE[0] + 18, LOUNGE[1] + 12), (X - 10, 1, X, 10), (0, Y - 9, 9, Y),
-                (X - 8, 35, X, 42), (0, 37, 7, 44), (X - 9, Y - 9, X, Y), (21, Y - 7, 28, Y), (X - 6, 24, X, 30), (24, 14, 30, 20)]
+                (X - 8, 35, X, 42), (0, 37, 7, 44), (X - 9, Y - 9, X, Y), (21, Y - 7, 28, Y), (X - 6, 24, X, 30), (24, 14, 30, 20),
+                (COFFEE[0] - 1, COFFEE[1] - 1, COFFEE[0] + 5, COFFEE[1] + 7), (BEANBAG[0] - 1, BEANBAG[1] - 1, BEANBAG[0] + 5, BEANBAG[1] + 5)]
 
     def free(x, y):
         if not (2 <= x <= X - 2 and 2 <= y <= Y - 2):
@@ -565,11 +597,15 @@ def walk_graph(screens):
     spot("bench", 12, RIG_Y + 5, "ul")
     spot('board', 82, 8, 'ur')
     for k, dy in enumerate((4, 11)):
-        spot(f'sofa{k}', LOUNGE[0] + 5, LOUNGE[1] + dy + 1, 'dr', z=4, sit=True)
+        # drawn after the sofa: sitting on it, not behind it
+        spot(f'sofa{k}', LOUNGE[0] + 5, LOUNGE[1] + dy + 1, 'dr', z=4, sit=True, depth=P(LOUNGE[0] + 8, LOUNGE[1] + 16)[1] + 1)
     spot('sofa2', LOUNGE[0] + 4, LOUNGE[1] + 20, 'dr')
     spot('sofa3', LOUNGE[0] + 13, LOUNGE[1] + 18, 'dl')
-    spot('sofa4', LOUNGE[0] - 2, LOUNGE[1] + 8, 'dr')
-    spot('sofa5', LOUNGE[0] + 12, LOUNGE[1] + 1, 'dl')
+    # standing spots beside the lounge, kept in front of the sofa and the table so nobody hides behind them
+    spot('sofa4', LOUNGE[0] + 20, LOUNGE[1] + 3, 'dl')
+    spot('sofa5', LOUNGE[0] + 20, LOUNGE[1] + 12, 'dl')
+    spot('coffee', COFFEE[0] + 9, COFFEE[1] + 4, 'ul')
+    spot('beanbag', BEANBAG[0] + 2.5, BEANBAG[1] + 2.5, 'dr', z=3, sit=True, depth=P(BEANBAG[0] + 5, BEANBAG[1] + 5)[1] + 1)
     spot('window', 8, 40, 'ul')
     spot('plantcorner', 44, 56, 'dr')
     spot('center', 26, 46, 'dr')

@@ -212,6 +212,10 @@ export class Actor {
     if (f === 'look_l') return [0, 0, 'l'];
     if (f === 'look_r') return [0, 0, 'r'];
     if (f === 'sit_sleep') return [0, Math.floor(Date.now() / 1600) % 2, null]; // slow breathing
+    if (f.startsWith('sip_')) return [0, f === 'sip_1' ? 1 : 0, null];          // tip the cup back
+    if (f.startsWith('dance_')) return [[-1, 0, 1, 0][k % 4], k % 2, k % 4 < 2 ? 'l' : 'r']; // sway side to side
+    if (f.startsWith('spin_')) return [0, 1, k % 2 ? 'l' : 'r'];              // twirl
+    if (f.startsWith('bounce_')) return [0, f === 'bounce_1' ? 3 : 1, null];  // little hop
     return [0, 0, null];                                                       // still: thinking, waiting, sitting
   }
 
