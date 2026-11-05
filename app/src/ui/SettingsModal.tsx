@@ -118,7 +118,8 @@ export function SettingsModal(props: {
               <Toggle label="승인·입력 요청 알림" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
               <Toggle label="남은 사용량 10% 이하 알림" v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
               <Toggle label="앱을 보고 있을 땐 알림 생략" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
-              <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
+              <Toggle label="항상 위에 표시 (기본 창)" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
+              <Toggle label="항상 위에 표시 (룸만 띄우기)" v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
               <AutostartToggle />
               <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
             </>

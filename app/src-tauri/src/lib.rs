@@ -39,6 +39,8 @@ pub struct Settings {
     pub stale_minutes: u32,
     pub panel_open: bool,
     pub always_on_top: bool,
+    /// always-on-top while in room-only mode (kept apart from the normal window's)
+    pub always_on_top_room: bool,
     /// remaining plan usage (5-hour / weekly) in the overview and HUD
     pub show_limits: bool,
     /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
@@ -76,6 +78,7 @@ impl Default for Settings {
             stale_minutes: 3,
             panel_open: true,
             always_on_top: false,
+            always_on_top_room: true,
             show_limits: true,
             characters: Default::default(),
             critter_colors: Default::default(),
