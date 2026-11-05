@@ -1,6 +1,6 @@
 // Dynamic-island style pill at the top centre of the screen. Collapsed it shows who is
 // working (left of the notch) and what needs the user (right of the notch); hovering (or a
-// click, by setting) opens the list. The window is resized from Rust so it stays centred.
+// click, by setting) opens the list. Its window stays one fixed size and lets clicks through outside the pill.
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
@@ -34,6 +34,13 @@ export function Island() {
   // so the shape change is animated instead of jumping with the window.
   const [open, setOpen] = useState(false);
   const [big, setBig] = useState(false);
+  // why the agent's app could not be brought up (shown for a few seconds in the open card)
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = window.setTimeout(() => setNote(null), 5000);
+    return () => clearTimeout(t);
+  }, [note]);
   const leave = useRef(0);
   const shrink = useRef(0);
   const todos = list.filter((s) => userTodo(s, now));
@@ -47,7 +54,7 @@ export function Island() {
   const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
   const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
-  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + Math.max(1, Math.min(list.length, 8)) * ROW + 12 + (limits.length ? 30 + limits.length * 22 : 0)];
+  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (limits.length ? 30 + limits.length * 22 : 0)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
@@ -119,6 +126,7 @@ export function Island() {
       </div>
       {open && (
         <ul className="is-list">
+          {note && <li className="is-empty is-note">{note}</li>}
           {list.length === 0 && <li className="is-empty">{running ? '에이전트가 실행 중이에요 · 다음 작업부터 여기에 보여요' : '진행 중인 작업이 없어요'}</li>}
           {list.slice(0, 8).map((s) => {
             const p = progressOf(s);
@@ -128,9 +136,10 @@ export function Island() {
               <li key={s.key}>
                 <button title={s.isDemo ? undefined : '눌러서 이 에이전트가 일하는 앱 열기'} onClick={(e) => {
                   e.stopPropagation();
-                  // jump to the agent's own app; the room shows the session when that app can't be found
+                  // jump to the agent's own app; when it can't be found, say why here instead of
+                  // bringing up the main window (which looked like a flash and no app)
                   if (s.isDemo) void backend.trayAction('select', s.key);
-                  else backend.focusAgent(s.key).catch(() => backend.trayAction('select', s.key));
+                  else backend.focusAgent(s.key).then(() => setNote(null), (err) => setNote(String(err)));
                 }}>
                   <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
                   <span className="is-proj">{s.project ?? '프로젝트'}</span>

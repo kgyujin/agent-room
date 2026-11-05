@@ -469,6 +469,7 @@ html.view-island, html.view-island body, html.view-island #root { background: tr
 .is-prog .bar { width: 44px; background: #2b2b33; }
 .is-time { font-size: 10.5px; color: #8a8790; font-variant-numeric: tabular-nums; width: 38px; text-align: right; }
 .is-empty { color: #8a8790; padding: 8px; }
+.is-note { color: #ffcf8a; }
 
 
 /* ------------------------------------------------ clean pass: calmer cards, readable type, clear hierarchy */
