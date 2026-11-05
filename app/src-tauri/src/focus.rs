@@ -11,6 +11,9 @@ pub enum Reach {
     Tab { app: &'static str, tty: String },
     /// an editor: open the session's folder, which raises the window that has it open
     Folder,
+    /// the Claude Code extension in an editor: raise the folder's window, then this link focuses
+    /// the session's tab (it resumes the session there when no tab has it)
+    EditorTab(String),
     /// the Codex app: its link to one chat
     Link(String),
     /// only the app itself (no way to point at the session)
@@ -30,9 +33,25 @@ pub fn reach(host: &Path, codex: bool, session_id: &str, tty: Option<String>, ha
         "iTerm" | "iTerm2" if tty.is_some() => Reach::Tab { app: "iTerm2", tty: tty.unwrap() },
         // thread ids are uuids; anything else is not put in a link
         "Codex" if codex && is_uuid(session_id) => Reach::Link(format!("codex://threads/{session_id}")),
+        // no terminal device: the extension's own panel, not a `claude` typed in the editor's terminal
+        _ if has_cwd && !codex && tty.is_none() && is_uuid(session_id) && editor_scheme(name).is_some() => {
+            Reach::EditorTab(format!("{}://anthropic.claude-code/open?session={session_id}", editor_scheme(name).unwrap()))
+        }
         _ if has_cwd && EDITORS.iter().any(|e| name.starts_with(e)) => Reach::Folder,
         _ => Reach::App,
     }
+}
+
+/// URL scheme of the editors that run VS Code extensions (the Claude Code extension's link handler)
+fn editor_scheme(app: &str) -> Option<&'static str> {
+    Some(match app {
+        "Visual Studio Code" => "vscode",
+        "Visual Studio Code - Insiders" | "Code - Insiders" => "vscode-insiders",
+        "VSCodium" => "vscodium",
+        "Cursor" => "cursor",
+        "Windsurf" => "windsurf",
+        _ => return None,
+    })
 }
 
 fn is_uuid(s: &str) -> bool {
@@ -102,6 +121,11 @@ mod tests {
         assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, true), Reach::App);
         assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, true), Reach::App);
         assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), true), Reach::App);
+        // the extension's panel has no terminal; `claude` in the editor's own terminal does
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, true), Reach::EditorTab(format!("vscode://anthropic.claude-code/open?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, id, None, true), Reach::EditorTab(format!("cursor://anthropic.claude-code/open?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, tty(), true), Reach::Folder);
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), true, id, None, true), Reach::Folder);
     }
 
     #[test]

@@ -6,8 +6,8 @@
 - idle: "z"s when nothing is going on
 - off: a faded grey shiba when no agent is connected
 
-36x36 colour images (not templates). macOS draws the menu bar icon 18pt tall, so on a Retina screen
-each art pixel of the 25x27 pet sprite is exactly one screen pixel. One colour per pixel.
+44 px tall colour images (not templates). The app shows them at 2 px per point (22pt tall, as tall
+as other apps' menu bar icons), so the shiba is drawn two pixels per art pixel. One colour per pixel.
 These are the bundled defaults; the app draws the same frames from the pet picked in settings
 (app/src/game/trayFrames.ts) and sends them to the menu bar, so keep the two in step.
 """
@@ -17,7 +17,9 @@ from PIL import Image
 HERE = os.path.dirname(__file__)
 OUT = os.path.join(HERE, '..', '..', 'app', 'src-tauri', 'icons')
 SHEET = os.path.join(HERE, '..', '..', 'app', 'public', 'assets', 'critters', 'shiba.png')
-N = 36
+N = 44                             # icon height in pixels
+PET_H = 42                         # the pet's height; two rows stay free for the hop
+G = 2                              # pixels per art pixel of the bubble and the "z"s
 W, H = 25, 27                      # sprite frame size; rows 4..25 hold the pet
 INK = (42, 34, 48, 255)            # the sprite's outline colour
 PAPER = (255, 255, 255, 255)
@@ -47,24 +49,31 @@ def frame(i):
     return Image.open(SHEET).convert('RGBA').crop((i * W, 0, (i + 1) * W, H))
 
 
-def canvas():
-    return Image.new('RGBA', (N, N), (0, 0, 0, 0))
-
-
-def put_pet(im, pet, dy=0):
-    im.alpha_composite(pet, (0, N - 26 + dy))   # feet on the bottom row
+def bounds(frames):
+    """box around the opaque pixels of all the frames"""
+    boxes = [f.getchannel('A').point(lambda a: 255 if a >= 128 else 0).getbbox() for f in frames]
+    return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
 
 
 def draw(im, rows, x0, y0, colours):
     for y, line in enumerate(rows):
         for x, ch in enumerate(line):
             if ch in colours:
-                im.putpixel((x0 + x, y0 + y), colours[ch])
+                for dy in range(G):
+                    for dx in range(G):
+                        im.putpixel((x0 + x * G + dx, y0 + y * G + dy), colours[ch])
 
 
-def bubble(im, glyph, colour):
-    draw(im, BUBBLE, N - 11, 0, {'o': INK, 'p': PAPER})
-    draw(im, glyph, N - 8, 3, {'x': colour})
+def grey(im):
+    """the faded look for "nothing connected": dark lines stay dark, the rest turns light grey"""
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if a:
+                l = (r * 30 + g * 59 + b * 11) / 100
+                v = 90 if l < 70 else 160 + round(l / 3)
+                px[x, y] = (v, v, v, a)
 
 
 def save(im, name):
@@ -73,39 +82,37 @@ def save(im, name):
 
 def main():
     front, step_l, step_r = frame(0), frame(1), frame(2)
+    x0, y0, x1, y1 = bounds([front, step_l, step_r])
+    k = min(2, PET_H / (y1 - y0))      # same as trayFrames.ts: doubled when that fits
+    pw, ph = max(1, round((x1 - x0) * k)), max(1, round((y1 - y0) * k))
+    n_w = max(N, pw + 14)
+
+    def make(pet, dy=0, extra=None):
+        im = Image.new('RGBA', (n_w, N), (0, 0, 0, 0))
+        im.alpha_composite(pet.crop((x0, y0, x1, y1)).resize((pw, ph), Image.NEAREST), (0, N - ph + dy * 2))
+        if extra:
+            extra(im)
+        return im
+
+    def bubble(glyph, colour):
+        def f(im):
+            draw(im, BUBBLE, n_w - 11 * G, 0, {'o': INK, 'p': PAPER})
+            draw(im, glyph, n_w - 8 * G, 3 * G, {'x': colour})
+        return f
+
+    def zs(im):
+        draw(im, Z_BIG, n_w - 6 * G, 0, {'o': INK, 'x': PAPER})
+        draw(im, Z_SMALL, n_w - 12 * G, 6 * G, {'o': INK, 'x': PAPER})
+
     # waddle: left step, hop, right step, hop
     for i, (pet, dy) in enumerate(((step_l, 0), (front, -1), (step_r, 0), (front, -1))):
-        im = canvas()
-        put_pet(im, pet, dy)
-        save(im, f'run{i}')
-
-    im = canvas()
-    put_pet(im, front)
-    bubble(im, EXCLAIM, (232, 85, 61, 255))
-    save(im, 'wait')
-
-    im = canvas()
-    put_pet(im, front)
-    bubble(im, CHECK, (61, 154, 80, 255))
-    save(im, 'done')
-
-    im = canvas()
-    put_pet(im, front)
-    draw(im, Z_BIG, N - 6, 0, {'o': INK, 'x': PAPER})
-    draw(im, Z_SMALL, N - 12, 6, {'o': INK, 'x': PAPER})
-    save(im, 'idle')
-
-    # off: the shiba in faded greys
-    im = canvas()
-    pet = front.copy()
-    for y in range(H):
-        for x in range(W):
-            p = pet.getpixel((x, y))
-            if p[3]:
-                v = 90 if p == INK else 160 + (p[0] * 30 + p[1] * 59 + p[2] * 11) // 300
-                pet.putpixel((x, y), (v, v, v, 255))
-    put_pet(im, pet)
-    save(im, 'off')
+        save(make(pet, dy), f'run{i}')
+    save(make(front, 0, bubble(EXCLAIM, (232, 85, 61, 255))), 'wait')
+    save(make(front, 0, bubble(CHECK, (61, 154, 80, 255))), 'done')
+    save(make(front, 0, zs), 'idle')
+    off = make(front)
+    grey(off)
+    save(off, 'off')
 
 
 if __name__ == '__main__':

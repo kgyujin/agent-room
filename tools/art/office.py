@@ -135,10 +135,14 @@ def window_color(u, z, u0, w, z0, h):
     zt = z0 + h - r
     inside = (u0 <= u < u0 + w and z0 <= z < zt) or (z >= zt and math.hypot(u - cx, z - zt) < r)
     frame = (u0 - 1 <= u < u0 + w + 1 and z0 - 1 <= z < zt) or (z >= zt and math.hypot(u - cx, z - zt) < r + 1)
+    # stone sill under the window: a lit top and a shadowed front, a little wider than the frame
+    if u0 - 2 <= u < u0 + w + 2 and z0 - 3 <= z < z0 - 1:
+        return C['st_hi'] if z >= z0 - 2 else C['st_dd']
     if not frame:
         return None
     if not inside:
-        return C['st_hi']
+        # a dark reveal reads as a frame set into the wall; a light one read like a gap round the glass
+        return C['st_ln']
     # leading: vertical centre bar, transoms, ring on the arch
     if abs(u - cx) < 0.5 or abs(z - (z0 + h * 0.42)) < 0.5 or (z >= zt and abs(math.hypot(u - cx, z - zt) - r * 0.55) < 0.5):
         return C['lead']
@@ -148,6 +152,12 @@ def window_color(u, z, u0, w, z0, h):
         # stained-glass band round the arch
         k = hsh(math.floor((u - u0) / 2.5), math.floor((z - z0) / 3), 11)
         return C['gl_1'] if k < 0.4 else C['gl_2'] if k < 0.7 else C['gl_3'] if k < 0.88 else C['gl_5']
+    # two short glints from each pane's top left corner, so the panes read as closed glass
+    if z < zt:
+        top = zt if z > z0 + h * 0.42 else z0 + h * 0.42
+        t = (u - (u0 if u < cx else cx)) + (top - z)
+        if 2 <= t < 3 or 4 <= t < 4.8:
+            return C['gl_4']
     return HOLE
 
 

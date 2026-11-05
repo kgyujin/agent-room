@@ -1,12 +1,15 @@
 // Menu bar icon frames drawn from any pet (built-in or the user's PNG), in the same layout as the
 // bundled shiba frames (tools/art/gen_tray.py): the pet stands at the bottom left, and a "!" or
-// check bubble, or "z"s, sit at the top right. macOS draws the icon 18pt tall, so the 36px-tall
-// canvas puts one art pixel on one Retina screen pixel. One colour per pixel, no smoothing.
+// check bubble, or "z"s, sit at the top right. The app shows the icon at 2 px per point (22pt tall,
+// as tall as other apps' menu bar icons), and the pet is drawn about two pixels per art pixel.
+// Nearest-neighbour only: every pixel keeps one colour, no smoothing.
 import type { Skin } from './skin';
 
-const H = 36;
-/** tallest pet that still leaves the bubble some room; taller pictures are shrunk by a whole factor */
-const MAX_PET = 30;
+const H = 44;
+/** the pet's height in the icon; the two rows above it leave room for the hop */
+const PET_H = 42;
+/** the bubble and the "z"s are drawn this many pixels per art pixel, like the pet */
+const G = 2;
 const INK = '#2a2230';
 const PAPER = '#ffffff';
 
@@ -34,7 +37,7 @@ function draw(g: CanvasRenderingContext2D, rows: string[], x0: number, y0: numbe
   rows.forEach((line, y) => [...line].forEach((ch, x) => {
     if (!colours[ch]) return;
     g.fillStyle = colours[ch];
-    g.fillRect(x0 + x, y0 + y, 1, 1);
+    g.fillRect(x0 + x * G, y0 + y * G, G, G);
   }));
 }
 
@@ -74,24 +77,25 @@ export function trayCanvases(skin: Skin): HTMLCanvasElement[] {
   const still = skin.canvas;
   const [stepL, stepR] = skin.walkF ?? [still, still];
   const b = bounds([still, stepL, stepR]);
-  // whole-factor scale: small pictures are doubled, big ones shrunk until they fit
-  const k = b.h > MAX_PET ? 1 / Math.ceil(b.h / MAX_PET) : b.h * 2 <= MAX_PET - 6 ? 2 : 1;
+  // every pet fills the icon's height: doubled when that fits, otherwise the nearest size that does
+  const k = Math.min(2, PET_H / b.h);
   const pw = Math.max(1, Math.round(b.w * k));
   const ph = Math.max(1, Math.round(b.h * k));
-  const W = Math.max(H, pw + 11);
+  // the bubble overlaps the pet's top right corner a little instead of widening the icon by all of it
+  const W = Math.max(H, pw + 14);
   const frame = (pet: HTMLCanvasElement, dy = 0, extra?: (g: CanvasRenderingContext2D) => void) => {
     const c = document.createElement('canvas');
     c.width = W;
     c.height = H;
     const g = c.getContext('2d', { willReadFrequently: true })!;
     g.imageSmoothingEnabled = false;
-    g.drawImage(pet, b.x, b.y, b.w, b.h, 0, H - ph + dy, pw, ph);
+    g.drawImage(pet, b.x, b.y, b.w, b.h, 0, H - ph + dy * 2, pw, ph);
     extra?.(g);
     return c;
   };
   const bubble = (glyph: string[], colour: string) => (g: CanvasRenderingContext2D) => {
-    draw(g, BUBBLE, W - 11, 0, { o: INK, p: PAPER });
-    draw(g, glyph, W - 8, 3, { x: colour });
+    draw(g, BUBBLE, W - 11 * G, 0, { o: INK, p: PAPER });
+    draw(g, glyph, W - 8 * G, 3 * G, { x: colour });
   };
   const off = frame(still);
   grey(off);
@@ -99,7 +103,7 @@ export function trayCanvases(skin: Skin): HTMLCanvasElement[] {
     frame(stepL), frame(still, -1), frame(stepR), frame(still, -1),
     frame(still, 0, bubble(EXCLAIM, '#e8553d')),
     frame(still, 0, bubble(CHECK, '#3d9a50')),
-    frame(still, 0, (g) => { draw(g, Z_BIG, W - 6, 0, { o: INK, x: PAPER }); draw(g, Z_SMALL, W - 12, 6, { o: INK, x: PAPER }); }),
+    frame(still, 0, (g) => { draw(g, Z_BIG, W - 6 * G, 0, { o: INK, x: PAPER }); draw(g, Z_SMALL, W - 12 * G, 6 * G, { o: INK, x: PAPER }); }),
     off,
   ];
 }

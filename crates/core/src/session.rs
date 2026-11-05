@@ -444,7 +444,9 @@ impl SessionStore {
 
         // Codex: remaining usage from its own rollout log (throttled)
         if let (Some(path), AgentKind::Codex) = (sess.transcript.clone(), ev.agent) {
-            let due = matches!(ev.kind, EvKind::TurnComplete | EvKind::ToolEnd { .. } | EvKind::SessionStart { .. }) && ev.ts.saturating_sub(sess.last_usage_poll) > 1500;
+            // log-only sessions (desktop app, VS Code) only ever send StillWorking / PromptSubmitted
+            let due = matches!(ev.kind, EvKind::TurnComplete | EvKind::ToolEnd { .. } | EvKind::SessionStart { .. } | EvKind::StillWorking | EvKind::PromptSubmitted)
+                && ev.ts.saturating_sub(sess.last_usage_poll) > 1500;
             if due {
                 sess.last_usage_poll = ev.ts;
                 if let Some(l) = sess.usage.poll(&path, ev.ts) {
