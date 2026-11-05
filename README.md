@@ -22,19 +22,30 @@ AI 코딩 에이전트(Claude Code, OpenAI Codex CLI)가 지금 무엇을 하는
 
 ### 앱 받기 (macOS, Apple Silicon)
 
-터미널에서 한 줄로 설치할 수 있습니다(Node.js 18 이상, git 필요). 최신 릴리스를 받아 `/Applications`에 넣고 실행합니다.
-
-```sh
+```bash
 npx github:kgyujin/agent-room
 ```
 
-직접 받으려면 [Releases](https://github.com/kgyujin/agent-room/releases)에서 `.dmg`를 받습니다. 앱은 Apple 공증을 받지 않았습니다. 처음 열 때는 Finder에서 우클릭 → 열기를 누르세요. 그래도 열리지 않으면 아래를 실행합니다.
+최신 릴리스를 받아 `/Applications`에 넣고 바로 실행합니다. Node.js 18 이상과 git이 필요합니다. 이렇게 받으면 "손상되었기 때문에 열 수 없습니다" 경고가 뜨지 않습니다.
 
-```sh
+한 번 설치하면 그다음부터는 앱 안에서 업데이트됩니다. 실행할 때와 6시간마다 새 버전을 확인하고, 새 버전이 있으면 위쪽에 **업데이트** 버튼이 뜹니다.
+
+| 하려는 일 | 명령 |
+| --- | --- |
+| 설치·최신 버전으로 업데이트 | `npx github:kgyujin/agent-room` |
+| 앱과 에이전트 Hook 제거 | `npx github:kgyujin/agent-room uninstall` |
+| 도움말 | `npx github:kgyujin/agent-room --help` |
+
+<details>
+<summary>직접 받아 설치하기</summary>
+
+[Releases](https://github.com/kgyujin/agent-room/releases)에서 `.dmg`를 받습니다. 앱은 Apple 공증을 받지 않았습니다. 처음 열 때는 Finder에서 우클릭 → 열기를 누르세요. 그래도 열리지 않으면 아래를 실행합니다.
+
+```bash
 xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 ```
 
-한 번 설치하면 그다음부터는 앱 안에서 업데이트됩니다. 실행할 때와 6시간마다 새 버전을 확인하고, 새 버전이 있으면 위쪽에 **업데이트** 버튼이 뜹니다(0.2.0 이상).
+</details>
 
 ### 에이전트 연결
 
@@ -51,6 +62,7 @@ xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 
 ### 제거
 
+- **한 번에**: `npx github:kgyujin/agent-room uninstall`이 에이전트 설정에서 Agent Room Hook을 빼고 앱을 지웁니다. `~/.agent-room`의 백업은 남깁니다.
 - **설정 → 고급 → 모든 Hook 제거**: 에이전트 설정에서 Agent Room 항목만 빼고, 상태줄도 원래대로 되돌립니다.
 - 앱 없이 제거하려면 `~/.agent-room/bin/agent-room-hook --uninstall`을 실행합니다.
 - 원래 설정으로 되돌리려면 **설정 → 고급 → 가장 최근 백업으로 복원**을 누릅니다. 현재 파일도 먼저 백업합니다.
