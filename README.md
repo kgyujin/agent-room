@@ -27,7 +27,7 @@ AI 코딩 에이전트(Claude Code, OpenAI Codex CLI)가 지금 무엇을 하는
 xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 ```
 
-0.2.0부터는 실행할 때와 6시간마다 새 버전을 확인합니다. 새 버전이 있으면 위쪽에 **업데이트** 버튼이 뜹니다.
+한 번 설치하면 그다음부터는 앱 안에서 업데이트됩니다. 실행할 때와 6시간마다 새 버전을 확인하고, 새 버전이 있으면 위쪽에 **업데이트** 버튼이 뜹니다(0.2.0 이상).
 
 ### 에이전트 연결
 
@@ -136,7 +136,7 @@ npm run app:build    # .app / .dmg 생성
 - **테스트**: `cargo test -p agent-room-core`
 - **이벤트 확인**: `cargo run -p agent-room-core --example monitor`를 실행하면 앱 대신 터미널에 이벤트를 출력합니다.
 - **새 에이전트 추가**: `crates/core/src/adapters/`에 어댑터를 추가하고, `install.rs`의 `Target`에 설정 경로를 등록합니다.
-- **릴리스**: `tauri.conf.json`의 `version`을 올리고 같은 이름의 태그(`v0.2.1` 등)로 릴리스를 만들면 `release` 워크플로가 서명된 업데이트를 올립니다.
+- **릴리스**: main에 코드가 들어갈 때마다 `release` 워크플로가 자동으로 새 버전(`tauri.conf.json`의 앞 두 자리 + 실행 번호, 예: `0.3.12`)을 만들어 서명된 업데이트를 올립니다. README와 `docs/`만 바뀐 경우에는 건너뜁니다. 앞 두 자리를 올리려면 `version`만 바꾸면 됩니다.
   - 저장소 Secret `TAURI_SIGNING_PRIVATE_KEY`가 필요합니다.
   - 그 키의 공개키가 `plugins.updater.pubkey`와 같아야 합니다.
 
