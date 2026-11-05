@@ -103,7 +103,8 @@ export function latestLimits(sessions: Snapshot[], agent: Snapshot['agent']): Ra
     try { localStorage.setItem(LIMITS_KEY, JSON.stringify({ ...mem, [agent]: best })); } catch { /* storage unavailable */ }
     return best;
   }
-  return best ?? old ?? null;
+  // the newest report wins: a session that is still open may hold an older one than the cache
+  return old && (!best || old.at > best.at) ? old : best;
 }
 
 /** "12분 전 기준" when the numbers are not fresh, so an old report is not read as current */

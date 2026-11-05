@@ -55,6 +55,8 @@ export default function App() {
   const [updDialog, setUpdDialog] = useState<UpdateState | null>(null);
   const asked = useRef<string | null>(null);
   const checkNow = () => {
+    // an install already running keeps its dialog; a second check would offer another install
+    if (updDialog?.k === 'installing' || updDialog?.k === 'checking') return;
     setUpdDialog({ k: 'checking' });
     void runCheck().then((r) => { setUpdDialog(r); if (r.k === 'available') setUpdate(r.u); });
   };
