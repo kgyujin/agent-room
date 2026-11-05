@@ -518,7 +518,35 @@ function Agents() {
     void refresh();
   };
   return (
-    <div className="agents">
+    <>
+      <Group title="연결">
+        {list.map((h) => (
+          <div key={h.agent} className="agent-item">
+            <div className="field">
+              <span>
+                {NAMES[h.agent]}
+                <small className="mono">{h.configPath}</small>
+                {!h.agentDetected && <small>이 컴퓨터에서 설정 폴더를 찾지 못했어요.</small>}
+              </span>
+              <span className="agent-act">
+                <span className={`tag st-${h.installed}`}>{{ full: '연결됨', partial: '다시 연결 필요', none: '연결 안 됨' }[h.installed]}</span>
+                {h.installed !== 'none' && (
+                  <button className="btn" onClick={() => run(() => backend.hooksUninstall(h.agent), `${NAMES[h.agent]} Hook을 제거했어요.`)}>
+                    제거
+                  </button>
+                )}
+                <button className={`btn ${h.installed === 'full' ? '' : 'primary'}`} onClick={() => run(() => backend.hooksInstall(h.agent), `${NAMES[h.agent]} 연결했어요. 새로 시작하는 세션부터 표시돼요.`)}>
+                  {h.installed === 'none' ? '연결하기' : '다시 연결'}
+                </button>
+              </span>
+            </div>
+            {h.notes.map((n) => (
+              <div key={n} className="callout wait small">{n}</div>
+            ))}
+          </div>
+        ))}
+      </Group>
+      {msg && <div className="callout small">{msg}</div>}
       <p className="muted small">
         에이전트의 공식 Hook에 작은 전달 프로그램(agent-room-hook)을 등록해요. 이 프로그램은 아무것도 출력하지 않아서 에이전트 대화에
         아무것도 추가되지 않고, 추가 토큰도 쓰지 않아요. 설정을 바꾸기 전에 원본을 백업합니다.
@@ -527,31 +555,7 @@ function Agents() {
         Claude Code는 남은 사용량을 상태줄(statusLine)에만 알려줘서, 상태줄 명령도 감싸요. 쓰던 상태줄이 있으면 그대로 실행해서 똑같이
         보이고, 연동을 해제하면 원래대로 돌아가요.
       </p>
-      {list.map((h) => (
-        <div key={h.agent} className="agent-card">
-          <div className="row between">
-            <b>{NAMES[h.agent]}</b>
-            <span className={`tag st-${h.installed}`}>{{ full: '연결됨', partial: '다시 연결 필요', none: '연결 안 됨' }[h.installed]}</span>
-          </div>
-          <div className="muted small mono">{h.configPath}</div>
-          {!h.agentDetected && <div className="muted small">이 컴퓨터에서 {NAMES[h.agent]} 설정 폴더를 찾지 못했어요.</div>}
-          {h.notes.map((n) => (
-            <div key={n} className="callout wait small">{n}</div>
-          ))}
-          <div className="row">
-            <button className="btn primary" onClick={() => run(() => backend.hooksInstall(h.agent), `${NAMES[h.agent]} 연결했어요. 새로 시작하는 세션부터 표시돼요.`)}>
-              {h.installed === 'none' ? '연결하기' : '다시 연결'}
-            </button>
-            {h.installed !== 'none' && (
-              <button className="btn" onClick={() => run(() => backend.hooksUninstall(h.agent), `${NAMES[h.agent]} Hook을 제거했어요.`)}>
-                제거
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
-      {msg && <div className="callout small">{msg}</div>}
-    </div>
+    </>
   );
 }
 
