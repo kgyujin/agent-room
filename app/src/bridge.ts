@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
+  petEnergy: 'normal', islandOpen: 'hover',
 };
 
 export interface Backend {
@@ -27,11 +28,13 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown' | 'settings-changed', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown' | 'settings-changed' | 'hover', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
   islandLayout(width: number, height: number): Promise<void>;
+  /** camera notch of the menu bar screen [width, height] in points; null without one */
+  notchSize(): Promise<[number, number] | null>;
   hooksStatus(): Promise<HookStatus[]>;
   hooksInstall(agent: string): Promise<HookStatus>;
   hooksUninstall(agent: string): Promise<HookStatus>;
@@ -58,6 +61,7 @@ const tauriBackend: Backend = {
   onTrayEvent: (name, cb) => tauriListen(name, cb),
   trayAction: (action, key) => tauriInvoke('tray_action', { action, key: key ?? null }),
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
+  notchSize: () => tauriInvoke('notch_size'),
   hooksStatus: () => tauriInvoke('hooks_status'),
   hooksInstall: (agent) => tauriInvoke('hooks_install', { agent }),
   hooksUninstall: (agent) => tauriInvoke('hooks_uninstall', { agent }),
@@ -153,6 +157,7 @@ function previewBackend(): Backend {
     onTrayEvent: async () => () => {},
     trayAction: async () => undefined,
     islandLayout: async () => undefined,
+    notchSize: async () => null,
     hooksStatus: async () => [
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },
       { agent: 'codex', configPath: '~/.codex/hooks.json', agentDetected: false, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },

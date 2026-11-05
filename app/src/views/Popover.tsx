@@ -5,13 +5,13 @@ import { Icon } from '../ui/icons';
 import { useLive } from './useLive';
 
 export function Popover() {
-  const { list, now, settings } = useLive();
+  const { list, now, settings, running } = useLive();
   const act = (a: string, key?: string) => void backend.trayAction(a, key);
   return (
     <div className="pop">
       <header className="pop-head">
         <b>Agent Room</b>
-        <span className="muted small">{list.length ? `에이전트 ${list.length}` : '연결된 에이전트 없음'}</span>
+        <span className="muted small">{list.length ? `에이전트 ${list.length}` : running ? `실행 중 ${running}` : '진행 중인 작업 없음'}</span>
       </header>
       <div className="pop-body">
         {list.length ? (

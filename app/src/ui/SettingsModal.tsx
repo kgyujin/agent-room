@@ -88,11 +88,26 @@ export function SettingsModal(props: {
                   <option value="off">숨기기</option>
                 </select>
               </Field>
+              <Field label="펫 활동량 (일이 없을 때)">
+                <select value={s.petEnergy ?? 'normal'} onChange={(e) => set('petEnergy', e.target.value as Settings['petEnergy'])}>
+                  <option value="calm">차분하게 (주로 쉬고 가끔 낮잠)</option>
+                  <option value="normal">보통 (쉬다가 돌아다니기)</option>
+                  <option value="lively">활발하게 (자주 돌아다니고 춤추기)</option>
+                </select>
+              </Field>
               <h4>화면 구성</h4>
               <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
               <Toggle label="남은 사용량 표시 (5시간·주간)" v={s.showLimits} on={(v) => set('showLimits', v)} />
               <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />
               <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
+              {s.island && (
+                <Field label="아일랜드 펼치기">
+                  <select value={s.islandOpen ?? 'hover'} onChange={(e) => set('islandOpen', e.target.value as Settings['islandOpen'])}>
+                    <option value="hover">마우스를 올리면</option>
+                    <option value="click">클릭할 때만</option>
+                  </select>
+                </Field>
+              )}
             </>
           )}
           {tab === 'general' && (

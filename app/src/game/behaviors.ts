@@ -32,23 +32,49 @@ const CHEER: Step[] = [['stretch_0', 6], ['stretch_1', 6], ['cheer_0', 3], ['che
 const PANIC: Step[] = [['panic_0', 3], ['panic_1', 3], ['panic_0', 3], ['panic_1', 3], ['look_l', 8], ['look_r', 8], ['panic_0', 6], ['stand_f0', 10]];
 const STAND: Step[] = [['stand_f0', 30], ['blink_f', 2], ['stand_f1', 30], ['look_l', 12], ['stand_f0', 20], ['look_r', 12]];
 
+// idle-only acts (critters have no limbs; the motion lives in Actor.motion)
+const LOOK: Step[] = [['stand_f0', 14], ['look_l', 10], ['stand_f0', 8], ['look_r', 10], ['blink_f', 2], ['stand_f1', 20]];
+const SIP: Step[] = [['stand_b0', 18], ['browse_0', 6], ['browse_1', 6], ['stand_b0', 8], ['sip_0', 14, 'dl'], ['sip_1', 10, 'dl'], ['sip_0', 22, 'dl'], ['blink_f', 2, 'dl'], ['sip_1', 10, 'dl'], ['sip_0', 18, 'dl']];
+const DANCE: Step[] = [['dance_0', 3], ['dance_1', 3], ['dance_0', 3], ['dance_1', 3], ['spin_0', 2], ['spin_1', 2], ['spin_0', 2], ['spin_1', 2], ['dance_0', 3], ['dance_1', 3], ['bounce_0', 3], ['bounce_1', 3], ['stand_f0', 18]];
+const STRETCH: Step[] = [['stretch_0', 8], ['stretch_1', 14], ['stand_f0', 10], ['bounce_0', 3], ['bounce_1', 3], ['stand_f0', 24], ['blink_f', 2], ['look_l', 10]];
+
 const REST: Record<string, { spot: string; seq: Step[]; bubble?: Behavior['bubble'] }> = {
   tea: { spot: 'sofa', seq: [['sit_tea0', 36], ['sit_tea1', 14], ['sit_tea0', 30], ['sit_blink', 2], ['sit_tea0', 26], ['sit_tea1', 12]] },
   read: { spot: 'sofa', seq: [['sit_read0', 40], ['sit_read1', 6], ['sit_read0', 36], ['sit_blink', 2], ['sit_read0', 30], ['sit_read1', 6]] },
   window: { spot: 'window', seq: [['stand_b0', 40], ['stand_b0', 30], ['look_l', 14, 'dl'], ['stand_f0', 20, 'dl'], ['blink_f', 2, 'dl']] },
   plant: { spot: 'plantcorner', seq: [['stand_b0', 30], ['browse_0', 8], ['stand_b0', 20], ['browse_1', 8]] },
   wander: { spot: 'front', seq: STAND },
+  coffee: { spot: 'coffee', seq: SIP },
+  beanbag: { spot: 'beanbag', seq: [['sit_read0', 40], ['sit_read1', 6], ['sit_read0', 30], ['sit_blink', 2], ['sit_tea0', 30]] },
+  dance: { spot: 'front', seq: DANCE, bubble: 'note' },
+  stretch: { spot: 'center', seq: STRETCH },
 };
 export const REST_KEYS = Object.keys(REST);
 
+/** how lively idle pets are (setting) */
+export type Energy = 'calm' | 'normal' | 'lively';
+
+/** rest variants an idle pet picks from; repeats weigh a variant. 'stroll' walks to a random spot. */
+export const REST_POOL: Record<Energy, string[]> = {
+  calm: ['tea', 'read', 'window', 'plant', 'coffee', 'beanbag'],
+  normal: ['tea', 'read', 'window', 'plant', 'coffee', 'beanbag', 'wander', 'stretch', 'dance', 'stroll', 'stroll', 'stroll'],
+  lively: ['tea', 'coffee', 'beanbag', 'window', 'plant', 'wander', 'stretch', 'dance', 'dance', 'stroll', 'stroll', 'stroll', 'stroll', 'stroll'],
+};
+/** how long an idle pet keeps one rest variant: [min, max] ms */
+export const REST_HOLD: Record<Energy, [number, number]> = { calm: [40_000, 70_000], normal: [14_000, 28_000], lively: [6_000, 13_000] };
+/** idle this long and the pet naps on the sofa instead */
+export const NAP_AFTER: Record<Energy, number> = { calm: 10 * 60_000, normal: 30 * 60_000, lively: Infinity };
+
 export function restBehavior(variant: string, napping: boolean): Behavior {
   if (napping) return { key: 'nap', spot: 'sofa', seq: [['sit_sleep', 60]], bubble: 'zzz', screen: 'off', rig: 'idle' };
+  // 'stroll:<node>' = walk to that floor point and look around
+  if (variant.startsWith('stroll:')) return { key: 'rest:' + variant, spot: variant.slice(7), seq: LOOK, screen: 'off', rig: 'idle' };
   const r = REST[variant] ?? REST.tea;
   return { key: 'rest:' + variant, spot: r.spot, seq: r.seq, bubble: r.bubble, screen: 'off', rig: 'idle' };
 }
 
 /** Behavior for a live session. `now` is used only for "just finished" celebration timing. */
-export function behaviorFor(s: Snapshot, now: number, restVariant: string): Behavior {
+export function behaviorFor(s: Snapshot, now: number, restVariant: string, napAfter = 10 * 60_000): Behavior {
   const base = { screen: 'idle' as Behavior['screen'], rig: 'idle' as Behavior['rig'] };
   if (s.connection === 'lost' || s.connection === 'ended' || s.state === 'disconnected') {
     return { ...restBehavior(restVariant, true), key: 'gone' };
@@ -59,8 +85,7 @@ export function behaviorFor(s: Snapshot, now: number, restVariant: string): Beha
   }
   switch (s.state) {
     case 'idle': {
-      const napping = now - s.lastEventAt > 10 * 60_000;
-      return restBehavior(restVariant, napping);
+      return restBehavior(restVariant, now - s.lastEventAt > napAfter);
     }
     case 'starting':
       return { ...base, key: 'starting', spot: 'desk', seq: THINK, bubble: 'dots', screen: 'idle' };
@@ -86,7 +111,7 @@ export function behaviorFor(s: Snapshot, now: number, restVariant: string): Beha
     case 'completed': {
       const since = now - (s.turnEndedAt ?? s.lastEventAt);
       if (since < 7000) return { ...base, key: 'done', spot: '', seq: CHEER, bubble: 'check', fx: 'sparkle', screen: 'ok', urgent: true };
-      return restBehavior(restVariant, now - s.lastEventAt > 10 * 60_000);
+      return restBehavior(restVariant, now - s.lastEventAt > napAfter);
     }
     case 'error': {
       const testFail = s.lastTest?.ok === false && s.error && s.lastTest.at >= s.error.at;

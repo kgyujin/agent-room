@@ -90,6 +90,10 @@ export interface Settings {
   tagStyle: 'compact' | 'full' | 'off';
   showDock: boolean;
   showTabs: boolean;
+  /** how much idle pets move around */
+  petEnergy: 'calm' | 'normal' | 'lively';
+  /** the island opens when the pointer is over it, or only on click */
+  islandOpen: 'hover' | 'click';
 }
 
 export interface CharacterFile { name: string; bytes: number[] }

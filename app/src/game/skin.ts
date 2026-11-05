@@ -1,6 +1,8 @@
 // Custom character ("skin") from a single local PNG in ~/.agent-room/characters/.
 // The image may be an enlarged pixel sprite (even at a non-integer scale, on a solid
 // background); it is reduced back to 1 art pixel = 1 px so it fits the room's pixel grid.
+// Pictures that are still too big for the room are shrunk by a whole factor, and a
+// two-step walk is made from the picture itself (the feet shuffle while the pet hops).
 export interface Skin {
   canvas: HTMLCanvasElement;
   w: number;
@@ -241,11 +243,76 @@ export async function loadBuiltin(id: string, color?: string): Promise<Skin> {
   return { canvas: f[0], w, h, walkF: [f[1], f[2]], back: f[3], walkB: [f[4], f[5]], top: Math.min(topRow(f[0]), topRow(f[3])) };
 }
 
+/** a custom pet is at most this many art pixels on its longer side (built-in critters are 25 x 27) */
+export const MAX_SKIN = 32;
+
+/**
+ * Shrinks a sprite by a whole factor until it fits MAX_SKIN. Each block becomes its most common
+ * opaque colour (or clear when mostly clear), so every pixel stays one exact source colour.
+ */
+export function fitSize(c: HTMLCanvasElement): HTMLCanvasElement {
+  const k = Math.ceil(Math.max(c.width, c.height) / MAX_SKIN);
+  if (k <= 1) return c;
+  const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, c.width, c.height).data;
+  const ow = Math.ceil(c.width / k);
+  const oh = Math.ceil(c.height / k);
+  const out = new ImageData(ow, oh);
+  for (let j = 0; j < oh; j++) {
+    for (let i = 0; i < ow; i++) {
+      const count = new Map<number, number>();
+      let opaque = 0;
+      let cells = 0;
+      for (let y = j * k; y < Math.min(c.height, (j + 1) * k); y++) {
+        for (let x = i * k; x < Math.min(c.width, (i + 1) * k); x++) {
+          cells++;
+          const a = (y * c.width + x) * 4;
+          if (d[a + 3] < 128) continue;
+          opaque++;
+          const key = (d[a] << 16) | (d[a + 1] << 8) | d[a + 2];
+          count.set(key, (count.get(key) ?? 0) + 1);
+        }
+      }
+      if (opaque * 2 < cells) continue;
+      let best = 0;
+      let n = -1;
+      for (const [key, v] of count) if (v > n) { n = v; best = key; }
+      const b = (j * ow + i) * 4;
+      out.data.set([best >> 16, (best >> 8) & 255, best & 255, 255], b);
+    }
+  }
+  const o = document.createElement('canvas');
+  o.width = ow;
+  o.height = oh;
+  o.getContext('2d')!.putImageData(out, 0, 0);
+  return o;
+}
+
+/**
+ * Still frame plus two walk frames for a one-picture pet: 1 px of clear margin on each side, and
+ * in the walk frames the bottom rows (the feet) step 1 px back and forth.
+ */
+export function walkFrames(c: HTMLCanvasElement): { still: HTMLCanvasElement; walk: HTMLCanvasElement[] } {
+  const w = c.width + 2;
+  const h = c.height;
+  const feet = Math.max(2, Math.round(h * 0.22));
+  const make = (dx: number) => {
+    const o = document.createElement('canvas');
+    o.width = w;
+    o.height = h;
+    const g = o.getContext('2d')!;
+    g.drawImage(c, 0, 0, c.width, h - feet, 1, 0, c.width, h - feet);
+    g.drawImage(c, 0, h - feet, c.width, feet, 1 + dx, h - feet, c.width, feet);
+    return o;
+  };
+  return { still: make(0), walk: [make(-1), make(1)] };
+}
+
 export async function loadSkin(bytes: number[]): Promise<Skin> {
   const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
   try {
-    const sk = reduce(await loadImage(url));
-    return { ...sk, top: topRow(sk.canvas) };
+    const { still, walk } = walkFrames(fitSize(reduce(await loadImage(url)).canvas));
+    // no back view: walking away shows the same picture
+    return { canvas: still, w: still.width, h: still.height, walkF: walk, walkB: walk, top: topRow(still) };
   } finally {
     URL.revokeObjectURL(url);
   }

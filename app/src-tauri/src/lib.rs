@@ -57,6 +57,10 @@ pub struct Settings {
     pub tag_style: String,
     pub show_dock: bool,
     pub show_tabs: bool,
+    /// how much idle pets move around: "calm", "normal" or "lively"
+    pub pet_energy: String,
+    /// the island opens on "hover" or only on "click"
+    pub island_open: String,
 }
 
 impl Default for Settings {
@@ -82,6 +86,8 @@ impl Default for Settings {
             tag_style: "compact".into(),
             show_dock: true,
             show_tabs: true,
+            pet_energy: "normal".into(),
+            island_open: "hover".into(),
         }
     }
 }
@@ -476,6 +482,89 @@ fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
     let _ = w.set_position(tauri::LogicalPosition::new(x.round(), y));
 }
 
+/// Size of the camera notch on the primary screen in points (width, height); None without a notch.
+/// The island is drawn around it, so its collapsed height and empty middle match the notch.
+#[tauri::command]
+fn notch_size() -> Option<(f64, f64)> {
+    #[cfg(target_os = "macos")]
+    return mac_notch();
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn mac_notch() -> Option<(f64, f64)> {
+    use objc2::encode::{Encode, Encoding};
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send, sel};
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Insets(f64, f64, f64, f64);
+    unsafe impl Encode for Insets {
+        const ENCODING: Encoding = Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double]);
+    }
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Rect(f64, f64, f64, f64);
+    const PAIR: [Encoding; 2] = [Encoding::Double, Encoding::Double];
+    unsafe impl Encode for Rect {
+        const ENCODING: Encoding = Encoding::Struct("CGRect", &[Encoding::Struct("CGPoint", &PAIR), Encoding::Struct("CGSize", &PAIR)]);
+    }
+    unsafe {
+        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+        if screens.is_null() {
+            return None;
+        }
+        let count: usize = msg_send![screens, count];
+        if count == 0 {
+            return None;
+        }
+        // the first screen holds the menu bar, which is where the island is placed
+        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
+        // safeAreaInsets and the auxiliary areas exist from macOS 12
+        let has: bool = msg_send![screen, respondsToSelector: sel!(auxiliaryTopLeftArea)];
+        if !has {
+            return None;
+        }
+        let inset: Insets = msg_send![screen, safeAreaInsets];
+        if inset.0 <= 0.0 {
+            return None;
+        }
+        let frame: Rect = msg_send![screen, frame];
+        let left: Rect = msg_send![screen, auxiliaryTopLeftArea];
+        let right: Rect = msg_send![screen, auxiliaryTopRightArea];
+        let width = frame.2 - left.2 - right.2;
+        (width > 0.0).then_some((width, inset.0))
+    }
+}
+
+/// Tells the main window and the island when the pointer is over them. macOS sends no hover
+/// events to a window of an app that is not frontmost, so without this the island only opened
+/// and the room-only controls only showed after a click. Only the pointer position is read.
+fn watch_hover(app: AppHandle) {
+    let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
+        let mut last: std::collections::HashMap<&str, bool> = Default::default();
+        loop {
+            std::thread::sleep(Duration::from_millis(120));
+            let Ok(c) = app.cursor_position() else { continue };
+            for label in ["main", "island"] {
+                let inside = app.get_webview_window(label).is_some_and(|w| {
+                    w.is_visible().unwrap_or(false)
+                        && match (w.outer_position(), w.outer_size()) {
+                            (Ok(p), Ok(s)) => {
+                                c.x >= p.x as f64 && c.y >= p.y as f64 && c.x < p.x as f64 + s.width as f64 && c.y < p.y as f64 + s.height as f64
+                            }
+                            _ => false,
+                        }
+                });
+                if last.insert(label, inside) != Some(inside) {
+                    let _ = app.emit_to(label, "hover", inside);
+                }
+            }
+        }
+    });
+}
+
 /// The island grows when hovered/clicked and shrinks back; it stays centred at the top.
 #[tauri::command]
 fn island_layout(app: AppHandle, width: f64, height: f64) {
@@ -672,7 +761,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout
+            tray_action, island_layout, notch_size
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -751,6 +840,7 @@ pub fn run() {
                 .build(app)?;
 
             show_island(&handle, island_on);
+            watch_hover(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| match event {
