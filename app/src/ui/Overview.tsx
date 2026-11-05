@@ -195,10 +195,13 @@ function AgentRow({ s, now, on, onClick, todo, slim }: { s: Snapshot; now: numbe
       <div className="ov-top">
         <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
         <span className="ov-proj">{name}</span>
-        <span className={`ov-state tone-${tone}`}>
-          <i className="pulse" />
-          {stateLabel(s)}
-        </span>
+        {/* a "내 차례" card already says what is asked in the line above */}
+        {!todo && (
+          <span className={`ov-state tone-${tone}`}>
+            <i className="pulse" />
+            {stateLabel(s)}
+          </span>
+        )}
       </div>
       {doing && doing !== stateLabel(s) && <div className="ov-doing">{doing}</div>}
       {busy ? (

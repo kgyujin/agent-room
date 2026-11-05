@@ -1,6 +1,6 @@
 import type { Snapshot, TimelineEntry } from '../types';
-import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, timelineText } from '../labels';
-import { Icon } from './icons';
+import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, timelineText } from '../labels';
+import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 import { Overview } from './Overview';
 import { UsageBoard } from './Usage';
@@ -29,7 +29,7 @@ export function DetailPanel(props: {
       <header>
         <nav>
           {(Object.keys(TAB_NAME) as Tab[]).filter((t) => s || !PER_SESSION.includes(t)).map((t) => (
-            <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+            <button key={t} className={`${tab === t ? 'on' : ''} ${t === PER_SESSION[0] ? 'first-own' : ''}`} onClick={() => setTab(t)}>
               {TAB_NAME[t]}
             </button>
           ))}
@@ -39,6 +39,14 @@ export function DetailPanel(props: {
         </button>
       </header>
       <div className="panel-body">
+        {/* the last three tabs are about the selected pet: say which one */}
+        {s && PER_SESSION.includes(tab) && (
+          <div className="pn-who">
+            <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
+            <b>{s.project ?? '프로젝트 미확인'}</b>
+            <span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span>
+          </div>
+        )}
         {(tab === 'overview' || (!s && PER_SESSION.includes(tab))) && <Overview sessions={props.sessions} now={props.now} selected={s?.key ?? null} onSelect={props.onSelect} showLimits={props.showLimits} />}
         {tab === 'usage' && <div className="pad"><UsageBoard sessions={props.sessions} now={props.now} /></div>}
         {s && tab === 'timeline' && <Timeline entries={props.timeline} />}
