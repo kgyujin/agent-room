@@ -1060,9 +1060,16 @@ unsafe impl objc2::encode::Encode for MacPoint {
     const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGPoint", &[objc2::encode::Encoding::Double, objc2::encode::Encoding::Double]);
 }
 
-/// Runs `f` on the main thread (AppKit) and waits briefly for its answer.
+/// Runs `f` on the main thread (AppKit) and waits briefly for its answer. Called on the main
+/// thread itself (sync commands, tray clicks) it runs `f` right away: waiting there for the main
+/// thread would only time out.
 #[cfg(target_os = "macos")]
 fn mac_on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    use objc2::{class, msg_send};
+    let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+    if on_main {
+        return Some(f());
+    }
     let (tx, rx) = std::sync::mpsc::channel();
     app.run_on_main_thread(move || {
         let _ = tx.send(f());
