@@ -13,7 +13,7 @@ import { Welcome } from './ui/Welcome';
 import { latestLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
-import { AGENT_NAME, doingLabel, stateTone } from './labels';
+import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
@@ -459,7 +459,7 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
 
       {!mini && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
@@ -534,7 +534,7 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean }) {
+function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const fullRef = useRef(full);
   fullRef.current = full;
@@ -574,11 +574,13 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
         const s = sessions[a.key];
         if (!s) return null;
         const prog = progressOf(s);
-        const tone = stateTone(s);
+        // a turn finished a while ago reads as idle: no "완료" any more, and the tag steps back
+        const settled = s.state === 'completed' && !justDone(s, now);
+        const tone = settled ? 'calm' : stateTone(s);
         const urgent = needsYou(s);
-        const doing = doingLabel(s);
+        const doing = settled ? null : doingLabel(s);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${settled || (s.state === 'idle' && s.connection === 'live') ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
             {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
