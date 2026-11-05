@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { backend } from '../bridge';
 import type { Settings, Snapshot } from '../types';
 import { applyUiTheme, uiTheme } from '../themes';
-import { useCodexLimits } from '../ui/Overview';
+import { useAccountLimits } from '../ui/Overview';
 
 const RANK: Record<Snapshot['state'], number> = { waiting: 0, error: 1, starting: 2, planning: 2, reading: 2, editing: 2, running: 2, testing: 2, completed: 3, idle: 4, disconnected: 5 };
 
@@ -15,7 +15,7 @@ function byAsk(a: Snapshot, b: Snapshot): number {
 }
 
 export function useLive() {
-  useCodexLimits();
+  useAccountLimits();
   const [sessions, setSessions] = useState<Record<string, Snapshot>>({});
   const [settings, setSettings] = useState<Settings | null>(null);
   const [now, setNow] = useState(Date.now());

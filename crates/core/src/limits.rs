@@ -3,7 +3,10 @@
 //! * Claude Code: the `rate_limits` object it passes to its status line command (Pro/Max only).
 //! * Codex: the `rate_limits` of the latest `token_count` line in its rollout log.
 //!
-//! Only these numbers are read; message text is skipped. No API calls.
+//! * Claude account (opt-out setting, macOS): Anthropic's own usage endpoint, with the login
+//!   Claude Code keeps in the Keychain. See the app's `claude_limits`.
+//!
+//! Only these numbers are read; message text is skipped.
 
 use crate::model::{LimitWindow, RateLimits};
 use serde_json::Value;
@@ -18,6 +21,20 @@ pub fn from_claude(rl: &Value, at: u64) -> Option<RateLimits> {
         .filter_map(|(k, minutes)| {
             let w = rl.get(*k)?;
             Some(LimitWindow { minutes: *minutes, used_pct: w.get("used_percentage")?.as_f64()?, resets_at: w.get("resets_at").and_then(Value::as_f64).map(|s| (s * 1000.0) as u64) })
+        })
+        .collect();
+    (!windows.is_empty()).then_some(RateLimits { windows, at })
+}
+
+/// Claude account usage (`/api/oauth/usage`, read only when the user turns it on):
+/// `{"five_hour": {"utilization", "resets_at": ISO}, "seven_day": {...}}`, `utilization` in percent.
+pub fn from_claude_usage(v: &Value, at: u64) -> Option<RateLimits> {
+    let windows: Vec<LimitWindow> = [("five_hour", 300), ("seven_day", 10080)]
+        .iter()
+        .filter_map(|(k, minutes)| {
+            let w = v.get(*k)?;
+            let resets_at = w.get("resets_at").and_then(Value::as_str).and_then(crate::usage::iso_ms).map(|t| t as u64);
+            Some(LimitWindow { minutes: *minutes, used_pct: w.get("utilization")?.as_f64()?, resets_at })
         })
         .collect();
     (!windows.is_empty()).then_some(RateLimits { windows, at })
@@ -111,6 +128,16 @@ mod tests {
         assert_eq!((l.windows[0].minutes, l.windows[0].used_pct, l.windows[0].resets_at), (300, 23.5, Some(1_700_000_000_000)));
         assert_eq!((l.windows[1].minutes, l.windows[1].resets_at), (10080, None));
         assert!(from_claude(&json!({}), 1).is_none());
+    }
+
+    #[test]
+    fn claude_account_usage_windows() {
+        let v = json!({"five_hour": {"utilization": 37.0, "resets_at": "2025-11-05T10:00:00.000+00:00"}, "seven_day": {"utilization": 12.5, "resets_at": null}, "seven_day_opus": null, "extra_usage": {"is_enabled": false}});
+        let l = from_claude_usage(&v, 5).unwrap();
+        assert_eq!(l.windows.len(), 2);
+        assert_eq!((l.windows[0].minutes, l.windows[0].used_pct, l.windows[0].resets_at), (300, 37.0, Some(1762336800000)));
+        assert_eq!((l.windows[1].minutes, l.windows[1].used_pct, l.windows[1].resets_at), (10080, 12.5, None));
+        assert!(from_claude_usage(&json!({"error": "x"}), 5).is_none());
     }
 
     #[test]

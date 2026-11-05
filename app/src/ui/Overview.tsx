@@ -82,17 +82,23 @@ function remembered(): Partial<Record<Snapshot['agent'], RateLimits>> {
   try { return JSON.parse(localStorage.getItem(LIMITS_KEY) ?? '{}'); } catch { return {}; }
 }
 
-/** Codex's usage straight from its newest log, once a minute: it shows even when no Codex session is
- *  open here (the desktop app, VS Code, or before Agent Room started). Kept like any other report. */
-export function useCodexLimits() {
+/** Account usage that shows even when no session here reported it (the desktop app, VS Code, or
+ *  before Agent Room started): Codex's from its newest log, Claude's from the account when that is
+ *  turned on (the backend asks at most every 5 minutes). Asked once a minute, kept like any other report. */
+export function useAccountLimits() {
   useEffect(() => {
-    const read = () => void backend.codexLimits().then((l) => {
+    const keep = (agent: 'claude' | 'codex') => (l: RateLimits | null) => {
       if (!l) return;
       const mem = remembered();
-      if (!mem.codex || l.at > mem.codex.at) {
-        try { localStorage.setItem(LIMITS_KEY, JSON.stringify({ ...mem, codex: l })); } catch { /* storage unavailable */ }
+      const old = mem[agent];
+      if (!old || l.at > old.at) {
+        try { localStorage.setItem(LIMITS_KEY, JSON.stringify({ ...mem, [agent]: l })); } catch { /* storage unavailable */ }
       }
-    }).catch(() => {});
+    };
+    const read = () => {
+      void backend.codexLimits().then(keep('codex')).catch(() => {});
+      void backend.claudeLimits().then(keep('claude')).catch(() => {});
+    };
     read();
     const t = setInterval(read, 60_000);
     return () => clearInterval(t);
