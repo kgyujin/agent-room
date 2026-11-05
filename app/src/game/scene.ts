@@ -204,6 +204,37 @@ export class Scene {
     this.draw();
   }
 
+  /**
+   * Draw order of a critter among the furniture. Sorting by the screen y of the feet alone puts a
+   * critter that stands beside a long piece (e.g. right of a desk) behind it, so it is placed from
+   * the floor boxes instead: after every piece it stands in front of (past its right or left front
+   * side) and before every piece it stands behind. A piece the critter stands on is ignored, and a
+   * seat keeps its own depth.
+   */
+  private depthOf(a: Actor): number {
+    const seat = a.depth();
+    if (seat !== a.y + 0.5) return seat;
+    const o = this.atlas.layout.wallOrigin;
+    if (!o) return seat;
+    const u = (a.x + 0.5 - o[0]) / 2;        // x - y
+    const v = a.y + 0.5 - o[1];              // x + y
+    const wx = (u + v) / 2;
+    const wy = (v - u) / 2;
+    let lo = -Infinity;
+    let hi = Infinity;
+    for (const f of this.atlas.layout.furniture) {
+      const b = f.box;
+      const r = this.atlas.frames[f.name];
+      // only pieces whose picture can overlap the critter's (about 24 x 30 px above its feet) matter
+      if (!b || !r || a.x + 12 < r.dx || a.x - 12 > r.dx + r.w || a.y < r.dy || a.y - 30 > r.dy + r.h) continue;
+      if (wx >= b[2] || wy >= b[3]) lo = Math.max(lo, f.base);
+      else if (wx <= b[0] || wy <= b[1]) hi = Math.min(hi, f.base);
+    }
+    if (lo === -Infinity) return Math.min(seat, hi - 0.01);
+    if (hi === Infinity || lo >= hi) return Math.max(seat, lo + 0.01);
+    return Math.min(Math.max(seat, lo + 0.01), hi - 0.01);
+  }
+
   /** largest whole scale at which the room-only window still fits in w x h CSS px */
   roomOnlyScale(cssW: number, cssH: number): number {
     const dpr = window.devicePixelRatio || 1;
@@ -338,7 +369,7 @@ export class Scene {
       },
     }));
     for (const m of this.mates) {
-      items.push({ y: m.actor.depth(), draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
+      items.push({ y: this.depthOf(m.actor), draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
     }
     items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 

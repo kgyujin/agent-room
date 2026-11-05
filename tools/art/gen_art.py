@@ -203,10 +203,10 @@ def main():
     room, screens, rig_panel, tea = office.build()
     sprites['room'] = (room, 0, 0)
     furniture = []
-    for (name, s, base_y) in sorted(office.FURN, key=lambda f: f[2]):
+    for (name, s, base_y, box) in sorted(office.FURN, key=lambda f: f[2]):
         c, x, y = s.crop()
         sprites[name] = (c, x, y)
-        furniture.append({'name': name, 'base': base_y})
+        furniture.append({'name': name, 'base': base_y, 'box': box})
     overlays = {}
     for i, scr in enumerate(screens):
         overlays.update(desk_screens(i, scr))
