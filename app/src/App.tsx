@@ -372,6 +372,9 @@ export default function App() {
   };
 
   const petClick = useRef(0);
+  // the OS double-click interval: a single click on a pet waits this long so a slow double-click still counts
+  const dblMs = useRef(500);
+  useEffect(() => { backend.doubleClickMs().then((ms) => { dblMs.current = ms; }).catch(() => {}); }, []);
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
@@ -426,7 +429,9 @@ export default function App() {
     // single click waits a moment (otherwise the other app would already be in front)
     if (hit && sessions[hit]) {
       window.clearTimeout(petClick.current);
-      petClick.current = window.setTimeout(() => openApp(hit), 260);
+      if (e.detail > 1) return; // the second click of a double-click: onCanvasDouble handles it
+      setPinned(hit);
+      petClick.current = window.setTimeout(() => openApp(hit), dblMs.current);
     } else if (!hit && Math.hypot(e.clientX - downAt.current[0], e.clientY - downAt.current[1]) < 5) {
       // a click on the empty room lets go of the picked pet (back to "자동")
       setPinned(null);
