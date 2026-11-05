@@ -414,9 +414,9 @@ export default function App() {
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}
-        {update && !compact && (
+        {update && (
           <div className="banner update">
-            {updating === null ? <>새 버전 {update.version}이 나왔어요</> : <>업데이트 받는 중… {updating}%</>}
+            {updating === null ? (compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>) : <>업데이트 받는 중… {updating}%</>}
             {updating === null && <button onClick={() => { setUpdating(0); update.install(setUpdating).catch(() => setUpdating(null)); }}>업데이트</button>}
           </div>
         )}
