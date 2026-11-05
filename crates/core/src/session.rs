@@ -12,6 +12,8 @@ const TIMELINE_MAX: usize = 300;
 const FILES_MAX: usize = 30;
 /// ended / lost sessions are dropped from the list after this long
 const FORGET_AFTER_MS: u64 = 30 * 60 * 1000;
+/// a session that just sent an event is alive, whatever process the event came through
+const LOST_GRACE_MS: u64 = 15 * 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -480,7 +482,7 @@ impl SessionStore {
                 _ => {}
             }
             if let Some(pid) = sess.pid {
-                if !alive(pid) {
+                if now.saturating_sub(s.last_event_at) > LOST_GRACE_MS && !alive(pid) {
                     s.connection = Connection::Lost;
                     s.state = AgentState::Disconnected;
                     s.waiting = None;
@@ -556,6 +558,17 @@ mod tests {
         let u = st.tick(st.stale_after_ms + 2, &mut |_| false);
         assert_eq!(u[0].snapshot.connection, Connection::Lost);
         assert_eq!(u[0].snapshot.state, AgentState::Disconnected);
+    }
+
+    #[test]
+    fn a_fresh_event_keeps_the_session_even_if_its_process_is_gone() {
+        let mut st = SessionStore::default();
+        st.apply(ev(EvKind::ToolStart { tool: "Bash".into(), activity: Activity::Run, detail: None }, 1000));
+        st.set_pid("claude:s", 42);
+        // the hook came through a short-lived process: not lost while events are fresh
+        assert!(st.tick(2000, &mut |_| false).is_empty());
+        let u = st.tick(1000 + LOST_GRACE_MS + 1, &mut |_| false);
+        assert_eq!(u[0].snapshot.connection, Connection::Lost);
     }
 
     #[test]

@@ -78,7 +78,10 @@ export interface Settings {
   alwaysOnTopRoom: boolean;
   showLimits: boolean;
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
-  characters: Record<string, string>;
+  /** pets that may appear (skin ids: builtin/<id> or a PNG name); empty means all built-ins */
+  petPool: string[];
+  /** pet drawn in the menu bar icon (`builtin/<id>` or a PNG name) */
+  trayPet: string;
   /** built-in critter id -> fur colour (hex) */
   critterColors: Record<string, string>;
   /** UI colour theme id (see themes.ts) */
@@ -124,3 +127,7 @@ export interface Overview {
 }
 
 export interface SoundFile { event: string; bytes: number[] }
+
+export interface DayTokens { day: number; claude: number; codex: number }
+/** token use from the agents' local logs (usage counters only) */
+export interface UsageHistory { days: DayTokens[]; recentClaude: number; recentCodex: number; streakLongest: number; streakCurrent: number }

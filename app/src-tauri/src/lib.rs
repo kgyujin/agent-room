@@ -44,8 +44,10 @@ pub struct Settings {
     pub always_on_top_room: bool,
     /// remaining plan usage (5-hour / weekly) in the overview and HUD
     pub show_limits: bool,
-    /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
-    pub characters: std::collections::BTreeMap<String, String>,
+    /// pets that may appear (built-in ids as `builtin/<id>` or PNG names); empty means all built-ins
+    pub pet_pool: Vec<String>,
+    /// pet drawn in the menu bar icon (`builtin/<id>` or a PNG name)
+    pub tray_pet: String,
     /// built-in critter id -> fur colour ("#rrggbb")
     pub critter_colors: std::collections::BTreeMap<String, String>,
     /// UI colour theme id ("peach", "mint", ...)
@@ -97,7 +99,8 @@ impl Default for Settings {
             always_on_top: false,
             always_on_top_room: true,
             show_limits: true,
-            characters: Default::default(),
+            pet_pool: Vec::new(),
+            tray_pet: "builtin/shiba".into(),
             critter_colors: Default::default(),
             ui_theme: "peach".into(),
             island: true,
@@ -105,7 +108,7 @@ impl Default for Settings {
             backdrop: String::new(),
             tag_style: "compact".into(),
             show_dock: true,
-            show_tabs: true,
+            show_tabs: false,
             pet_energy: "normal".into(),
             island_open: "hover".into(),
             done_shown_sec: 60,
@@ -123,6 +126,8 @@ impl Default for Settings {
 #[derive(Default)]
 struct Shared {
     store: Mutex<SessionStore>,
+    /// token totals per day, read from the agents' own logs (usage counters only)
+    usage: Mutex<agent_room_core::usage::UsageScanner>,
     procs: Mutex<ProcWatch>,
     settings: Mutex<Settings>,
     detected: Mutex<(u32, u32)>,
@@ -134,6 +139,9 @@ struct Shared {
     hooked: Mutex<std::collections::HashSet<String>>,
     /// sessions known only from their log: key -> last write seen
     log_only: Mutex<std::collections::HashMap<String, u64>>,
+    /// menu bar frames drawn by the app from the chosen pet (run0..3, wait, done, idle, off);
+    /// None until then, and the bundled shiba frames are used. The number counts the updates.
+    tray_frames: Mutex<Option<(u64, Arc<Vec<Vec<u8>>>)>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -196,9 +204,70 @@ fn sync_island(app: &AppHandle) {
         })
     };
     let show = !st.island_hide_idle || busy();
+    if show {
+        // also after a display was plugged in or out, or its resolution changed
+        place_island(app, &w, ISLAND_WIN.0, ISLAND_WIN.1);
+    }
     if show != w.is_visible().unwrap_or(true) {
         let _ = if show { w.show() } else { w.hide() };
     }
+}
+
+/// Menu bar icon frames: the pet waddles while agents work (faster with more of them), shows a "!"
+/// when one waits for the user, a check right after work finishes, dozes when all are idle, and
+/// fades to grey when none is connected. Only the session states are read. These bundled shiba
+/// frames show until the app sends frames drawn from the pet picked in settings.
+const TRAY_RUN: [&[u8]; 4] = [
+    include_bytes!("../icons/tray_run0.png"),
+    include_bytes!("../icons/tray_run1.png"),
+    include_bytes!("../icons/tray_run2.png"),
+    include_bytes!("../icons/tray_run3.png"),
+];
+const TRAY_WAIT: &[u8] = include_bytes!("../icons/tray_wait.png");
+const TRAY_DONE: &[u8] = include_bytes!("../icons/tray_done.png");
+const TRAY_IDLE: &[u8] = include_bytes!("../icons/tray_idle.png");
+const TRAY_OFF: &[u8] = include_bytes!("../icons/tray_off.png");
+
+fn animate_tray(app: AppHandle) {
+    let _ = std::thread::Builder::new().name("agent-room-tray".into()).spawn(move || {
+        use agent_room_core::session::Connection;
+        let mut frame = 0usize;
+        let mut last = (0u64, usize::MAX);
+        loop {
+            let shared = app.state::<Shared>();
+            let done_ms = shared.settings.lock().unwrap().done_shown_sec as u64 * 1000;
+            let now = now_ms();
+            let live: Vec<Snapshot> = shared.store.lock().unwrap().snapshots().into_iter().filter(|s| matches!(s.connection, Connection::Live | Connection::Stale)).collect();
+            let working = live.iter().filter(|s| matches!(s.state, AgentState::Starting | AgentState::Planning | AgentState::Reading | AgentState::Editing | AgentState::Running | AgentState::Testing)).count();
+            // same rule as the number beside the icon: only sessions still sending events count as asking
+            let waiting = live.iter().any(|s| s.connection == Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error));
+            let done = live.iter().any(|s| s.state == AgentState::Completed && (done_ms == 0 || s.turn_ended_at.is_some_and(|t| now.saturating_sub(t) < done_ms)));
+            // frame index: run0..3, wait, done, idle, off
+            let (idx, wait_ms): (usize, u64) = if waiting {
+                (4, 400)
+            } else if working > 0 {
+                frame = (frame + 1) % TRAY_RUN.len();
+                (frame, match working { 1 => 220, 2 | 3 => 150, _ => 100 })
+            } else if done {
+                (5, 400)
+            } else if !live.is_empty() {
+                (6, 600)
+            } else {
+                (7, 600)
+            };
+            let custom = shared.tray_frames.lock().unwrap().clone();
+            let key = (custom.as_ref().map_or(0, |f| f.0), idx);
+            if key != last {
+                last = key;
+                let builtin = [TRAY_RUN[0], TRAY_RUN[1], TRAY_RUN[2], TRAY_RUN[3], TRAY_WAIT, TRAY_DONE, TRAY_IDLE, TRAY_OFF];
+                let bytes = custom.as_ref().map_or(builtin[idx], |f| f.1[idx].as_slice());
+                if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
+                    let _ = tray.set_icon(Some(img));
+                }
+            }
+            std::thread::sleep(Duration::from_millis(wait_ms));
+        }
+    });
 }
 
 /// One notification per usage window and reset period once 10% or less is left.
@@ -244,16 +313,15 @@ fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
             }
         }
     }
+    // the project leads the title, so a glance at the banner says which session it is
     let agent = agent_label(s);
-    let project = s.project.clone().unwrap_or_default();
+    let project = s.project.clone().unwrap_or_else(|| agent.into());
+    let tool = s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| "도구".into());
     let (title, body) = match n {
-        Notice::Completed => (format!("{agent} 작업 완료"), format!("{project} 작업이 끝났어요.")),
-        Notice::Failed => (format!("{agent} 오류"), s.error.as_ref().map(|e| e.message.clone()).unwrap_or_default()),
-        Notice::NeedsApproval => (
-            format!("{agent} 승인 필요"),
-            format!("{project}: {} 실행 승인을 기다리고 있어요.", s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| "도구".into())),
-        ),
-        Notice::NeedsInput => (format!("{agent} 입력 대기"), format!("{project}: 입력을 기다리고 있어요.")),
+        Notice::Completed => (format!("{project} · 작업 완료"), format!("{agent} 작업이 끝났어요.")),
+        Notice::Failed => (format!("{project} · 오류"), s.error.as_ref().map(|e| e.message.clone()).unwrap_or_else(|| format!("{agent}에서 오류가 났어요."))),
+        Notice::NeedsApproval => (format!("{project} · {tool} 승인 필요"), format!("{agent}가 {tool} 실행 승인을 기다리고 있어요.")),
+        Notice::NeedsInput => (format!("{project} · 입력 대기"), format!("{agent}가 답을 기다리고 있어요.")),
     };
     let _ = app.notification().builder().title(title).body(body).show();
 }
@@ -289,6 +357,12 @@ fn state_label(s: &Snapshot) -> &'static str {
 }
 
 /// Most important session first: waiting > error > working > rest.
+/// menu order: what needs the user first (the longest-waiting at the top), then work, then the rest newest first
+fn order_key(s: &Snapshot) -> (u8, u64) {
+    let asked = s.waiting.as_ref().map(|w| w.since).or_else(|| (s.state == AgentState::Error).then(|| s.error.as_ref().map_or(s.last_event_at, |e| e.at)));
+    (priority(s), asked.unwrap_or(u64::MAX - s.last_event_at))
+}
+
 fn priority(s: &Snapshot) -> u8 {
     match s.state {
         AgentState::Waiting => 0,
@@ -303,13 +377,16 @@ fn priority(s: &Snapshot) -> u8 {
 fn refresh_tray(app: &AppHandle) {
     let Some(tray) = app.tray_by_id("main") else { return };
     let mut sessions: Vec<Snapshot> = app.state::<Shared>().store.lock().unwrap().snapshots().into_iter().filter(|s| !s.is_demo).collect();
-    sessions.sort_by_key(priority);
-    let title = sessions.first().map(|s| {
+    sessions.sort_by_key(order_key);
+    let summary = sessions.first().map(|s| {
         let extra = if sessions.len() > 1 { format!(" +{}", sessions.len() - 1) } else { String::new() };
         format!("{}{}", state_label(s), extra)
     });
-    let _ = tray.set_title(title.as_deref());
-    let _ = tray.set_tooltip(Some(title.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
+    // the icon itself shows the state (see animate_tray); the text beside it is only the number of
+    // agents waiting for the user, so the menu bar stays short
+    let waiting = sessions.iter().filter(|s| s.connection == agent_room_core::session::Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error)).count();
+    let _ = tray.set_title((waiting > 0).then(|| waiting.to_string()).as_deref());
+    let _ = tray.set_tooltip(Some(summary.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
     if let Ok(menu) = build_menu(app, &sessions) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -351,10 +428,14 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
             shared.log_only.lock().unwrap().remove(&key);
         }
         let update = {
+            // same lock order as the tick thread (procs, then store)
+            let mut procs = shared.procs.lock().unwrap();
             let mut store = shared.store.lock().unwrap();
             let u = store.apply(ev);
             if let Some(pid) = pid {
-                if store.pid_of(&key) != Some(pid) {
+                // keep a pid that is still running: a hook can come through a helper process that exits
+                let known = store.pid_of(&key);
+                if known != Some(pid) && !known.is_some_and(|k| procs.alive(k)) {
                     store.set_pid(&key, pid);
                 }
             }
@@ -520,6 +601,14 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
     if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
 }
 
+/// Tokens per local day for the last `days` days, recent rate and streaks, from local logs only.
+#[tauri::command]
+async fn usage_history(app: AppHandle, tz_offset_min: i64, days: i64) -> agent_room_core::usage::UsageHistory {
+    let shared = app.state::<Shared>();
+    let mut scan = shared.usage.lock().unwrap();
+    scan.history(&agent_room_core::logs::LogDirs::from_env(), now_ms() as i64, tz_offset_min.clamp(-840, 840), days.clamp(1, 90))
+}
+
 /// the system's double-click interval in ms, so a single click on a pet can wait exactly that long
 #[tauri::command]
 fn double_click_ms() -> u32 {
@@ -621,6 +710,22 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     Ok(())
 }
 
+/// Menu bar frames the app drew from the pet picked in settings (8 PNGs in TRAY order).
+#[tauri::command]
+fn set_tray_frames(app: AppHandle, frames: Vec<Vec<u8>>) -> Result<(), String> {
+    if frames.len() != 8 {
+        return Err("8 frames expected".into());
+    }
+    for f in &frames {
+        tauri::image::Image::from_bytes(f).map_err(|e| e.to_string())?;
+    }
+    let shared = app.state::<Shared>();
+    let mut cur = shared.tray_frames.lock().unwrap();
+    let n = cur.as_ref().map_or(0, |f| f.0) + 1;
+    *cur = Some((n, Arc::new(frames)));
+    Ok(())
+}
+
 // ------------------------------------------------------------------ menu bar popover + island
 
 /// Window for the menu bar popover ("tray") and the top-centre status pill ("island").
@@ -688,22 +793,25 @@ fn show_island(app: &AppHandle, on: bool) {
 }
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
+    #[cfg(target_os = "macos")]
+    if mac_set_frame(w, width, height) {
+        return;
+    }
     let Ok(Some(mon)) = app.primary_monitor() else { return };
     let k = mon.scale_factor();
     let x = mon.position().x as f64 / k + (mon.size().width as f64 / k - width) / 2.0;
     let y = mon.position().y as f64 / k;
-    #[cfg(target_os = "macos")]
-    if mac_set_frame(w, x.round(), width, height) {
-        return;
-    }
     let _ = w.set_size(tauri::LogicalSize::new(width, height));
     let _ = w.set_position(tauri::LogicalPosition::new(x.round(), y));
 }
 
-/// Moves and resizes the island in one step at the top of the first screen. Two separate calls
-/// (size, then position) showed a frame of the pill off-centre, which looked like flicker on hover.
+/// Moves and resizes the island in one step to the top centre of the screen with the menu bar (and
+/// the notch). Two separate calls (size, then position) showed a frame of the pill off-centre.
+/// Both x and y come from that screen's Cocoa frame, the same coordinates `setFrame` uses, so a
+/// second display, a changed resolution or a different scale can't put the island mid-screen.
+/// Does nothing when the island is already there.
 #[cfg(target_os = "macos")]
-fn mac_set_frame(w: &WebviewWindow, x: f64, width: f64, height: f64) -> bool {
+fn mac_set_frame(w: &WebviewWindow, width: f64, height: f64) -> bool {
     use objc2::runtime::AnyObject;
     use objc2::{class, msg_send};
     let Ok(ptr) = w.ns_window() else { return false };
@@ -718,7 +826,11 @@ fn mac_set_frame(w: &WebviewWindow, x: f64, width: f64, height: f64) -> bool {
         // Cocoa puts the origin at the bottom-left of the first screen
         let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
         let frame: MacRect = msg_send![screen, frame];
-        let r = MacRect(x, frame.1 + frame.3 - height, width, height);
+        let r = MacRect((frame.0 + (frame.2 - width) / 2.0).round(), frame.1 + frame.3 - height, width, height);
+        let now: MacRect = msg_send![ns, frame];
+        if (now.0 - r.0).abs() < 0.5 && (now.1 - r.1).abs() < 0.5 && (now.2 - r.2).abs() < 0.5 && (now.3 - r.3).abs() < 0.5 {
+            return;
+        }
         let _: () = msg_send![ns, setFrame: r, display: true];
     })
     .is_ok()
@@ -995,6 +1107,16 @@ fn tray_action(app: AppHandle, action: String, key: Option<String>) {
                 let _ = app.emit("select-session", k);
             }
         }
+        // a session row: straight to that session's own terminal tab, editor or chat;
+        // when it can't be found, show it in the room instead
+        "focus" => {
+            if let Some(k) = key {
+                if focus_agent(app.clone(), k.clone()).is_err() {
+                    show_main(&app);
+                    let _ = app.emit("select-session", k);
+                }
+            }
+        }
         "quit" => app.exit(0),
         _ => {}
     }
@@ -1247,7 +1369,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, focus_agent, double_click_ms, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
+            hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
             tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {
@@ -1299,8 +1421,7 @@ pub fn run() {
             // menu bar
             let menu = build_menu(&handle, &[])?;
             TrayIconBuilder::with_id("main")
-                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
-                .icon_as_template(true)
+                .icon(tauri::image::Image::from_bytes(TRAY_OFF)?)
                 .tooltip("Agent Room")
                 .menu(&menu)
                 // left click opens the popover; right click still shows the menu
@@ -1325,10 +1446,7 @@ pub fn run() {
                         let _ = app.emit_to("main", "check-update", ());
                     }
                     "quit" => app.exit(0),
-                    id if id.starts_with("session:") => {
-                        show_main(app);
-                        let _ = app.emit("select-session", id.trim_start_matches("session:"));
-                    }
+                    id if id.starts_with("session:") => tray_action(app.clone(), "focus".into(), Some(id.trim_start_matches("session:").into())),
                     _ => {}
                 })
                 .build(app)?;
@@ -1336,6 +1454,7 @@ pub fn run() {
             show_island(&handle, island_on);
             sync_island(&handle);
             watch_hover(handle.clone());
+            animate_tray(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| match event {

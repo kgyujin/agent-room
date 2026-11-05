@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { CharacterFile, SoundFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update } from './types';
+import type { CharacterFile, SoundFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -18,8 +18,8 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
-  font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
+  font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
   doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
 };
@@ -50,10 +50,14 @@ export interface Backend {
   focusAgent(key: string): Promise<void>;
   /** the system's double-click interval (ms) */
   doubleClickMs(): Promise<number>;
+  /** tokens per local day, recent rate and streaks, read from the agents' local logs */
+  usageHistory(days: number): Promise<UsageHistory>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
   listCharacters(): Promise<CharacterFile[]>;
+  /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
+  setTrayFrames(frames: number[][]): Promise<void>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
   replaceCharacter(name: string, bytes: number[]): Promise<void>;
   renameCharacter(name: string, to: string): Promise<string>;
@@ -83,10 +87,12 @@ const tauriBackend: Backend = {
   removeSession: (key) => tauriInvoke('remove_session', { key }),
   focusAgent: (key) => tauriInvoke('focus_agent', { key }),
   doubleClickMs: () => tauriInvoke('double_click_ms'),
+  usageHistory: (days) => tauriInvoke('usage_history', { tzOffsetMin: -new Date().getTimezoneOffset(), days }),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
   listCharacters: () => tauriInvoke('list_characters'),
+  setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
   replaceCharacter: (name, bytes) => tauriInvoke('replace_character', { name, bytes }),
   renameCharacter: (name, to) => tauriInvoke('rename_character', { name, to }),
@@ -188,11 +194,21 @@ function previewBackend(): Backend {
     removeSession: async () => undefined,
     focusAgent: async () => undefined,
     doubleClickMs: async () => 500,
+    // a made-up month for the design preview (never real data)
+    usageHistory: async (days) => {
+      const today = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60_000) / 86_400_000);
+      const wave = (i: number, k: number) => Math.max(0, Math.round((Math.sin(i * k) + 0.6) * 4e7 * (i % 7 === 3 ? 0 : 1)));
+      return {
+        days: Array.from({ length: days }, (_, i) => ({ day: today - days + 1 + i, claude: wave(i, 0.45) * (i > days - 12 ? 3 : 1), codex: Math.round(wave(i + 3, 0.7) / 3) })),
+        recentClaude: 1_300_000, recentCodex: 240_000, streakLongest: 6, streakCurrent: 5,
+      };
+    },
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
+    setTrayFrames: async () => {},
     saveCharacter: async (name, bytes) => {
       const w = window as { __previewCharacters?: CharacterFile[] };
       const stem = name.replace(/\.png$/i, '');

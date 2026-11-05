@@ -2,6 +2,7 @@
 // buffer and scales it up by an integer factor (crisp pixels, very cheap).
 // Runs at 12 fps when focused, 6 fps when unfocused, and stops when hidden.
 // One critter per session (up to one per desk), each with its own desk and screen.
+import { stateTone } from '../labels';
 import type { Snapshot } from '../types';
 import { Actor } from './actor';
 import type { Atlas } from './assets';
@@ -17,6 +18,10 @@ interface Spark { x: number; y: number; t: number }
 
 /** what a shared spot falls back to when another critter is already there */
 const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center', 'coffee', 'beanbag']);
+
+/** floor ring under a pet by state, so who works, who waits for you and what broke reads at a glance */
+// the same values as the --work / --wait / --bad / --ok tokens in styles.css
+const RING: Partial<Record<ReturnType<typeof stateTone>, string>> = { work: '#2e9a9c', wait: '#d9922e', bad: '#d0504b', ok: '#3f9e57' };
 
 interface Mate {
   key: string;
@@ -57,10 +62,12 @@ export class Scene {
   bubbles = true;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
-  /** preferred skin order per agent ('claude', 'codex', 'generic'); first unused one wins */
-  prefs: Record<string, string[]> = {};
+  /** pets new critters may get (the user's checked list) */
+  pool: string[] = [];
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
+  /** pixel ratio the canvas was last fitted at */
+  private fitDpr = 0;
   /** user zoom: integer steps added to the fitted scale (mouse wheel) */
   zoom = 0;
   /** user pan in art pixels while zoomed in */
@@ -114,17 +121,22 @@ export class Scene {
     for (const m of this.mates) this.applyBehavior(m);
   }
 
-  /** each critter keeps its skin; new ones take the first preferred skin nobody else wears.
-   *  reset: re-pick every skin (the user changed the character settings) */
-  assignSkins(reset = false) {
-    const taken = new Set<string>();
+  /**
+   * Each critter keeps its pet while that pet is still in the pool. One without a pet gets a random
+   * pool pet nobody in the room has; only when every pool pet is already in the room is one repeated.
+   */
+  assignSkins() {
+    const inRoom = new Set<string>();
     for (const m of this.mates) {
-      if (reset) m.skin = '';
-      const pref = this.prefs[m.agent] ?? [];
-      if (!m.skin || !this.skins[m.skin] || taken.has(m.skin)) {
-        m.skin = pref.find((n) => this.skins[n] && !taken.has(n)) ?? pref.find((n) => this.skins[n]) ?? '';
-      }
-      taken.add(m.skin);
+      if (m.skin && this.skins[m.skin] && this.pool.includes(m.skin)) inRoom.add(m.skin);
+      else m.skin = '';
+    }
+    for (const m of this.mates) {
+      if (m.skin) continue;
+      const free = this.pool.filter((n) => !inRoom.has(n));
+      const from = free.length ? free : this.pool;
+      m.skin = from[Math.floor(Math.random() * from.length)] ?? '';
+      inRoom.add(m.skin);
     }
   }
 
@@ -181,6 +193,7 @@ export class Scene {
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
+    this.fitDpr = dpr;
     // measure the container: the canvas itself carries a pinned CSS size from the last resize
     const rect = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width * dpr));
@@ -194,7 +207,7 @@ export class Scene {
     const room = this.atlas.frames.room;
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
-    const margin = this.roomOnly ? 2 : 8;
+    const margin = this.roomOnly ? 2 : 4;
     const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / (room.w + margin), availH / (room.h + margin))));
     // opening the side panel keeps the room's size when it still fits beside the panel at the window's
     // centre (it stays put, see draw); otherwise it shrinks to the free area
@@ -255,21 +268,10 @@ export class Scene {
     return { w: Math.ceil(((room.w + 2) * scale) / dpr), h: Math.ceil(((room.h + 2) * scale) / dpr) };
   }
 
-  /** zoom one step in (dir 1) or out (-1), keeping the art pixel under the cursor in place */
-  zoomAt(dir: number, cssX: number, cssY: number) {
-    const dpr = window.devicePixelRatio || 1;
-    const ax = (cssX * dpr) / this.scale - this.off.x;
-    const ay = (cssY * dpr) / this.scale - this.off.y;
-    const before = this.scale;
+  /** zoom one step in (dir 1) or out (-1) around the window centre, so the room stays in the middle */
+  zoomBy(dir: number) {
     this.zoom += dir;
     this.resize();
-    if (this.scale === before || this.zoom <= 0) return this.draw();
-    // where the same art point lands now, and pan so it is back under the cursor
-    const nx = (cssX * dpr) / this.scale - ax;
-    const ny = (cssY * dpr) / this.scale - ay;
-    this.pan.x += nx - this.off.x;
-    this.pan.y += ny - this.off.y;
-    this.draw();
   }
 
   /** drag the zoomed room by a CSS-pixel delta */
@@ -347,11 +349,60 @@ export class Scene {
     });
   }
 
+  /** hands of the wall clock at the scene's time (the face is part of the room art) */
+  private clockHands(g: CanvasRenderingContext2D, ox: number, oy: number) {
+    const c = this.atlas.layout.clock;
+    if (!c) return;
+    const d = this.now();
+    const min = d.getMinutes() + d.getSeconds() / 60;
+    const hand = (turn: number, len: number, col: string) => {
+      g.fillStyle = col;
+      const a = turn * 2 * Math.PI;
+      for (let t = 0; t <= len; t += 0.25) {
+        const k = Math.round(t * Math.sin(a));
+        const dz = Math.round(t * Math.cos(a));
+        g.fillRect(ox + c.x + k, oy + Math.floor(c.y + k / 2 - dz), 1, 1);
+      }
+    };
+    hand(((d.getHours() % 12) + min / 60) / 12, c.r - 3, '#2a2230');
+    hand(min / 60, c.r - 1.5, '#4a3a5c');
+  }
+
+  /** pixel ellipse on the floor (or the seat) under a pet; waiting and errors blink */
+  private ring(g: CanvasRenderingContext2D, m: Mate, ox: number, oy: number) {
+    if (!m.session) return;
+    const tone = stateTone(m.session);
+    // "done" only rings while the pet celebrates, not for the whole time the tag says 완료
+    if (tone === 'ok' && m.actor.current?.key !== 'done') return;
+    const col = RING[tone];
+    if (!col || ((tone === 'wait' || tone === 'bad') && Math.floor(this.tickN / 6) % 2)) return;
+    const f = m.actor.feet();
+    const cx = ox + Math.round(f.x);
+    const cy = oy + Math.round(f.y);
+    g.fillStyle = col;
+    // two pixels thick; the floor is drawn 2:1, so the ring is twice as wide as deep
+    for (const [rx, ry] of [[11, 5], [10, 4]]) {
+      for (let x = -rx; x <= rx; x++) {
+        const h = Math.round(ry * Math.sqrt(1 - (x / rx) ** 2));
+        g.fillRect(cx + x, cy - h, 1, 1);
+        g.fillRect(cx + x, cy + h, 1, 1);
+      }
+      for (let y = -ry; y <= ry; y++) {
+        const w = Math.round(rx * Math.sqrt(1 - (y / ry) ** 2));
+        g.fillRect(cx - w, cy + y, 1, 1);
+        g.fillRect(cx + w, cy + y, 1, 1);
+      }
+    }
+  }
+
   private burst(m: Mate) {
     for (let i = 0; i < 6; i++) m.sparks.push({ x: (Math.random() - 0.5) * 26, y: -10 - Math.random() * 18, t: 0 });
   }
 
   private frame() {
+    // ⌘+/⌘− or a move to a display with another pixel density changes the pixel ratio without
+    // always sending a resize event: re-fit then, so the room stays centred and crisp
+    if ((window.devicePixelRatio || 1) !== this.fitDpr) return this.resize();
     this.tickN++;
     if (this.tickN % 6 === 0) this.mates.forEach((m) => this.applyBehavior(m));
     const now = Date.now();
@@ -388,6 +439,7 @@ export class Scene {
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);
+    this.clockHands(g, ox, oy);
 
     // y-sorted: furniture and critters by the screen y of their front edge / feet
     const atDesk: Record<number, Behavior | null> = {};
@@ -403,7 +455,7 @@ export class Scene {
       },
     }));
     for (const m of this.mates) {
-      items.push({ y: this.depthOf(m.actor), draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
+      items.push({ y: this.depthOf(m.actor), draw: () => { this.ring(g, m, ox, oy); m.actor.draw(g, A, ox, oy, this.skins[m.skin]); } });
     }
     items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 

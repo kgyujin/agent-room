@@ -4,14 +4,15 @@ import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
-import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
+import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
+import { trayFrames } from './game/trayFrames';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
-import { SessionTabs } from './ui/SessionTabs';
+import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
-import { latestLimits, UsageStrip, userTodo } from './ui/Overview';
+import { UsageStrip, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
@@ -21,6 +22,8 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
+/** how long a new session must last before its critter comes in */
+const NEW_SESSION_MS = 3000;
 
 function priority(s: Snapshot): number {
   if (s.connection === 'ended' || s.connection === 'lost') return 9;
@@ -101,7 +104,8 @@ export default function App() {
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
-  const [settingsOpen, setSettingsOpen] = useState<null | 'look' | 'general' | 'agents' | 'dev'>(null);
+  // open: the pane to show ('last' = the one used last time)
+  const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
   const [detailTab, setDetailTab] = useState<Tab>('overview');
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
@@ -120,7 +124,7 @@ export default function App() {
   const compact = mini || vw < 560;
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
-  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
+  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW;
   // with room to spare the room, the info card and banners stay centred on the whole window when the
   // panel opens (the room does the same in scene.ts), instead of jumping left
   const centred = vw - 2 * PANEL_W >= 740;
@@ -153,7 +157,7 @@ export default function App() {
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
-        await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'look')),
+        await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'last')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
         await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
@@ -223,20 +227,22 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // ended sessions leave the office; live ones each get a desk and a critter. A session gets its
+  // critter only after a few seconds: a session that ends right away (a one-shot run an editor
+  // button starts, for example) would otherwise pop in and vanish.
+  const inRoom = list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost' && (s.isDemo || now - s.startedAt >= NEW_SESSION_MS));
+  const inRoomKey = inRoom.map((s) => s.key).join('|');
   useEffect(() => {
-    const sc = sceneRef.current;
-    if (!sc) return;
-    // ended sessions leave the office; live ones each get a desk and a critter
-    sc.setSessions(list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost'));
-  }, [list, ready]);
+    sceneRef.current?.setSessions(inRoom);
+  }, [list, ready, inRoomKey]);
 
-  // The status card and the banners change height as the agent's work changes (a tool line, a
-  // notice, a 4-second error banner). Re-centring the room on every change made the middle of the
-  // screen jump, so the room keeps the tallest space they needed until the layout itself changes.
-  const tall = useRef({ key: '', dock: 0, banners: 0 });
+  // The banners change height as things happen (a 4-second error banner). Re-centring the room on
+  // every change made the middle of the screen jump, so the room keeps the tallest space they needed
+  // until the layout itself changes. The status bar at the bottom is one line, so it keeps its height.
+  const tall = useRef({ key: '', banners: 0 });
   const layoutKey = `${vw}x${window.innerHeight}|${panelOpen}|${mini}|${tabsBelow}`;
-  if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, dock: 0, banners: 0 };
-  const dockRoom = dockH ? (tall.current.dock = Math.max(tall.current.dock, dockH)) : 0;
+  if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, banners: 0 };
+  const dockRoom = dockH;
   const bannersRoom = bannersH ? (tall.current.banners = Math.max(tall.current.banners, bannersH)) : 0;
   useEffect(() => {
     const sc = sceneRef.current;
@@ -260,6 +266,12 @@ export default function App() {
   }, [colorsKey]);
   useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
 
+  // the menu bar icon is drawn from the pet picked in settings (the shiba if that one is gone)
+  const trayPet = skins[settings.trayPet] ?? skins['builtin/shiba'];
+  useEffect(() => {
+    if (trayPet) void trayFrames(trayPet).then(backend.setTrayFrames).catch(() => {});
+  }, [trayPet]);
+
   // the user's own effect sounds
   const reloadSounds = useCallback(async () => {
     soundRef.current.setCustom(await backend.listSounds().catch(() => []));
@@ -270,9 +282,9 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.skins = skins;
-    sc.prefs = skinPrefs(settings.characters ?? {}, Object.keys(skins).filter((k) => !k.startsWith('builtin/')));
-    sc.assignSkins(true);
-  }, [settings.characters, skins, ready]);
+    sc.pool = petPool(settings.petPool, Object.keys(skins));
+    sc.assignSkins();
+  }, [settings.petPool, skins, ready]);
 
   useEffect(() => {
     const th = uiTheme(settings.uiTheme);
@@ -412,9 +424,8 @@ export default function App() {
     const dir = wheelAcc.current < 0 ? 1 : -1;
     wheelAcc.current = 0;
     if (!mini) {
-      const r = e.currentTarget.getBoundingClientRect();
       const sc = sceneRef.current;
-      sc?.zoomAt(dir, e.clientX - r.left, e.clientY - r.top);
+      sc?.zoomBy(dir);
       try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
       return;
     }
@@ -445,13 +456,6 @@ export default function App() {
     }
     sceneRef.current?.resetZoom();
     try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
-  };
-
-  const toggleFullscreen = async () => {
-    const w = await win();
-    if (w) await w.setFullscreen(!(await w.isFullscreen()));
-    else if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.();
-    else void document.exitFullscreen?.();
   };
 
   const [furnTip, setFurnTip] = useState<string | null>(null);
@@ -521,7 +525,7 @@ export default function App() {
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -539,11 +543,12 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
-      {!mini && !office && settings.showTabs && (
-        <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
-          <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
+      {!mini && !office && (
+        <div className="topleft" style={{ right: (panelOpen ? PANEL_W : 0) + toolbarW + 24 }}>
+          {!compact && <StatusPills sessions={list} now={now} onSelect={setPinned} />}
+          {settings.showTabs && <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />}
         </div>
       )}
       {/* a small window has no room for the welcome card, so a first-time user still gets one clear next step */}
@@ -551,35 +556,38 @@ export default function App() {
         <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
       )}
       {!compact && !office && settings.showDock && (
-        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected && !centred ? PANEL_W + 12 : 12 }}>
+        <div className="dock" ref={dockRef} style={{ right: panelOpen && !centred ? PANEL_W + 12 : 12 }}>
           {selected ? (
-            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
+            <Hud s={selected} now={now} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
             <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
         </div>
       )}
 
-      {panelOpen && selected && (
+      {panelOpen && (
         <DetailPanel
           width={PANEL_W}
           s={selected}
           sessions={list}
           onSelect={setPinned}
           showLimits={settings.showLimits}
-          timeline={timelines[selected.key] ?? []}
+          timeline={selected ? timelines[selected.key] ?? [] : []}
           tab={detailTab}
           setTab={setDetailTab}
           now={now}
           onClose={() => saveSettings({ ...settings, panelOpen: false })}
-          onForget={selected.connection === 'ended' || selected.connection === 'lost' ? () => backend.removeSession(selected.key) : undefined}
+          onForget={selected && (selected.connection === 'ended' || selected.connection === 'lost') ? () => backend.removeSession(selected.key) : undefined}
         />
       )}
 
-      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? PANEL_W + 12 : 12 }}>
         {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
-        {!compact && !office && !mini && settings.showLimits && <UsageStrip sessions={list} now={now} />}
-        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
+        {/* with little width left the pills keep the top bar; the panel's 사용량 tab still has the numbers */}
+        {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? PANEL_W : 0) >= 1000 && (
+          <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
+        )}
+        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
           else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
@@ -587,14 +595,13 @@ export default function App() {
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
-        {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
-        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('look')} />
+        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
       </div>
 
       {settingsOpen && (
         <SettingsModal
-          initialTab={settingsOpen}
+          initialTab={settingsOpen === 'agents' ? 'agents' : null}
           settings={settings}
           onChange={saveSettings}
           onClose={() => setSettingsOpen(null)}
@@ -684,8 +691,16 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         return (
           <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
-            {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            {/* which pet is which: the project by default; what it does joins it when picked or with full tags
+                (the ring under the pet and the dot already show the state) */}
+            {full || selected === a.key ? (
+              <>
+                <b className="tag-project">{tagName(s)}</b>
+                {doing && <span>{doing}</span>}
+              </>
+            ) : (
+              <span>{tagName(s)}</span>
+            )}
             <i className={`dot tone-${tone}`} />
             {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
           </button>
@@ -698,12 +713,16 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
 const TAG_H = 22;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
+/** project name on a tag, cut to keep tags small */
+const tagName = (s: Snapshot) => {
+  const n = s.project ?? AGENT_NAME[s.agent];
+  return n.length > 14 ? n.slice(0, 13) + '…' : n;
+};
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
 function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean): number {
   if (!s) return 40;
-  const doing = tagLabel(s, short) ?? (needsYou(s) ? s.project ?? '' : '');
-  const text = (withProject ? (s.project ?? AGENT_NAME[s.agent]).slice(0, 12) + ' ' : '') + doing;
+  const text = withProject ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s);
   let w = 40;
   for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
   return Math.min(w, 260);

@@ -148,26 +148,13 @@ export const BUILTIN_CRITTERS: [string, string][] = [
   ['rabbit', '솜토끼'], ['frog', '개굴이'], ['chick', '삐약이'],
 ];
 
-/** critter each role uses until the user picks another one */
-export const DEFAULT_CHARACTERS: Record<string, string> = {
-  claude: 'builtin/shiba', codex: 'builtin/penguin', generic: 'builtin/hamster',
-};
+/** pets that may appear until the user checks their own list: all the built-ins */
+export const DEFAULT_POOL = BUILTIN_CRITTERS.map(([id]) => `builtin/${id}`);
 
-/**
- * Skin preference per role for auto-assignment: the role's chosen critter, then the
- * user's own PNGs, then the built-ins. Each new session takes the first one not in use.
- */
-export function skinPrefs(chosen: Record<string, string>, own: string[]): Record<string, string[]> {
-  const builtins = BUILTIN_CRITTERS.map(([id]) => `builtin/${id}`);
-  const firsts = Object.keys(DEFAULT_CHARACTERS).map((r) => chosen[r] ?? DEFAULT_CHARACTERS[r]);
-  const out: Record<string, string[]> = {};
-  for (const role of Object.keys(DEFAULT_CHARACTERS)) {
-    const first = chosen[role] ?? DEFAULT_CHARACTERS[role];
-    // other roles' signature critters go last, so Claude and Codex keep looking different
-    const rest = [...own, ...builtins].sort((a, b) => Number(firsts.includes(a)) - Number(firsts.includes(b)));
-    out[role] = [...new Set([first, ...rest])];
-  }
-  return out;
+/** the pets new sessions can get: the checked ones that loaded (the built-ins if none did) */
+export function petPool(checked: string[] | undefined, loaded: string[]): string[] {
+  const ok = (checked?.length ? checked : DEFAULT_POOL).filter((n) => loaded.includes(n));
+  return ok.length ? ok : loaded.filter((n) => n.startsWith('builtin/'));
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
