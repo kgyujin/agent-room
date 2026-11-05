@@ -22,6 +22,8 @@ where
 
     let sock = paths::socket_path();
     let dir = sock.parent().unwrap().to_path_buf();
+    // everything Agent Room keeps (config backups, the kept status line command) is user-only
+    paths::ensure_private_dir(&paths::data_dir())?;
     std::fs::create_dir_all(&dir)?;
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
     if sock.exists() {

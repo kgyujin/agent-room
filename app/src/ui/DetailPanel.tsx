@@ -1,5 +1,5 @@
 import type { Snapshot, TimelineEntry } from '../types';
-import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, fmtTokens, timelineText } from '../labels';
+import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, timelineText } from '../labels';
 import { Icon } from './icons';
 import { progressOf } from './Hud';
 import { Overview } from './Overview';
@@ -12,6 +12,7 @@ export function DetailPanel(props: {
   s: Snapshot;
   sessions: Snapshot[];
   onSelect: (k: string) => void;
+  showLimits: boolean;
   timeline: TimelineEntry[];
   tab: Tab;
   setTab: (t: Tab) => void;
@@ -35,7 +36,7 @@ export function DetailPanel(props: {
         </button>
       </header>
       <div className="panel-body">
-        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} />}
+        {tab === 'overview' && <Overview sessions={props.sessions} now={props.now} selected={s.key} onSelect={props.onSelect} showLimits={props.showLimits} />}
         {tab === 'timeline' && <Timeline entries={props.timeline} />}
         {tab === 'tasks' && <Tasks s={s} />}
         {tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
@@ -76,11 +77,11 @@ function Tasks({ s }: { s: Snapshot }) {
               </li>
             ))}
           </ul>
-          <p className="muted small">Agent가 직접 작성한 작업 목록 기준이에요.</p>
+          <p className="muted small">에이전트가 직접 작성한 작업 목록 기준이에요.</p>
         </>
       ) : (
         <p className="muted">
-          Agent가 작업 목록(TodoWrite / update_plan 등)을 만들지 않아서 전체 단계를 알 수 없어요. 임의의 진행률 대신 경과 시간만 표시합니다.
+          에이전트가 작업 목록(TodoWrite / update_plan 등)을 만들지 않아서 전체 단계를 알 수 없어요. 임의의 진행률 대신 경과 시간만 표시합니다.
         </p>
       )}
       {s.filesEdited.length > 0 && (
@@ -99,23 +100,16 @@ function Tasks({ s }: { s: Snapshot }) {
 
 function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?: () => void }) {
   const rows: [string, string][] = [
-    ['Agent', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],
+    ['에이전트', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],
     ['프로젝트', s.project ?? '—'],
     ['경로', s.cwd ?? '—'],
     ['모델', s.model ?? '—'],
-    ['권한 모드', s.permissionMode ?? '—'],
     ['세션 시작', `${fmtClock(s.startedAt)}${s.startExact ? '' : ' (앱이 처음 관찰한 시각)'}`],
     ['세션 경과', fmtDuration(now - s.startedAt)],
-    ['마지막 이벤트', `${fmtClock(s.lastEventAt)} · ${fmtAgo(now - s.lastEventAt)}`],
+    ['마지막 활동', fmtAgo(now - s.lastEventAt)],
     ['연결 상태', { live: '연결됨', stale: '이벤트 없음(불확실)', ended: '종료됨', lost: '프로세스 없음' }[s.connection]],
     ['완료한 요청', `${s.completedTurns}회`],
-    ['도구 호출', `${s.toolCount}회`],
-    ['세션 ID', s.sessionId],
   ];
-  if (s.tokens) {
-    rows.push(['토큰 입력/출력', `${fmtTokens(s.tokens.input)} / ${fmtTokens(s.tokens.output)}`]);
-    rows.push(['캐시 읽기/쓰기', `${fmtTokens(s.tokens.cacheRead)} / ${fmtTokens(s.tokens.cacheWrite)}`]);
-  }
   return (
     <div className="pad">
       <dl className="info">
@@ -126,7 +120,6 @@ function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?
           </div>
         ))}
       </dl>
-      {s.tokens && <p className="muted small">토큰 수는 Agent의 로컬 로그({s.tokens.source})에서 읽은 값이에요. 추가 API 호출은 없어요.</p>}
       {onForget && (
         <button className="btn" onClick={onForget}>
           목록에서 지우기

@@ -24,6 +24,12 @@ export function SettingsModal(props: {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const { settings: s, onChange } = props;
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...s, [k]: v });
+  const { onClose } = props;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
     <div className="modal-bg" onClick={props.onClose}>
       <div className="modal card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="설정">
@@ -32,7 +38,7 @@ export function SettingsModal(props: {
             <button className={tab === 'look' ? 'on' : ''} onClick={() => setTab('look')}>꾸미기</button>
             <button className={tab === 'characters' ? 'on' : ''} onClick={() => setTab('characters')}>캐릭터</button>
             <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>알림·소리</button>
-            <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agent 연동</button>
+            <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>에이전트 연동</button>
             <button className={tab === 'dev' ? 'on' : ''} onClick={() => setTab('dev')}>고급</button>
           </nav>
           <button className="tool" onClick={props.onClose} aria-label="닫기"><Icon name="close" /></button>
@@ -70,7 +76,7 @@ export function SettingsModal(props: {
               </Field>
               <Field label="글꼴">
                 <select value={s.font} onChange={(e) => set('font', e.target.value as Settings['font'])}>
-                  <option value="mixed">기본 (숫자·제목만 도트)</option>
+                  <option value="mixed">기본 (제목만 도트)</option>
                   <option value="system">읽기 쉬운 글꼴만</option>
                   <option value="pixel">전부 도트</option>
                 </select>
@@ -84,6 +90,7 @@ export function SettingsModal(props: {
               </Field>
               <h4>화면 구성</h4>
               <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
+              <Toggle label="남은 사용량 표시 (5시간·주간)" v={s.showLimits} on={(v) => set('showLimits', v)} />
               <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />
               <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
             </>
@@ -94,9 +101,9 @@ export function SettingsModal(props: {
               <Toggle label="배경 음악 (Lo-fi)" v={s.bgm} on={(v) => set('bgm', v)} />
               <Toggle label="작업 완료·오류 알림" v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
               <Toggle label="승인·입력 요청 알림" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
+              <Toggle label="남은 사용량 10% 이하 알림" v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
               <Toggle label="앱을 보고 있을 땐 알림 생략" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
-              <Toggle label="토큰 사용량 표시 (로컬 로그 기준)" v={s.showTokens} on={(v) => set('showTokens', v)} />
               <AutostartToggle />
               <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
             </>
@@ -294,14 +301,18 @@ function Agents() {
   return (
     <div className="agents">
       <p className="muted small">
-        Agent의 공식 Hook에 작은 전달 프로그램(agent-room-hook)을 등록해요. 이 프로그램은 아무것도 출력하지 않아서 Agent 대화에
+        에이전트의 공식 Hook에 작은 전달 프로그램(agent-room-hook)을 등록해요. 이 프로그램은 아무것도 출력하지 않아서 에이전트 대화에
         아무것도 추가되지 않고, 추가 토큰도 쓰지 않아요. 설정을 바꾸기 전에 원본을 백업합니다.
+      </p>
+      <p className="muted small">
+        Claude Code는 남은 사용량을 상태줄(statusLine)에만 알려줘서, 상태줄 명령도 감싸요. 쓰던 상태줄이 있으면 그대로 실행해서 똑같이
+        보이고, 연동을 해제하면 원래대로 돌아가요.
       </p>
       {list.map((h) => (
         <div key={h.agent} className="agent-card">
           <div className="row between">
             <b>{NAMES[h.agent]}</b>
-            <span className={`tag st-${h.installed}`}>{{ full: '연결됨', partial: '일부만 설치', none: '미설치' }[h.installed]}</span>
+            <span className={`tag st-${h.installed}`}>{{ full: '연결됨', partial: '다시 연결 필요', none: '연결 안 됨' }[h.installed]}</span>
           </div>
           <div className="muted small mono">{h.configPath}</div>
           {!h.agentDetected && <div className="muted small">이 컴퓨터에서 {NAMES[h.agent]} 설정 폴더를 찾지 못했어요.</div>}
@@ -309,8 +320,8 @@ function Agents() {
             <div key={n} className="callout wait small">{n}</div>
           ))}
           <div className="row">
-            <button className="btn primary" onClick={() => run(() => backend.hooksInstall(h.agent), `${NAMES[h.agent]} Hook을 설치했어요. 새로 시작하는 세션부터 표시돼요.`)}>
-              {h.installed === 'none' ? 'Hook 설치' : '다시 설치'}
+            <button className="btn primary" onClick={() => run(() => backend.hooksInstall(h.agent), `${NAMES[h.agent]} 연결했어요. 새로 시작하는 세션부터 표시돼요.`)}>
+              {h.installed === 'none' ? '연결하기' : '다시 연결'}
             </button>
             {h.installed !== 'none' && (
               <button className="btn" onClick={() => run(() => backend.hooksUninstall(h.agent), `${NAMES[h.agent]} Hook을 제거했어요.`)}>
@@ -360,7 +371,7 @@ function Dev(props: { settings: Settings; onChange: (s: Settings) => void; demoR
       ))}
       <h4>완전 제거</h4>
       <p className="muted small">
-        모든 Agent 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서
+        모든 에이전트 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서
         <span className="mono"> ~/.agent-room/bin/agent-room-hook --uninstall</span> 로 같은 작업을 할 수 있어요.
       </p>
       <button className="btn danger" onClick={() => backend.hooksRemoveAll().then(() => setMsg('모든 Hook을 제거했어요.'))}>

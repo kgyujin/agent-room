@@ -33,11 +33,14 @@ pub struct Settings {
     pub bgm: bool,
     pub notify_complete: bool,
     pub notify_approval: bool,
+    /// notify when a plan usage window has 10% or less left
+    pub notify_limits: bool,
     pub notify_only_when_hidden: bool,
     pub stale_minutes: u32,
     pub panel_open: bool,
     pub always_on_top: bool,
-    pub show_tokens: bool,
+    /// remaining plan usage (5-hour / weekly) in the overview and HUD
+    pub show_limits: bool,
     /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
     pub characters: std::collections::BTreeMap<String, String>,
     /// built-in critter id -> fur colour ("#rrggbb")
@@ -64,11 +67,12 @@ impl Default for Settings {
             bgm: false,
             notify_complete: true,
             notify_approval: true,
+            notify_limits: true,
             notify_only_when_hidden: true,
             stale_minutes: 3,
             panel_open: true,
             always_on_top: false,
-            show_tokens: true,
+            show_limits: true,
             characters: Default::default(),
             critter_colors: Default::default(),
             ui_theme: "peach".into(),
@@ -90,6 +94,8 @@ struct Shared {
     detected: Mutex<(u32, u32)>,
     server_error: Mutex<Option<String>>,
     demo_stop: Mutex<Option<Arc<AtomicBool>>>,
+    /// (agent, window minutes) -> reset time already warned about (low remaining usage)
+    limit_warned: Mutex<std::collections::HashMap<(String, u32), u64>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -124,7 +130,29 @@ fn publish(app: &AppHandle, u: Update) {
     if let Some(n) = u.notice {
         notify(app, &u.snapshot, n);
     }
+    if let Some(l) = &u.snapshot.limits {
+        notify_low_limits(app, &u.snapshot, l);
+    }
     refresh_tray(app);
+}
+
+/// One notification per usage window and reset period once 10% or less is left.
+fn notify_low_limits(app: &AppHandle, s: &Snapshot, l: &agent_room_core::model::RateLimits) {
+    let shared = app.state::<Shared>();
+    if s.is_demo || !shared.settings.lock().unwrap().notify_limits {
+        return;
+    }
+    let agent = agent_label(s);
+    let low = agent_room_core::limits::newly_low(agent, l, 10.0, &mut shared.limit_warned.lock().unwrap());
+    for w in low {
+        let name = match w.minutes { 300 => "5시간", 10080 => "주간", _ => "사용량" };
+        let left = (100.0 - w.used_pct).max(0.0).round();
+        let reset = w.resets_at.map(|t| {
+            let mins = t.saturating_sub(agent_room_core::model::now_ms()) / 60_000;
+            if mins < 60 { format!(" {mins}분 뒤 초기화돼요.") } else if mins < 1440 { format!(" {}시간 뒤 초기화돼요.", mins / 60) } else { format!(" {}일 뒤 초기화돼요.", mins / 1440) }
+        }).unwrap_or_default();
+        let _ = app.notification().builder().title(format!("{agent} {name} 사용량 {left}% 남음")).body(format!("남은 사용량이 얼마 없어요.{reset}")).show();
+    }
 }
 
 fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
@@ -209,7 +237,7 @@ fn refresh_tray(app: &AppHandle) {
         format!("{}{}", state_label(s), extra)
     });
     let _ = tray.set_title(title.as_deref());
-    let _ = tray.set_tooltip(Some(title.as_deref().unwrap_or("Agent Room · 연결된 Agent 없음")));
+    let _ = tray.set_tooltip(Some(title.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
     if let Ok(menu) = build_menu(app, &sessions) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -221,13 +249,14 @@ fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<taur
     menu.append(&MenuItem::with_id(app, "mini", "룸만 띄우기", true, None::<&str>)?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     if sessions.is_empty() {
-        menu.append(&MenuItem::with_id(app, "none", "연결된 Agent 세션 없음", false, None::<&str>)?)?;
+        menu.append(&MenuItem::with_id(app, "none", "연결된 에이전트 없음", false, None::<&str>)?)?;
     }
     for s in sessions.iter().take(8) {
         let label = format!("{} · {} — {}", agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s));
         menu.append(&MenuItem::with_id(app, format!("session:{}", s.key), label, true, None::<&str>)?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(app, "settings", "설정…", true, None::<&str>)?)?;
     menu.append(&MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?)?;
     Ok(menu)
 }
@@ -372,6 +401,8 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())?;
     show_island(&app, settings.island);
+    // the popover and island keep their pages alive, so they pick up the change from this event
+    let _ = app.emit("settings-changed", &settings);
     Ok(())
 }
 
@@ -418,18 +449,22 @@ fn float_over_menu_bar(win: &WebviewWindow) {
     }
 }
 
-/// Shows or hides the island at the top centre of the primary screen.
+/// Shows the island at the top centre of the primary screen, or removes it. The island's web
+/// view only exists while the setting is on, so a turned-off island costs no memory.
 fn show_island(app: &AppHandle, on: bool) {
-    let Some(w) = app.get_webview_window("island") else { return };
-    if on {
-        let size = w.inner_size().ok().map(|s| s.to_logical::<f64>(w.scale_factor().unwrap_or(1.0)));
-        if let Some(s) = size {
-            place_island(app, &w, s.width, s.height);
+    let existing = app.get_webview_window("island");
+    if !on {
+        if let Some(w) = existing {
+            let _ = w.destroy();
         }
-        let _ = w.show();
-    } else {
-        let _ = w.hide();
+        return;
     }
+    let Some(w) = existing.or_else(|| extra_window(app, "island", 340.0, 34.0, true).ok()) else { return };
+    let size = w.inner_size().ok().map(|s| s.to_logical::<f64>(w.scale_factor().unwrap_or(1.0)));
+    if let Some(s) = size {
+        place_island(app, &w, s.width, s.height);
+    }
+    let _ = w.show();
 }
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
@@ -450,8 +485,10 @@ fn island_layout(app: AppHandle, width: f64, height: f64) {
 }
 
 /// Opens the popover under the menu bar icon (or closes it when it is already open).
+/// The popover's web view is made on the first click, not at launch.
 fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
-    let Some(w) = app.get_webview_window("tray") else { return };
+    let existing = app.get_webview_window("tray");
+    let Some(w) = existing.or_else(|| extra_window(app, "tray", 360.0, 480.0, false).ok()) else { return };
     if w.is_visible().unwrap_or(false) {
         let _ = w.hide();
         return;
@@ -700,6 +737,10 @@ pub fn run() {
                         show_main(app);
                         let _ = app.emit("set-mini", true);
                     }
+                    "settings" => {
+                        show_main(app);
+                        let _ = app.emit("open-settings", ());
+                    }
                     "quit" => app.exit(0),
                     id if id.starts_with("session:") => {
                         show_main(app);
@@ -709,8 +750,6 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            extra_window(&handle, "tray", 360.0, 480.0, false)?;
-            extra_window(&handle, "island", 340.0, 34.0, true)?;
             show_island(&handle, island_on);
             Ok(())
         })
