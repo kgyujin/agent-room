@@ -331,9 +331,12 @@ export default function App() {
 
   // in room-only mode the whole room, pets included, is the drag handle (double-click a pet for its
   // details); in window mode dragging pans the room while it is zoomed in
+  /** where the last press started, so the end of a pan is not taken for a click on the floor */
+  const downAt = useRef<[number, number]>([0, 0]);
   const onCanvasDown = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
     if (mini) return void (await win())?.startDragging();
+    downAt.current = [e.clientX, e.clientY];
     const r = e.currentTarget.getBoundingClientRect();
     if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
     let last = [e.clientX, e.clientY];
@@ -424,6 +427,9 @@ export default function App() {
     if (hit && sessions[hit]) {
       window.clearTimeout(petClick.current);
       petClick.current = window.setTimeout(() => openApp(hit), 260);
+    } else if (!hit && Math.hypot(e.clientX - downAt.current[0], e.clientY - downAt.current[1]) < 5) {
+      // a click on the empty room lets go of the picked pet (back to "자동")
+      setPinned(null);
     }
   };
 
