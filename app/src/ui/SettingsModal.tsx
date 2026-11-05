@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { appVersion, autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
+import { appVersion, autostartEnabled, backend, IN_TAURI, setAutostart, ZOOMS } from '../bridge';
 import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_CHARACTERS } from '../game/skin';
 import type { Sfx, Sound } from '../game/audio';
 import type { CharacterFile, HookStatus, Settings } from '../types';
@@ -118,6 +118,11 @@ export function SettingsModal(props: {
                 </select>
               </Field>
               <h4>화면 구성</h4>
+              <Field label="화면 크기 (⌘+ / ⌘− / ⌘0)">
+                <select value={s.uiZoom ?? 1} onChange={(e) => set('uiZoom', Number(e.target.value))} disabled={!IN_TAURI}>
+                  {ZOOMS.map((z) => <option key={z} value={z}>{Math.round(z * 100)}%{z === 1 ? ' (기본)' : ''}</option>)}
+                </select>
+              </Field>
               <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
               <Toggle label="남은 사용량 표시 (5시간·주간)" v={s.showLimits} on={(v) => set('showLimits', v)} />
               <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />

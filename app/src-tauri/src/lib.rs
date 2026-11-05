@@ -78,6 +78,8 @@ pub struct Settings {
     pub notify_min_turn_sec: u32,
     /// look for a new version at launch and every few hours, and ask before installing it
     pub auto_update_check: bool,
+    /// size of the whole main window's contents (text, panels, room), 1.0 = 100%
+    pub ui_zoom: f64,
 }
 
 impl Default for Settings {
@@ -113,6 +115,7 @@ impl Default for Settings {
             island_usage: true,
             notify_min_turn_sec: 0,
             auto_update_check: true,
+            ui_zoom: 1.0,
         }
     }
 }
@@ -1209,7 +1212,12 @@ fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         &sep()?,
         &P::close_window(app, Some("윈도우 닫기"))?,
     ])?;
-    Menu::with_items(app, &[&main, &edit, &window])
+    let view = Submenu::with_items(app, "보기", true, &[
+        &MenuItem::with_id(app, "zoom-in", "확대", true, Some("CmdOrCtrl+="))?,
+        &MenuItem::with_id(app, "zoom-out", "축소", true, Some("CmdOrCtrl+-"))?,
+        &MenuItem::with_id(app, "zoom-reset", "실제 크기", true, Some("CmdOrCtrl+0"))?,
+    ])?;
+    Menu::with_items(app, &[&main, &edit, &view, &window])
 }
 
 pub fn run() {
@@ -1224,6 +1232,9 @@ pub fn run() {
             "app-update" => {
                 show_main(app);
                 let _ = app.emit_to("main", "check-update", ());
+            }
+            id @ ("zoom-in" | "zoom-out" | "zoom-reset") => {
+                let _ = app.emit_to("main", "ui-zoom", id.trim_start_matches("zoom-"));
             }
             _ => {}
         }

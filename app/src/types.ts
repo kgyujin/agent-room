@@ -108,6 +108,8 @@ export interface Settings {
   islandUsage: boolean;
   /** look for a new version at launch and every few hours, and ask before installing */
   autoUpdateCheck: boolean;
+  /** size of the main window's contents, 1 = 100% (⌘+ / ⌘− / ⌘0) */
+  uiZoom: number;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }
