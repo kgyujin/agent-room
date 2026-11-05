@@ -151,8 +151,10 @@ def body(s, ramp, bh=BH):
 
 
 def eyes_mouth(s, h=5, eye=INK, mouth=True, blush=True):
+    # eyes two pixels tall, set wide apart around the mouth
     for i in (2, 10):
         s.put(F(i, h), eye)
+        s.put(F(i, h + 1), eye)
     if mouth:
         mx, my = F(6, h)
         s.put((mx, my), INK); s.put((mx - 1, my + 1), INK); s.put((mx + 1, my + 1), INK)

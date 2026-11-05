@@ -123,41 +123,42 @@ def face_frames(poly, to_uv, fn):
 
 
 def desk_screens(i, scr):
-    x0, y0, z0, lx, lz = scr
-    yf = y0  # the +y face sits at y = y0
+    """states of the sheet lying on desk i: u runs along the sheet's long side (world y), v across it"""
+    x0, y0, z0, lx, ly = scr
+    P = office.P
 
     def to_uv(px, py):
-        xw = (px + 0.5 - office.OX) / 2 + yf
-        z = office.OY + xw + yf - (py + 0.5)
-        return int((xw - x0 - 1) * 2), int(z0 + lz - 1 - z)
+        wx, wy = office.to_world(px, py, z0)
+        return int((wy - y0) * 2), int((wx - x0) * 2)
 
-    poly = office.screen_poly(x0, yf, z0, lx, lz)
-    W, H = int((lx - 2) * 2), int(lz - 2)
+    poly = [P(x0 + 0.5, y0 + 0.5, z0), P(x0 + lx - 0.5, y0 + 0.5, z0), P(x0 + lx - 0.5, y0 + ly - 0.5, z0), P(x0 + 0.5, y0 + ly - 0.5, z0)]
+    W, H = int(ly * 2), int(lx * 2)
 
     def glyph(rows, col, bg):
         gh, gw = len(rows), len(rows[0])
         ou, ov = (W - gw) // 2, (H - gh) // 2
         return lambda u, v: col if 0 <= v - ov < gh and 0 <= u - ou < gw and rows[v - ov][u - ou] == 'x' else bg
 
-    # paper on the drawing board: pencil and ink marks instead of a screen
     C2 = office.C
-    paper, ink, fold = C2['paper'], C2['nv_d'], C2['cr_d']
-    out = {'off': lambda u, v: fold if u + v < 2 else paper,
-           'idle': glyph(['x.x', 'xxx', '.x.'], C2['fl_r'], paper),
-           'err': glyph(['x.x', '.x.', 'x.x'], C2['fl_rd'], paper),
-           'ok': glyph(['..x', 'x.x', '.x.'], C2['g_d'], paper),
-           'wait': glyph(['x', 'x', '.', 'x'], C2['gold_d'], paper)}
+    paper, ink = C2['paper'], C2['nv_d']
+    big = lambda rows: [''.join(ch * 2 for ch in r) for r in rows for _ in (0, 1)]   # each mark 2 x 2
+    out = {'off': lambda u, v: paper,
+           'idle': glyph(big(['x.x', 'xxx', '.x.']), C2['fl_r'], paper),
+           'err': glyph(big(['x.x', '.x.', 'x.x']), C2['fl_rd'], paper),
+           'ok': glyph(big(['..x', 'x.x', '.x.']), C2['g_d'], paper),
+           'wait': glyph(big(['x', 'x', '.', 'x']), C2['gold_d'], paper)}
     # writing: lines of pencil and ink appear one by one, a little more each frame
     for f in range(4):
         def write(u, v, f=f):
-            if v % 2 == 1 or v // 2 > f:
+            line = (v - 2) // 3
+            if v < 2 or (v - 2) % 3 != 0 or line > f:
                 return paper
-            ind = 1 + (v * 7) % 3
-            ln = 3 + (v * 5) % 7
-            return (ink, C2['w_dd'], C2['fl_rd'])[(v // 2) % 3] if ind <= u < ind + ln else paper
+            ind = 2 + (line * 5) % 4
+            ln = 6 + (line * 7) % 7
+            return (ink, C2['w_dd'], C2['fl_rd'])[line % 3] if ind <= u < ind + ln else paper
         out[f'code{f}'] = write
     for f in range(2):
-        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and (v + f) % 2 == 0 else paper
+        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and v % 3 == 1 + f else paper
     return {f'scr{i}_{k}': face_frames(poly, to_uv, fn) for k, fn in out.items()}
 
 
