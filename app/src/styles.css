@@ -8,14 +8,15 @@
   --paper-2: #f8ebdc;
   --line: #7a5646;
   --line-soft: #e3cdb9;
-  --work: #4f8fb0;
+  --work: #2e9a9c;
   --wait: #d9922e;
   --ok: #3f9e57;
   --bad: #d0504b;
   --calm: #a39aa0;
   --muted: #9a8f95;
-  --claude: #d9825f;
-  --codex: #5b97b5;
+  /* agent colours follow their marks; only charts and marks use them, never a state */
+  --claude: #d97757;
+  --codex: #7184ff;
   --demo: #a993d6;
   --shadow: 0 1px 2px rgba(58, 40, 50, 0.08), 0 10px 30px rgba(58, 40, 50, 0.14);
   --glass: rgba(255, 250, 243, 0.86);
@@ -601,7 +602,7 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 }
 
 /* ------------------------------------------------ readable text: status words use darker tones than dots and bars (WCAG AA 4.5:1) */
-:root { --work-ink: #2e6c8c; --wait-ink: #9e5f0b; --ok-ink: #2a7a40; --bad-ink: #b03a35; }
+:root { --work-ink: #1d6e70; --wait-ink: #9e5f0b; --ok-ink: #2a7a40; --bad-ink: #b03a35; }
 .tone-work { color: var(--work-ink); }
 .tone-wait { color: var(--wait-ink); }
 .tone-ok { color: var(--ok-ink); }
@@ -822,8 +823,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .lc-bar { display: block; height: 6px; border-radius: 999px; background: var(--tint-2, rgba(122, 86, 70, 0.12)); overflow: hidden; }
 .lc-bar.a-claude, .lc-bar.a-codex { background: var(--tint-2, rgba(122, 86, 70, 0.12)); }
 .lc-bar i { display: block; height: 100%; border-radius: inherit; }
-.lc-bar.a-claude i { background: var(--claude); }
-.lc-bar.a-codex i { background: var(--codex); }
+.lc-bar i { background: color-mix(in srgb, var(--ink) 45%, transparent); } /* neutral until low: amber and red mean running out */
 .lc-row.mid .lc-bar i { background: var(--wait); }
 .lc-row.low .lc-bar i { background: var(--bad); }
 .lc-row.low .lc-foot b { color: var(--bad); }

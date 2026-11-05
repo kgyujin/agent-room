@@ -21,7 +21,7 @@ const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'cen
 
 /** floor ring under a pet by state, so who works, who waits for you and what broke reads at a glance */
 // the same values as the --work / --wait / --bad / --ok tokens in styles.css
-const RING: Partial<Record<ReturnType<typeof stateTone>, string>> = { work: '#4f8fb0', wait: '#d9922e', bad: '#d0504b', ok: '#3f9e57' };
+const RING: Partial<Record<ReturnType<typeof stateTone>, string>> = { work: '#2e9a9c', wait: '#d9922e', bad: '#d0504b', ok: '#3f9e57' };
 
 interface Mate {
   key: string;
