@@ -22,6 +22,9 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
+/** room-only window width limits for resizing it with the scroll wheel (CSS px) */
+const ROOM_ONLY_MIN_W = 300;
+const ROOM_ONLY_MAX_W = 1200;
 /** how long a new session must last before its critter comes in */
 const NEW_SESSION_MS = 3000;
 
@@ -419,11 +422,20 @@ export default function App() {
 
   // mouse wheel / trackpad scroll: zooms the room in window mode, resizes the floating window in room-only mode
   const wheelAcc = useRef(0);
+  // room-only: one size step per scroll gesture. A trackpad swipe sends dozens of events, which
+  // jumped the floating room from tiny to huge at once; the next step waits for a pause.
+  const wheelLock = useRef(0);
   const onWheel = async (e: React.WheelEvent<HTMLCanvasElement>) => {
+    const lock = () => {
+      window.clearTimeout(wheelLock.current);
+      wheelLock.current = window.setTimeout(() => { wheelLock.current = 0; }, 250);
+    };
+    if (mini && wheelLock.current) return lock();
     wheelAcc.current += e.deltaY;
     if (Math.abs(wheelAcc.current) < 40) return;
     const dir = wheelAcc.current < 0 ? 1 : -1;
     wheelAcc.current = 0;
+    if (mini) lock();
     if (!mini) {
       const sc = sceneRef.current;
       sc?.zoomBy(dir);
@@ -433,9 +445,10 @@ export default function App() {
     // one whole pixel scale per step; grows from the corner it sits in, so a room in a screen
     // corner stays fully visible
     const sc = sceneRef.current;
-    if (!sc || sc.scale + dir < 1) return;
+    if (!sc) return;
     const f = roomOnlyFit(sc.scale + dir);
-    if (f.w <= 1600) await resizeOnScreen(f.w, f.h);
+    // smaller than this the pets and their tags can't be made out; larger fills most screens
+    if (f.w >= ROOM_ONLY_MIN_W && f.w <= ROOM_ONLY_MAX_W) await resizeOnScreen(f.w, f.h);
   };
 
   const petClick = useRef(0);
