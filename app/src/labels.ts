@@ -136,3 +136,21 @@ export function fmtUntil(ms: number): string {
   if (h < 24) return `${h}시간${m % 60 ? ` ${m % 60}분` : ''} 후`;
   return `${Math.floor(h / 24)}일${h % 24 ? ` ${h % 24}시간` : ''} 후`;
 }
+
+/**
+ * Names that tell sessions apart when their folders share a name: "web-app · wt-2" (the parent
+ * folder), or the session's short id when they run in the same folder. Others keep the folder name.
+ */
+export function sessionNames(list: Snapshot[]): Record<string, string> {
+  const base = (s: Snapshot) => s.project ?? '프로젝트';
+  const parent = (s: Snapshot) => (s.cwd ?? '').split('/').filter(Boolean).slice(-2, -1)[0] ?? null;
+  const out: Record<string, string> = {};
+  for (const s of list) {
+    const twins = list.filter((o) => base(o) === base(s));
+    if (twins.length < 2) { out[s.key] = base(s); continue; }
+    const p = parent(s);
+    const own = p !== null && twins.filter((o) => parent(o) === p).length === 1;
+    out[s.key] = `${base(s)} · ${own ? p : s.key.split(':').pop()!.slice(0, 4)}`;
+  }
+  return out;
+}

@@ -72,8 +72,9 @@ def bubble(icon):
             if ch in pal:
                 s.put(x, y, pal[ch])
     icons = {
-        'bang': (["..x..", "..x..", "..x..", ".....", "..x.."], C['led_r']),
-        'ask': ([".xxx.", "x...x", "...x.", ".....", "..x.."], hexc('#5f8fc9')),
+        # asking the user (approval / input) is amber like every other "내 차례" cue; only errors are red
+        'bang': (["..x..", "..x..", "..x..", ".....", "..x.."], hexc('#d9922e')),
+        'ask': ([".xxx.", "x...x", "...x.", ".....", "..x.."], hexc('#d9922e')),
         'check': (["....x", "...x.", "x.x..", ".x...", "....."], hexc('#4fae62')),
         'cross': (["x...x", ".x.x.", "..x..", ".x.x.", "x...x"], C['led_r']),
         'dots': ([".....", ".....", "x.x.x", ".....", "....."], C['ink']),

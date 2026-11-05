@@ -20,7 +20,8 @@ interface Spark { x: number; y: number; t: number }
 const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center', 'coffee', 'beanbag']);
 
 /** floor ring under a pet by state, so who works, who waits for you and what broke reads at a glance */
-const RING: Partial<Record<ReturnType<typeof stateTone>, string>> = { work: '#5b9be0', wait: '#f2a33a', bad: '#e2574c', ok: '#52b46e' };
+// the same values as the --work / --wait / --bad / --ok tokens in styles.css
+const RING: Partial<Record<ReturnType<typeof stateTone>, string>> = { work: '#4f8fb0', wait: '#d9922e', bad: '#d0504b', ok: '#3f9e57' };
 
 interface Mate {
   key: string;

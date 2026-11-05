@@ -691,8 +691,16 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         return (
           <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
-            {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            {/* which pet is which: the project by default; what it does joins it when picked or with full tags
+                (the ring under the pet and the dot already show the state) */}
+            {full || selected === a.key ? (
+              <>
+                <b className="tag-project">{tagName(s)}</b>
+                {doing && <span>{doing}</span>}
+              </>
+            ) : (
+              <span>{tagName(s)}</span>
+            )}
             <i className={`dot tone-${tone}`} />
             {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
           </button>
@@ -705,12 +713,16 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
 const TAG_H = 22;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
+/** project name on a tag, cut to keep tags small */
+const tagName = (s: Snapshot) => {
+  const n = s.project ?? AGENT_NAME[s.agent];
+  return n.length > 14 ? n.slice(0, 13) + '…' : n;
+};
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
 function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean): number {
   if (!s) return 40;
-  const doing = tagLabel(s, short) ?? (needsYou(s) ? s.project ?? '' : '');
-  const text = (withProject ? (s.project ?? AGENT_NAME[s.agent]).slice(0, 12) + ' ' : '') + doing;
+  const text = withProject ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s);
   let w = 40;
   for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
   return Math.min(w, 260);

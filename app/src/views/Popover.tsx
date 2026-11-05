@@ -3,7 +3,7 @@
 // the rest is one click away in the main window.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtAgo, fmtUntil, stateLabel, stateTone, windowLabel } from '../labels';
+import { fmtAgo, fmtUntil, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import type { Snapshot } from '../types';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { fmtTokens, useUsageHistory } from '../ui/Usage';
@@ -23,7 +23,7 @@ export function Popover() {
   }, [list.length]);
   const showLimits = settings?.showLimits ?? true;
   const live = list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
-  const todo = live.filter((s) => userTodo(s, now));
+  const todo = live.filter((s) => userTodo(s, now)).sort((a, b) => userTodo(a, now)!.since - userTodo(b, now)!.since);
   const work = live.filter((s) => isActive(s) && !userTodo(s, now));
   // as many rows as the space between the usage block and the footer holds
   const box = useRef<HTMLDivElement>(null);
@@ -40,6 +40,7 @@ export function Popover() {
   const order = [...todo, ...live.filter((s) => !todo.includes(s))];
   const rows = order.length > fit ? order.slice(0, fit - 1) : order;
   const more = live.length - rows.length;
+  const names = sessionNames(live);
   return (
     <div className="pop">
       <header className="pop-head">
@@ -47,7 +48,7 @@ export function Popover() {
         <span className="pp-counts">
           {todo.length > 0 && <em className="todo">내 차례 {todo.length}</em>}
           {work.length > 0 && <em>작업 중 {work.length}</em>}
-          {!todo.length && !work.length && <em className="calm">{live.length ? '모두 쉬는 중' : '대기 중'}</em>}
+          {!todo.length && !work.length && <em className="calm">{live.length ? '모두 쉬는 중' : unhooked ? '연결 안 됨' : '대기 중'}</em>}
         </span>
       </header>
       {showLimits && <UsageBlock sessions={list} now={now} />}
@@ -55,7 +56,7 @@ export function Popover() {
         {live.length ? (
           <>
             <h4>세션 <span>{live.length}</span></h4>
-            {rows.map((s) => <Row key={s.key} s={s} now={now} onClick={() => act('select', s.key)} />)}
+            {rows.map((s) => <Row key={s.key} s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom ? 'select' : 'focus', s.key)} />)}
             {more > 0 && <button className="pp-more" onClick={() => act('open')}>+{more}개 더 · 방에서 보기</button>}
           </>
         ) : (
@@ -90,7 +91,8 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
               const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
               return (
                 <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : undefined}>
-                  <small>{windowLabel(w.minutes)}</small>
+                  {/* running low: when it comes back matters more than which window it is */}
+                  <small>{left <= 30 && w.resetsAt && w.resetsAt > now ? fmtUntil(w.resetsAt - now) : windowLabel(w.minutes)}</small>
                   <i className={`lc-bar a-${a}`}><i style={{ width: `${left}%` }} /></i>
                   <b>{left}%</b>
                 </span>
@@ -111,13 +113,14 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
   );
 }
 
-function Row({ s, now, onClick }: { s: Snapshot; now: number; onClick: () => void }) {
+/** click: open the session itself (terminal tab, editor, chat); ⌥-click: show it in the room */
+function Row({ s, name, now, onClick }: { s: Snapshot; name: string; now: number; onClick: (inRoom: boolean) => void }) {
   const todo = userTodo(s, now);
   const tone = stateTone(s);
   return (
-    <button className={`pp-row t-${tone}`} onClick={onClick} title={s.cwd ?? ''}>
+    <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n⌥ 클릭: 방에서 보기`}>
       <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} />
-      <span className="pp-name">{s.project ?? '프로젝트'}</span>
+      <span className="pp-name">{name}</span>
       <span className={`pp-state tone-${tone}`}><i className="pulse" />{todo ? todo.text : stateLabel(s)}</span>
       <span className="pp-ago">{fmtAgo(now - (todo?.since ?? s.lastEventAt))}</span>
     </button>
