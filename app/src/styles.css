@@ -652,3 +652,4 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 
 /* first step in a small window (the welcome card needs a wide one) */
 .first-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; white-space: nowrap; }
+.pop-body .pad .btn { margin-top: 10px; }

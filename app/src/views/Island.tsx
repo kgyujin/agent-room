@@ -112,9 +112,9 @@ export function Island() {
             <span className="is-work"><Icon name="cog" />{open ? `작업 중 ${working.length}` : working.length}</span>
           ) : done.length ? (
             <span className="is-ok"><Icon name="check" />{open ? `완료 ${done.length}` : done.length}</span>
-          ) : (
+          ) : list.length ? (
             <span className="is-dim"><Icon name="moon" /></span>
-          )}
+          ) : null /* the left side already says 대기 */}
         </div>
       </div>
       {open && (

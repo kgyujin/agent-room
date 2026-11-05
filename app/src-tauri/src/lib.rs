@@ -791,7 +791,8 @@ fn tray_action(app: AppHandle, action: String, key: Option<String>) {
         }
         "settings" => {
             show_main(&app);
-            let _ = app.emit("open-settings", ());
+            // the popover's "에이전트 연결하기" opens the settings on the agents tab
+            let _ = app.emit("open-settings", key);
         }
         "select" => {
             show_main(&app);
