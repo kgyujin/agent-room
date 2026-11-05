@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, type AppUpdate } from './bridge';
+import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
@@ -10,7 +11,7 @@ import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
-import { latestLimits, userTodo } from './ui/Overview';
+import { latestLimits, UsageStrip, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
@@ -47,15 +48,32 @@ export default function App() {
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
   const [hovered, setHovered] = useState(false);
-  // update available on GitHub Releases (checked at launch and every 6 hours)
+  // update available on GitHub Releases: checked at launch and every 6 hours when the setting is on,
+  // or on demand from the app menu, the menu bar menu and Settings. A found update asks first (dialog);
+  // "나중에" leaves a small banner instead of asking again for the same version.
   const [update, setUpdate] = useState<AppUpdate | null>(null);
-  const [updating, setUpdating] = useState<number | null>(null);
+  const [updDialog, setUpdDialog] = useState<UpdateState | null>(null);
+  const asked = useRef<string | null>(null);
+  const checkNow = () => {
+    setUpdDialog({ k: 'checking' });
+    void runCheck().then((r) => { setUpdDialog(r); if (r.k === 'available') setUpdate(r.u); });
+  };
+  const checkRef = useRef(checkNow);
+  checkRef.current = checkNow;
+  const autoUpdate = settings.autoUpdateCheck ?? true;
   useEffect(() => {
-    const run = () => void checkUpdate().then(setUpdate);
-    run();
+    if (!autoUpdate) return;
+    const run = () => void checkUpdate().then((u) => {
+      setUpdate(u);
+      if (u && asked.current !== u.version) {
+        asked.current = u.version;
+        setUpdDialog((d) => d ?? { k: 'available', u });
+      }
+    }, () => undefined);
+    const first = window.setTimeout(run, 4000);
     const id = window.setInterval(run, 6 * 3600_000);
-    return () => clearInterval(id);
-  }, []);
+    return () => { clearTimeout(first); clearInterval(id); };
+  }, [autoUpdate]);
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
@@ -112,6 +130,7 @@ export default function App() {
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'look')),
+        await backend.onTrayEvent('check-update', () => checkRef.current()),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
     })();
@@ -186,14 +205,22 @@ export default function App() {
     sc.setSessions(list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost'));
   }, [list, ready]);
 
+  // The status card and the banners change height as the agent's work changes (a tool line, a
+  // notice, a 4-second error banner). Re-centring the room on every change made the middle of the
+  // screen jump, so the room keeps the tallest space they needed until the layout itself changes.
+  const tall = useRef({ key: '', dock: 0, banners: 0 });
+  const layoutKey = `${vw}x${window.innerHeight}|${panelOpen}|${mini}|${tabsBelow}`;
+  if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, dock: 0, banners: 0 };
+  const dockRoom = dockH ? (tall.current.dock = Math.max(tall.current.dock, dockH)) : 0;
+  const bannersRoom = bannersH ? (tall.current.banners = Math.max(tall.current.banners, bannersH)) : 0;
   useEffect(() => {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
-    sc.insetBottom = dockH ? dockH + 24 : tabsBelow ? 36 : 0;
-    sc.insetTop = mini ? 0 : bannersH ? bannersH + 66 : 56;
+    sc.insetBottom = dockRoom ? dockRoom + 24 : tabsBelow ? 36 : 0;
+    sc.insetTop = mini ? 0 : bannersRoom ? bannersRoom + 66 : 56;
     sc.resize();
-  }, [panelOpen, ready, mini, dockH, bannersH, tabsBelow]);
+  }, [panelOpen, ready, mini, dockRoom, bannersRoom, tabsBelow]);
 
   // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
@@ -477,10 +504,10 @@ export default function App() {
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}
-        {update && (
+        {update && !updDialog && (
           <div className="banner update">
-            {updating === null ? (compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>) : <>업데이트 받는 중… {updating}%</>}
-            {updating === null && <button onClick={() => { setUpdating(0); update.install(setUpdating).catch(() => setUpdating(null)); }}>업데이트</button>}
+            {compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>}
+            <button onClick={() => setUpdDialog({ k: 'available', u: update })}>업데이트</button>
           </div>
         )}
         {flash && <div className="banner error">{flash}</div>}
@@ -525,6 +552,8 @@ export default function App() {
       )}
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+        {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
+        {!compact && !office && !mini && settings.showLimits && <UsageStrip sessions={list} now={now} />}
         {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
@@ -551,8 +580,10 @@ export default function App() {
           onCharactersChanged={reloadSkins}
           sound={soundRef.current}
           onSoundsChanged={reloadSounds}
+          onCheckUpdate={checkNow}
         />
       )}
+      {updDialog && <UpdateDialog state={updDialog} setState={setUpdDialog} onClose={() => setUpdDialog(null)} />}
     </div>
   );
 }

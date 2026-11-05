@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
+import { appVersion, autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
 import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_CHARACTERS } from '../game/skin';
 import type { Sfx, Sound } from '../game/audio';
 import type { CharacterFile, HookStatus, Settings } from '../types';
@@ -20,8 +20,11 @@ export function SettingsModal(props: {
   onCharactersChanged: () => Promise<void>;
   sound: Sound;
   onSoundsChanged: () => Promise<void>;
+  onCheckUpdate: () => void;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
+  const [version, setVersion] = useState('');
+  useEffect(() => { void appVersion().then(setVersion); }, []);
   const { settings: s, onChange } = props;
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...s, [k]: v });
   const { onClose } = props;
@@ -155,6 +158,12 @@ export function SettingsModal(props: {
               <Toggle label="항상 위에 표시 (기본 창)" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
               <Toggle label="항상 위에 표시 (룸만 띄우기)" v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
               <AutostartToggle />
+              <h4>업데이트</h4>
+              <div className="field">
+                <span>지금 버전 <b className="ver">{version || '—'}</b></span>
+                <button className="btn" onClick={props.onCheckUpdate} disabled={!IN_TAURI}>업데이트 확인</button>
+              </div>
+              <Toggle label="자동으로 새 버전 확인 (실행할 때와 6시간마다, 설치 전에 물어봐요)" v={s.autoUpdateCheck ?? true} on={(v) => set('autoUpdateCheck', v)} />
               <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
             </>
           )}

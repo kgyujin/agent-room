@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true,
 };
 
 export interface Backend {
@@ -29,7 +29,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
@@ -243,16 +243,18 @@ export async function autostartEnabled(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------- in-app updates (GitHub Releases, signed)
-export interface AppUpdate { version: string; install: (onProgress: (pct: number) => void) => Promise<void> }
+export interface AppUpdate { version: string; current: string; notes?: string; install: (onProgress: (pct: number) => void) => Promise<void> }
 
-/** null when up to date, in the browser preview, or when the check fails (offline etc.) */
+/** null when up to date (or in the browser preview); throws when the check itself fails (offline etc.) */
 export async function checkUpdate(): Promise<AppUpdate | null> {
   if (!IN_TAURI) return null;
   const { check } = await import('@tauri-apps/plugin-updater');
-  const u = await check().catch(() => null);
+  const u = await check();
   if (!u) return null;
   return {
     version: u.version,
+    current: u.currentVersion,
+    notes: u.body ?? undefined,
     install: async (onProgress) => {
       let total = 0;
       let got = 0;
