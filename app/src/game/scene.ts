@@ -37,7 +37,7 @@ export class Scene {
   private ctx: CanvasRenderingContext2D;
   private buf = document.createElement('canvas');
   private bctx: CanvasRenderingContext2D;
-  private scale = 3;
+  scale = 3;
   private theme: Theme = 'day';
   private mates: Mate[] = [];
   private tickN = 0;
@@ -202,6 +202,20 @@ export class Scene {
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
     this.draw();
+  }
+
+  /** largest whole scale at which the room-only window still fits in w x h CSS px */
+  roomOnlyScale(cssW: number, cssH: number): number {
+    const dpr = window.devicePixelRatio || 1;
+    const room = this.atlas.frames.room;
+    return Math.max(1, Math.floor(Math.min((cssW * dpr) / (room.w + 2), (cssH * dpr) / (room.h + 2))));
+  }
+
+  /** CSS size of a room-only window that holds the room at `scale` with no spare clear margin */
+  roomOnlySize(scale: number): { w: number; h: number } {
+    const dpr = window.devicePixelRatio || 1;
+    const room = this.atlas.frames.room;
+    return { w: Math.ceil(((room.w + 2) * scale) / dpr), h: Math.ceil(((room.h + 2) * scale) / dpr) };
   }
 
   /** zoom one step in (dir 1) or out (-1), keeping the art pixel under the cursor in place */

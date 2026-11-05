@@ -76,6 +76,8 @@ export default function App() {
   const realSessions = list.filter((s) => !s.isDemo);
   const selected = (pinned && sessions[pinned]) || list[0] || null;
   const compact = mini || vw < 560;
+  // narrow window: the session tabs move under the room
+  const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
 
   // ---------------------------------------------------------------- data
@@ -185,10 +187,10 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
-    sc.insetBottom = dockH ? dockH + 24 : 0;
+    sc.insetBottom = dockH ? dockH + 24 : tabsBelow ? 36 : 0;
     sc.insetTop = mini ? 0 : bannersH ? bannersH + 66 : 56;
     sc.resize();
-  }, [panelOpen, ready, mini, dockH, bannersH]);
+  }, [panelOpen, ready, mini, dockH, bannersH, tabsBelow]);
 
   // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
@@ -252,6 +254,12 @@ export default function App() {
   // room-only mode: a borderless transparent window that floats just the room on the desktop.
   // Leaving it puts the window back where it was; inside it the window stays on its screen.
   const windowFrame = useRef<Rect | null>(null);
+  // the floating window is cut to the room at a whole pixel scale, so no clear margin is left
+  // around it and a room pushed into a screen corner sits right in that corner
+  const roomOnlyFit = (scale?: number) => {
+    const sc = sceneRef.current;
+    return sc ? sc.roomOnlySize(scale ?? sc.roomOnlyScale(440, 360)) : { w: 440, h: 360 };
+  };
   const toggleMini = async (force?: boolean) => {
     const next = force ?? !mini;
     if (next === mini) return;
@@ -268,7 +276,12 @@ export default function App() {
       // macOS: keep the grey title bar hidden (traffic lights float over the app) when decorations return
       if (!next && IS_MAC) await w.setTitleBarStyle('overlay').catch(() => undefined);
       await w.setShadow(!next);
-      if (next) await resizeOnScreen(440, 360);
+      const { LogicalSize } = await import('@tauri-apps/api/dpi');
+      await w.setMinSize(next ? new LogicalSize(120, 80) : new LogicalSize(300, 260));
+      if (next) {
+        const f = roomOnlyFit();
+        await resizeOnScreen(f.w, f.h);
+      }
       else await placeOnScreen(windowFrame.current ?? { x: 80, y: 80, w: 980, h: 700 });
     }
   };
@@ -346,12 +359,12 @@ export default function App() {
       try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
       return;
     }
-    const r = await windowRect();
-    if (!r) return;
-    const k = dir > 0 ? 1.15 : 1 / 1.15;
-    const nw = Math.max(300, Math.min(1600, Math.round(r.w * k)));
-    // grows from the corner it sits in, so a room in a screen corner stays fully visible
-    await resizeOnScreen(nw, Math.max(260, Math.round((r.h * nw) / r.w)));
+    // one whole pixel scale per step; grows from the corner it sits in, so a room in a screen
+    // corner stays fully visible
+    const sc = sceneRef.current;
+    if (!sc || sc.scale + dir < 1) return;
+    const f = roomOnlyFit(sc.scale + dir);
+    if (f.w <= 1600) await resizeOnScreen(f.w, f.h);
   };
 
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -401,7 +414,7 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
       onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
@@ -424,9 +437,9 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini || settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact} />
+      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
 
-      {!compact && !office && settings.showTabs && (
+      {!mini && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
