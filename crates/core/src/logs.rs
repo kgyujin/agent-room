@@ -79,10 +79,13 @@ fn codex_id(stem: &str) -> Option<String> {
 /// How many of the newest Codex day folders are checked for fresh rollouts.
 const CODEX_DAYS: usize = 7;
 
-/// Codex's remaining usage from its newest rollout log, whichever app wrote it (limits are per
-/// account). Only the last 512 KB is read, and only the numbers of the last `rate_limits` line.
+/// How many of the newest rollouts are tried for a usage report (a fresh session may have none yet).
+const CODEX_LIMIT_FILES: usize = 10;
+
+/// Codex's remaining usage from its newest rollout log that has one, whichever app wrote it
+/// (limits are per account). Only the last 512 KB of each log is read, and only the numbers of
+/// its last `rate_limits` line, timed by that line's own `timestamp`.
 pub fn newest_codex_limits(dirs: &LogDirs) -> Option<crate::model::RateLimits> {
-    use std::io::{Read, Seek, SeekFrom};
     let mut days = Vec::new();
     for y in entries(&dirs.codex) {
         for m in entries(&y) {
@@ -90,15 +93,21 @@ pub fn newest_codex_limits(dirs: &LogDirs) -> Option<crate::model::RateLimits> {
         }
     }
     days.sort();
-    let newest = days
+    let mut logs: Vec<(u64, PathBuf)> = days
         .iter()
         .rev()
         .take(CODEX_DAYS)
         .flat_map(|d| entries(d))
         .filter(|f| f.extension().is_some_and(|e| e == "jsonl"))
         .filter_map(|f| modified_ms(&f).map(|m| (m, f)))
-        .max_by_key(|(m, _)| *m)?;
-    let mut file = std::fs::File::open(&newest.1).ok()?;
+        .collect();
+    logs.sort_by(|a, b| b.0.cmp(&a.0));
+    logs.iter().take(CODEX_LIMIT_FILES).find_map(|(m, f)| last_codex_limits(f, *m))
+}
+
+fn last_codex_limits(path: &Path, modified: u64) -> Option<crate::model::RateLimits> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
     file.seek(SeekFrom::Start(len.saturating_sub(512 * 1024))).ok()?;
     let mut buf = Vec::new();
@@ -108,7 +117,8 @@ pub fn newest_codex_limits(dirs: &LogDirs) -> Option<crate::model::RateLimits> {
             return None;
         }
         let v: serde_json::Value = serde_json::from_slice(line).ok()?;
-        crate::limits::from_codex(v.pointer("/payload/rate_limits")?, newest.0)
+        let at = v.get("timestamp").and_then(|t| t.as_str()).and_then(crate::usage::iso_ms).map(|t| t as u64).unwrap_or(modified);
+        crate::limits::from_codex(v.pointer("/payload/rate_limits")?, at)
     })
 }
 
@@ -212,6 +222,14 @@ mod tests {
         let l = newest_codex_limits(&dirs).unwrap();
         assert_eq!((l.windows.len(), l.windows[0].used_pct, l.windows[0].minutes), (1, 42.0, 300), "last line wins, null window skipped");
         assert!(newest_codex_limits(&LogDirs { claude: root.join("x"), codex: root.join("none") }).is_none());
+        // the report's own time is used, not the file's
+        std::fs::write(&f, "{\"timestamp\":\"2025-11-05T10:00:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"rate_limits\":{\"primary\":{\"used_percent\":5.0,\"window_minutes\":300,\"resets_in_seconds\":60}}}}\n").unwrap();
+        let l = newest_codex_limits(&dirs).unwrap();
+        assert_eq!((l.at, l.windows[0].resets_at), (1762336800000, Some(1762336860000)));
+        // a newer rollout with no report yet falls back to the older one
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(day.join("rollout-2025-11-05T11-00-00-0199a1b2-c3d4-7e5f-8a9b-000000000001.jsonl"), "{\"type\":\"session_meta\"}\n").unwrap();
+        assert_eq!(newest_codex_limits(&dirs).unwrap().windows[0].used_pct, 5.0);
         let _ = std::fs::remove_dir_all(&root);
     }
 }
