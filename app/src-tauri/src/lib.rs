@@ -849,13 +849,17 @@ fn check_png(bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Path of an existing character file; the name must already be a safe stem.
+/// Path of a character file that is listed in the characters folder (any `.png` case, any name
+/// the user gave it there). Only entries of that folder are matched, so a name can't reach outside it.
 fn existing_character(name: &str) -> Result<std::path::PathBuf, String> {
-    let p = characters_dir().join(format!("{name}.png"));
-    if character_stem(name) != name || !p.is_file() {
-        return Err("캐릭터 파일을 찾지 못했어요".into());
-    }
-    Ok(p)
+    let found = std::fs::read_dir(characters_dir()).ok().and_then(|rd| {
+        rd.flatten().map(|e| e.path()).find(|p| {
+            p.is_file()
+                && p.file_stem().and_then(|x| x.to_str()) == Some(name)
+                && p.extension().and_then(|x| x.to_str()).is_some_and(|x| x.eq_ignore_ascii_case("png"))
+        })
+    });
+    found.ok_or_else(|| "캐릭터 파일을 찾지 못했어요".into())
 }
 
 /// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
@@ -1033,7 +1037,5 @@ mod tests {
         assert_eq!(character_stem("pikachu.png"), "pikachu");
         assert_eq!(character_stem("../../etc/passwd"), "______etc_passwd");
         assert_eq!(character_stem(""), "character");
-        // an existing name must already be safe, so a crafted one never matches its file
-        assert_ne!(character_stem("../x"), "../x");
     }
 }
