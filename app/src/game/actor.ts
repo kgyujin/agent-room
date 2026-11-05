@@ -164,7 +164,10 @@ export class Actor {
   private walkView: 'f' | 'b' = 'f';
 
   facing(): Facing {
-    return ((this.frame.startsWith('walk_b') || BACK.some((p) => this.frame.startsWith(p)) ? 'u' : 'd') + this.lr) as Facing;
+    // desk poses face away by default; a seat that faces the viewer shows the front instead
+    const front = !this.walking && !!this.layout.spots[this.spot]?.face.startsWith('d');
+    const back = this.frame.startsWith('walk_b') || (!front && BACK.some((p) => this.frame.startsWith(p)));
+    return ((back ? 'u' : 'd') + this.lr) as Facing;
   }
 
   draw(ctx: CanvasRenderingContext2D, atlas: Atlas, ox: number, oy: number, skin?: Skin) {

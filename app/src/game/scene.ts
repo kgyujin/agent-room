@@ -292,6 +292,31 @@ export class Scene {
     return null;
   }
 
+  private alpha: Uint8ClampedArray | null = null;
+
+  /** name of the topmost furniture piece drawn under this CSS point, if any */
+  furnitureAt(cssX: number, cssY: number): string | null {
+    const dpr = window.devicePixelRatio || 1;
+    const x = Math.floor((cssX * dpr) / this.scale) - this.off.x;
+    const y = Math.floor((cssY * dpr) / this.scale) - this.off.y;
+    const A = this.atlas;
+    if (!this.alpha) {
+      const c = document.createElement('canvas');
+      c.width = A.img.naturalWidth;
+      c.height = A.img.naturalHeight;
+      const g = c.getContext('2d', { willReadFrequently: true })!;
+      g.drawImage(A.img, 0, 0);
+      this.alpha = g.getImageData(0, 0, c.width, c.height).data;
+    }
+    const W = A.img.naturalWidth;
+    for (const f of [...A.layout.furniture].reverse()) {
+      const r = A.frames[f.name];
+      if (!r || x < r.dx || y < r.dy || x >= r.dx + r.w || y >= r.dy + r.h) continue;
+      if (this.alpha[((r.y + y - r.dy) * W + r.x + x - r.dx) * 4 + 3] > 0) return f.name;
+    }
+    return null;
+  }
+
   /** is there any room (wall, floor, furniture, pet) drawn under this CSS point? */
   hitRoom(cssX: number, cssY: number): boolean {
     const dpr = window.devicePixelRatio || 1;

@@ -386,6 +386,7 @@ export default function App() {
     else void document.exitFullscreen?.();
   };
 
+  const [furnTip, setFurnTip] = useState<string | null>(null);
   // a short note at the top (e.g. when an agent's app window can't be found)
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
@@ -429,7 +430,14 @@ export default function App() {
   return (
     <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
       onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
-      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
+      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble}
+        title={furnTip ?? undefined} onMouseMove={(e) => {
+          // what each piece of furniture is for, as a tooltip
+          const r = e.currentTarget.getBoundingClientRect();
+          const n = sceneRef.current?.furnitureAt(e.clientX - r.left, e.clientY - r.top) ?? null;
+          const tip = n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
+          if (tip !== furnTip) setFurnTip(tip);
+        }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
@@ -592,6 +600,19 @@ function tagWidth(s: Snapshot | undefined, withProject: boolean): number {
   for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
   return Math.min(w, 260);
 }
+
+/** what the furniture is for (hover tooltip); keys are sprite names without their number */
+const FURN_TIPS: Record<string, string> = {
+  desk: '작업 책상 · 생각하거나 코드를 고칠 때 앉아서 종이에 적어요. 종이에 지금 상태가 그려져요',
+  stool: '작업 책상 의자',
+  rig: '테스트 장치 · 테스트나 명령을 실행할 때 여기서 작동시켜요. 불빛이 통과(초록)·실패(빨강)를 보여줘요',
+  shelf: '책장 · 파일이나 자료를 찾을 때 와요',
+  board: '게시판 · 작업 계획(할 일 목록)을 세울 때 와요',
+  sofa: '소파 · 일이 끝나면 쉬는 곳',
+  beanbag: '빈백 · 쉬는 자리',
+  coffee: '커피 카트 · 쉬는 동안 들러요',
+  table: '찻상',
+};
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
 
