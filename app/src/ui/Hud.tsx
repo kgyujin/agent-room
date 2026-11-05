@@ -80,8 +80,8 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
     return (
       <div className="callout wait">
         {s.waiting.kind === 'approval'
-          ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 터미널에서 확인해 주세요.`
-          : '답변을 기다리고 있어요. 터미널에서 확인해 주세요.'}
+          ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 에이전트가 일하는 앱에서 확인해 주세요.`
+          : '답변을 기다리고 있어요. 에이전트가 일하는 앱에서 확인해 주세요.'}
         <span className="since">{fmtAgo(now - s.waiting.since)}</span>
       </div>
     );

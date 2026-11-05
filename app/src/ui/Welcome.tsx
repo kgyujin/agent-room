@@ -55,7 +55,7 @@ export function Welcome({ detected, onDemo, onSettings }: { detected: Overview['
           <div>
             <b>평소처럼 일을 시키기</b>
             <span className="muted">
-              터미널에서 Claude Code나 Codex에게 일을 시키면 펫이 책상에 앉아요. 이미 열려 있던 세션은 한 번 다시 시작해 주세요.
+              터미널이나 앱에서 Claude Code나 Codex에게 일을 시키면 펫이 책상에 앉아요. 이미 열려 있던 세션은 한 번 다시 시작해 주세요.
               {hooks.some((h) => h.agent === 'codex' && h.installed === 'full') && ' Codex는 처음 한 번 /hooks 에서 승인이 필요해요.'}
               {running > 0 && ` 지금 실행 중인 에이전트 ${running}개가 보여요.`}
             </span>
