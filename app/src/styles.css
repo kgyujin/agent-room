@@ -946,3 +946,34 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .ov-row.slim .ov-proj { flex: 1; font-size: 12.5px; }
 .ov-row.slim .ov-state { font-size: 11.5px; }
 .ov-row.slim .ov-since { width: 44px; text-align: right; }
+
+/* menu bar popover: one fixed view, never scrolls */
+.pop-head { align-items: center; }
+.pp-counts { display: flex; gap: 6px; }
+.pp-counts em { font-style: normal; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--work) 14%, var(--box)); color: var(--work-ink, var(--work)); }
+.pp-counts em.todo { background: var(--wait); color: #fff; animation: pill-ping 1.6s ease-in-out infinite; }
+.pp-counts em.calm { background: transparent; color: var(--ink-soft); font-weight: 600; }
+.pp-use { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--hair); }
+.pp-agent { display: flex; align-items: center; gap: 10px; min-height: 18px; }
+.pp-win { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; font-size: 11px; }
+.pp-win small { color: var(--ink-soft); font-size: 10.5px; }
+.pp-win b { font-size: 11.5px; font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
+.pp-win.mid .lc-bar i { background: var(--wait); }
+.pp-win.low .lc-bar i { background: var(--bad); }
+.pp-win.low b { color: var(--bad-ink, var(--bad)); }
+.pp-none { font-size: 11px; color: var(--ink-soft); }
+.pp-today { font-size: 11px; color: var(--ink-soft); }
+.pp-today b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pp-list { flex: 1; min-height: 0; overflow: hidden; padding: 6px 8px 4px; display: flex; flex-direction: column; }
+.pp-list h4 { margin: 0; height: 22px; display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 11px; color: var(--ink-soft); font-weight: 700; }
+.pp-list h4 span { color: var(--ink); }
+.pp-row { flex: none; height: 36px; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 0 8px; border: none; background: transparent; border-radius: 8px; font: inherit; text-align: left; color: var(--ink); }
+.pp-row:hover { background: var(--tint); }
+.pp-row.t-wait { background: color-mix(in srgb, var(--wait) 12%, var(--box)); }
+.pp-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-state { display: flex; align-items: center; gap: 5px; font-size: 11.5px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-state .pulse { flex: none; width: 6px; height: 6px; }
+.pp-ago { font-size: 10.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
+.pp-more { flex: none; height: 30px; margin-top: 2px; border: 1px dashed var(--line-soft); background: transparent; border-radius: 8px; font: inherit; font-size: 11.5px; color: var(--ink-soft); }
+.pp-more:hover { border-color: var(--accent); color: var(--ink); }
+.pp-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 0 16px; font-size: 12px; }

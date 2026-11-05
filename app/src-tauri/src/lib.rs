@@ -207,6 +207,57 @@ fn sync_island(app: &AppHandle) {
     }
 }
 
+/// Menu bar icon frames: a small pet that runs while agents work (faster with more of them), sits
+/// with "!" when one waits for the user, shows a check right after work finishes, naps when all
+/// are idle, and is an outline when none is connected. Only the session states are read.
+const TRAY_RUN: [&[u8]; 4] = [
+    include_bytes!("../icons/tray_run0.png"),
+    include_bytes!("../icons/tray_run1.png"),
+    include_bytes!("../icons/tray_run2.png"),
+    include_bytes!("../icons/tray_run3.png"),
+];
+const TRAY_WAIT: &[u8] = include_bytes!("../icons/tray_wait.png");
+const TRAY_DONE: &[u8] = include_bytes!("../icons/tray_done.png");
+const TRAY_IDLE: &[u8] = include_bytes!("../icons/tray_idle.png");
+const TRAY_OFF: &[u8] = include_bytes!("../icons/tray_off.png");
+
+fn animate_tray(app: AppHandle) {
+    let _ = std::thread::Builder::new().name("agent-room-tray".into()).spawn(move || {
+        use agent_room_core::session::Connection;
+        let mut frame = 0usize;
+        let mut last: *const u8 = std::ptr::null();
+        loop {
+            let shared = app.state::<Shared>();
+            let done_ms = shared.settings.lock().unwrap().done_shown_sec as u64 * 1000;
+            let now = now_ms();
+            let live: Vec<Snapshot> = shared.store.lock().unwrap().snapshots().into_iter().filter(|s| matches!(s.connection, Connection::Live | Connection::Stale)).collect();
+            let working = live.iter().filter(|s| matches!(s.state, AgentState::Starting | AgentState::Planning | AgentState::Reading | AgentState::Editing | AgentState::Running | AgentState::Testing)).count();
+            let waiting = live.iter().any(|s| matches!(s.state, AgentState::Waiting | AgentState::Error));
+            let done = live.iter().any(|s| s.state == AgentState::Completed && (done_ms == 0 || s.turn_ended_at.is_some_and(|t| now.saturating_sub(t) < done_ms)));
+            let (bytes, wait_ms): (&[u8], u64) = if waiting {
+                (TRAY_WAIT, 400)
+            } else if working > 0 {
+                frame = (frame + 1) % TRAY_RUN.len();
+                (TRAY_RUN[frame], match working { 1 => 220, 2 | 3 => 150, _ => 100 })
+            } else if done {
+                (TRAY_DONE, 400)
+            } else if !live.is_empty() {
+                (TRAY_IDLE, 600)
+            } else {
+                (TRAY_OFF, 600)
+            };
+            if bytes.as_ptr() != last {
+                last = bytes.as_ptr();
+                if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
+                    let _ = tray.set_icon(Some(img));
+                    let _ = tray.set_icon_as_template(true);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(wait_ms));
+        }
+    });
+}
+
 /// One notification per usage window and reset period once 10% or less is left.
 fn notify_low_limits(app: &AppHandle, s: &Snapshot, l: &agent_room_core::model::RateLimits) {
     let shared = app.state::<Shared>();
@@ -310,12 +361,15 @@ fn refresh_tray(app: &AppHandle) {
     let Some(tray) = app.tray_by_id("main") else { return };
     let mut sessions: Vec<Snapshot> = app.state::<Shared>().store.lock().unwrap().snapshots().into_iter().filter(|s| !s.is_demo).collect();
     sessions.sort_by_key(priority);
-    let title = sessions.first().map(|s| {
+    let summary = sessions.first().map(|s| {
         let extra = if sessions.len() > 1 { format!(" +{}", sessions.len() - 1) } else { String::new() };
         format!("{}{}", state_label(s), extra)
     });
-    let _ = tray.set_title(title.as_deref());
-    let _ = tray.set_tooltip(Some(title.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
+    // the icon itself shows the state (see animate_tray); the text beside it is only the number of
+    // agents waiting for the user, so the menu bar stays short
+    let waiting = sessions.iter().filter(|s| s.connection == agent_room_core::session::Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error)).count();
+    let _ = tray.set_title((waiting > 0).then(|| waiting.to_string()).as_deref());
+    let _ = tray.set_tooltip(Some(summary.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
     if let Ok(menu) = build_menu(app, &sessions) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -1361,6 +1415,7 @@ pub fn run() {
             show_island(&handle, island_on);
             sync_island(&handle);
             watch_hover(handle.clone());
+            animate_tray(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| match event {
