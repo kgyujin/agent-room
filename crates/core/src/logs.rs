@@ -74,6 +74,9 @@ fn codex_id(stem: &str) -> Option<String> {
     (stem.starts_with("rollout-") && id.chars().filter(|&c| c == '-').count() == 4).then(|| id.to_string())
 }
 
+/// How many of the newest Codex day folders are checked for fresh rollouts.
+const CODEX_DAYS: usize = 7;
+
 /// Sessions whose log was written in the last `within_ms`.
 pub fn recent(dirs: &LogDirs, now: u64, within_ms: u64) -> Vec<LogSession> {
     let fresh = |p: &Path| modified_ms(p).filter(|&m| now.saturating_sub(m) <= within_ms);
@@ -88,7 +91,8 @@ pub fn recent(dirs: &LogDirs, now: u64, within_ms: u64) -> Vec<LogSession> {
             }
         }
     }
-    // Codex: only the two newest day folders (a session started yesterday may still be running)
+    // Codex: the newest week of day folders. A rollout stays in the folder of the day its session
+    // started, so an older session that is still being written must be looked for there too.
     let mut days = Vec::new();
     for y in entries(&dirs.codex) {
         for m in entries(&y) {
@@ -96,7 +100,7 @@ pub fn recent(dirs: &LogDirs, now: u64, within_ms: u64) -> Vec<LogSession> {
         }
     }
     days.sort();
-    for day in days.iter().rev().take(2) {
+    for day in days.iter().rev().take(CODEX_DAYS) {
         for f in entries(day) {
             let Some(id) = f.file_stem().and_then(|s| s.to_str()).and_then(codex_id) else { continue };
             if let Some(m) = fresh(&f) {
@@ -143,15 +147,18 @@ mod tests {
         }
         let id = "0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
         std::fs::write(codex.join("2025/11/05").join(format!("rollout-2025-11-05T10-00-00-{id}.jsonl")), r#"{"type":"session_meta","payload":{"id":"x","cwd":"/work/api"}}"#).unwrap();
-        std::fs::write(codex.join("2025/11/03").join(format!("rollout-2025-11-03T10-00-00-{id}.jsonl")), "{}").unwrap();
+        // a session started two days ago that is still writing its log is found too
+        let old = "0199a1b2-c3d4-7e5f-8a9b-000000000003";
+        std::fs::write(codex.join("2025/11/03").join(format!("rollout-2025-11-03T10-00-00-{old}.jsonl")), "{}").unwrap();
 
         let dirs = LogDirs { claude, codex };
         let now = crate::model::now_ms();
         let mut found = recent(&dirs, now, 60_000);
         found.sort_by(|a, b| a.session_id.cmp(&b.session_id));
-        assert_eq!(found.len(), 2, "{found:?}");
-        assert_eq!((found[0].agent, found[0].session_id.as_str(), found[0].cwd.as_deref()), (AgentKind::Codex, id, Some("/work/api")));
-        assert_eq!((found[1].agent, found[1].session_id.as_str(), found[1].cwd.as_deref()), (AgentKind::Claude, "abc-123", Some("/Users/kim/app")));
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert_eq!((found[0].agent, found[0].session_id.as_str()), (AgentKind::Codex, old));
+        assert_eq!((found[1].agent, found[1].session_id.as_str(), found[1].cwd.as_deref()), (AgentKind::Codex, id, Some("/work/api")));
+        assert_eq!((found[2].agent, found[2].session_id.as_str(), found[2].cwd.as_deref()), (AgentKind::Claude, "abc-123", Some("/Users/kim/app")));
         // nothing counts once it is older than the window
         assert!(recent(&dirs, now + 120_000, 60_000).is_empty());
         let _ = std::fs::remove_dir_all(&root);
