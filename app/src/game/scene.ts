@@ -109,7 +109,10 @@ export class Scene {
     this.span = this.fitSky();
     for (const m of this.mates) {
       const spot = m.actor.spot in atlas.layout.nodes ? m.actor.spot : `sofa${m.slot}`;
+      const old = m.actor;
       m.actor = new Actor(m.agent, atlas.layout, spot);
+      // a frozen (stale) behavior never re-arrives, so carry the pose and seat height over
+      if (!old.walking) Object.assign(m.actor, { frame: old.frame, flip: old.flip, lr: old.lr, z: old.z });
       this.applyBehavior(m);
     }
     this.resize();
