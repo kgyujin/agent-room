@@ -640,3 +640,12 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .is-lim { flex-direction: column; gap: 4px; }
 .is-lim b, .is-lim em, .is-lim span { white-space: nowrap; }
 .is-lim > span { gap: 12px; }
+
+/* Korean wraps between words, never inside one ("캐릭/터") */
+body { word-break: keep-all; overflow-wrap: anywhere; }
+/* settings tabs stay on one line and scroll sideways in a narrow window */
+.modal nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.modal nav::-webkit-scrollbar { display: none; }
+.modal nav button { white-space: nowrap; flex: none; }
+/* selects grow to fit their longest choice instead of cutting it off */
+.field select { width: auto; min-width: 150px; max-width: 64%; }
