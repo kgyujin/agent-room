@@ -25,6 +25,8 @@ const P: Record<string, string[]> = {
   paw: ['............', '..xx....xx..', '.xoox..xoox.', '.xoox..xoox.', '..xx....xx..', '.xx.xxxx.xx.', 'xoox.xx.xoox', '.xx.xooxx.x.', '...xooooox..', '..xoooooox..', '...xxxxxx...', '............'],
   link: ['............', '.......xxx..', '......xooox.', '.....xo..ox.', '....xo..ox..', '...xo.xxx...', '..xxx.xo....', '..xo..ox....', '.xo..ox.....', '.xooox......', '..xxx.......', '............'],
   monitor: ['............', 'xxxxxxxxxxxx', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xxxxxxxxxxxx', '.....xx.....', '....xxxx....', '............', '............'],
+  menubar: ['............', 'xxxxxxxxxxxx', 'xxxxxxxxxxxx', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xxxxxxxxxxxx', '.....xx.....', '....xxxx....', '............', '............'],
+  island: ['............', 'xxxxxxxxxxxx', 'xo.xxxxxx.ox', 'xoo.xxxx.oox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xxxxxxxxxxxx', '.....xx.....', '....xxxx....', '............', '............'],
   expand: ['xxxxxx......', 'x.....x.....', 'x......x....', 'x.......x...', 'x........x..', 'x.........x.', '.x.........x', '..x........x', '...x.......x', '....x......x', '.....x.....x', '......xxxxxx'],
 };
 
