@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
 };
 
 export interface Backend {
@@ -29,7 +29,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
@@ -241,6 +241,9 @@ export async function autostartEnabled(): Promise<boolean> {
   const m = await import('@tauri-apps/plugin-autostart');
   return m.isEnabled();
 }
+
+/** window content sizes offered by ⌘+ / ⌘− and Settings */
+export const ZOOMS = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
 
 // ---------------------------------------------------------------- in-app updates (GitHub Releases, signed)
 export interface AppUpdate { version: string; current: string; notes?: string; install: (onProgress: (pct: number) => void) => Promise<void> }

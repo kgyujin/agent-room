@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, type AppUpdate } from './bridge';
+import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, ZOOMS, type AppUpdate } from './bridge';
 import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
@@ -60,6 +60,28 @@ export default function App() {
   };
   const checkRef = useRef(checkNow);
   checkRef.current = checkNow;
+  // ⌘+ / ⌘− / ⌘0 (보기 menu on macOS, keys elsewhere): the whole window's contents in steps
+  const zoom = settings.uiZoom ?? 1;
+  useEffect(() => {
+    if (!IN_TAURI) return;
+    void import('@tauri-apps/api/webview').then(({ getCurrentWebview }) => getCurrentWebview().setZoom(zoom)).catch(() => undefined);
+  }, [zoom]);
+  const zoomRef = useRef((_: string) => {});
+  zoomRef.current = (how: string) => {
+    const i = ZOOMS.findIndex((z) => z >= zoom - 0.001);
+    const next = how === 'reset' ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? ZOOMS.length - 1 : i) + (how === 'in' ? 1 : -1)))];
+    if (next !== zoom) void saveSettings({ ...settings, uiZoom: next });
+  };
+  useEffect(() => {
+    if (IS_MAC) return; // the 보기 menu's shortcuts handle these on macOS
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const how = e.key === '=' || e.key === '+' ? 'in' : e.key === '-' ? 'out' : e.key === '0' ? 'reset' : null;
+      if (how) { e.preventDefault(); zoomRef.current(how); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const autoUpdate = settings.autoUpdateCheck ?? true;
   useEffect(() => {
     if (!autoUpdate) return;
@@ -131,6 +153,7 @@ export default function App() {
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'look')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
+        await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
     })();
