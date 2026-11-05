@@ -36,12 +36,10 @@ async function main() {
     if (!dl.ok) fail(`내려받지 못했어요 (HTTP ${dl.status}).`);
     fs.writeFileSync(dmg, Buffer.from(await dl.arrayBuffer()));
 
-    // a running copy would keep the old app's files busy
+    // a running copy would stay the old version, and opening the new one would only bring it forward
     try {
-      execFileSync('/usr/bin/pgrep', ['-x', 'Agent Room'], { stdio: 'ignore' });
-      console.log('실행 중인 Agent Room을 종료하는 중…');
-      execFileSync('/usr/bin/osascript', ['-e', 'quit app "Agent Room"'], { stdio: 'ignore' });
-    } catch { /* not running */ }
+      execFileSync('/usr/bin/osascript', ['-e', 'if application "Agent Room" is running then quit app "Agent Room"'], { stdio: 'ignore' });
+    } catch { /* could not ask it to quit */ }
 
     console.log('/Applications에 설치하는 중…');
     fs.mkdirSync(mnt);
