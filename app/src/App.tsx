@@ -5,6 +5,7 @@ import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
+import { trayFrames } from './game/trayFrames';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
@@ -264,6 +265,12 @@ export default function App() {
     setSkins(Object.fromEntries(loaded.filter((x) => x !== null)));
   }, [colorsKey]);
   useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
+
+  // the menu bar icon is drawn from the pet picked in settings (the shiba if that one is gone)
+  const trayPet = skins[settings.trayPet] ?? skins['builtin/shiba'];
+  useEffect(() => {
+    if (trayPet) void trayFrames(trayPet).then(backend.setTrayFrames).catch(() => {});
+  }, [trayPet]);
 
   // the user's own effect sounds
   const reloadSounds = useCallback(async () => {

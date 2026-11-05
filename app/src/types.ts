@@ -80,6 +80,8 @@ export interface Settings {
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
   /** pets that may appear (skin ids: builtin/<id> or a PNG name); empty means all built-ins */
   petPool: string[];
+  /** pet drawn in the menu bar icon (`builtin/<id>` or a PNG name) */
+  trayPet: string;
   /** built-in critter id -> fur colour (hex) */
   critterColors: Record<string, string>;
   /** UI colour theme id (see themes.ts) */

@@ -3,11 +3,13 @@
 - run0..run3: the shiba waddles while agents work (the app plays them faster the more agents work)
 - wait: a "!" bubble when an agent waits for the user
 - done: a check bubble when work just finished
-- idle: the shiba dozes (closed eyes, "z") when nothing is going on
+- idle: "z"s when nothing is going on
 - off: a faded grey shiba when no agent is connected
 
 36x36 colour images (not templates). macOS draws the menu bar icon 18pt tall, so on a Retina screen
 each art pixel of the 25x27 pet sprite is exactly one screen pixel. One colour per pixel.
+These are the bundled defaults; the app draws the same frames from the pet picked in settings
+(app/src/game/trayFrames.ts) and sends them to the menu bar, so keep the two in step.
 """
 import os
 from PIL import Image
@@ -19,9 +21,6 @@ N = 36
 W, H = 25, 27                      # sprite frame size; rows 4..25 hold the pet
 INK = (42, 34, 48, 255)            # the sprite's outline colour
 PAPER = (255, 255, 255, 255)
-FUR = (246, 160, 77, 255)
-EYES = [(4, 16), (4, 17), (12, 18), (12, 19)]   # (x, y) eye pixels in the front frame
-CLOSED = [(3, 17), (4, 17), (12, 19), (13, 19)]  # closed eyes: short lines
 
 BUBBLE = [
     '.ooooooooo.',
@@ -68,15 +67,6 @@ def bubble(im, glyph, colour):
     draw(im, glyph, N - 8, 3, {'x': colour})
 
 
-def sleepy(pet):
-    pet = pet.copy()
-    for xy in EYES:
-        pet.putpixel(xy, FUR)
-    for xy in CLOSED:
-        pet.putpixel(xy, INK)
-    return pet
-
-
 def save(im, name):
     im.save(os.path.join(OUT, f'tray_{name}.png'))
 
@@ -100,14 +90,14 @@ def main():
     save(im, 'done')
 
     im = canvas()
-    put_pet(im, sleepy(front))
+    put_pet(im, front)
     draw(im, Z_BIG, N - 6, 0, {'o': INK, 'x': PAPER})
     draw(im, Z_SMALL, N - 12, 6, {'o': INK, 'x': PAPER})
     save(im, 'idle')
 
-    # off: the dozing shiba in faded greys
+    # off: the shiba in faded greys
     im = canvas()
-    pet = sleepy(front)
+    pet = front.copy()
     for y in range(H):
         for x in range(W):
             p = pet.getpixel((x, y))

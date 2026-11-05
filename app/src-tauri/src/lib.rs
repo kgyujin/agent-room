@@ -46,6 +46,8 @@ pub struct Settings {
     pub show_limits: bool,
     /// pets that may appear (built-in ids as `builtin/<id>` or PNG names); empty means all built-ins
     pub pet_pool: Vec<String>,
+    /// pet drawn in the menu bar icon (`builtin/<id>` or a PNG name)
+    pub tray_pet: String,
     /// built-in critter id -> fur colour ("#rrggbb")
     pub critter_colors: std::collections::BTreeMap<String, String>,
     /// UI colour theme id ("peach", "mint", ...)
@@ -98,6 +100,7 @@ impl Default for Settings {
             always_on_top_room: true,
             show_limits: true,
             pet_pool: Vec::new(),
+            tray_pet: "builtin/shiba".into(),
             critter_colors: Default::default(),
             ui_theme: "peach".into(),
             island: true,
@@ -136,6 +139,9 @@ struct Shared {
     hooked: Mutex<std::collections::HashSet<String>>,
     /// sessions known only from their log: key -> last write seen
     log_only: Mutex<std::collections::HashMap<String, u64>>,
+    /// menu bar frames drawn by the app from the chosen pet (run0..3, wait, done, idle, off);
+    /// None until then, and the bundled shiba frames are used. The number counts the updates.
+    tray_frames: Mutex<Option<(u64, Arc<Vec<Vec<u8>>>)>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -207,9 +213,10 @@ fn sync_island(app: &AppHandle) {
     }
 }
 
-/// Menu bar icon frames: a small pet that runs while agents work (faster with more of them), sits
-/// with "!" when one waits for the user, shows a check right after work finishes, naps when all
-/// are idle, and is an outline when none is connected. Only the session states are read.
+/// Menu bar icon frames: the pet waddles while agents work (faster with more of them), shows a "!"
+/// when one waits for the user, a check right after work finishes, dozes when all are idle, and
+/// fades to grey when none is connected. Only the session states are read. These bundled shiba
+/// frames show until the app sends frames drawn from the pet picked in settings.
 const TRAY_RUN: [&[u8]; 4] = [
     include_bytes!("../icons/tray_run0.png"),
     include_bytes!("../icons/tray_run1.png"),
@@ -225,7 +232,7 @@ fn animate_tray(app: AppHandle) {
     let _ = std::thread::Builder::new().name("agent-room-tray".into()).spawn(move || {
         use agent_room_core::session::Connection;
         let mut frame = 0usize;
-        let mut last: *const u8 = std::ptr::null();
+        let mut last = (0u64, usize::MAX);
         loop {
             let shared = app.state::<Shared>();
             let done_ms = shared.settings.lock().unwrap().done_shown_sec as u64 * 1000;
@@ -234,20 +241,25 @@ fn animate_tray(app: AppHandle) {
             let working = live.iter().filter(|s| matches!(s.state, AgentState::Starting | AgentState::Planning | AgentState::Reading | AgentState::Editing | AgentState::Running | AgentState::Testing)).count();
             let waiting = live.iter().any(|s| matches!(s.state, AgentState::Waiting | AgentState::Error));
             let done = live.iter().any(|s| s.state == AgentState::Completed && (done_ms == 0 || s.turn_ended_at.is_some_and(|t| now.saturating_sub(t) < done_ms)));
-            let (bytes, wait_ms): (&[u8], u64) = if waiting {
-                (TRAY_WAIT, 400)
+            // frame index: run0..3, wait, done, idle, off
+            let (idx, wait_ms): (usize, u64) = if waiting {
+                (4, 400)
             } else if working > 0 {
                 frame = (frame + 1) % TRAY_RUN.len();
-                (TRAY_RUN[frame], match working { 1 => 220, 2 | 3 => 150, _ => 100 })
+                (frame, match working { 1 => 220, 2 | 3 => 150, _ => 100 })
             } else if done {
-                (TRAY_DONE, 400)
+                (5, 400)
             } else if !live.is_empty() {
-                (TRAY_IDLE, 600)
+                (6, 600)
             } else {
-                (TRAY_OFF, 600)
+                (7, 600)
             };
-            if bytes.as_ptr() != last {
-                last = bytes.as_ptr();
+            let custom = shared.tray_frames.lock().unwrap().clone();
+            let key = (custom.as_ref().map_or(0, |f| f.0), idx);
+            if key != last {
+                last = key;
+                let builtin = [TRAY_RUN[0], TRAY_RUN[1], TRAY_RUN[2], TRAY_RUN[3], TRAY_WAIT, TRAY_DONE, TRAY_IDLE, TRAY_OFF];
+                let bytes = custom.as_ref().map_or(builtin[idx], |f| f.1[idx].as_slice());
                 if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
                     let _ = tray.set_icon(Some(img));
                 }
@@ -689,6 +701,22 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     sync_island(&app);
     // the popover and island keep their pages alive, so they pick up the change from this event
     let _ = app.emit("settings-changed", &settings);
+    Ok(())
+}
+
+/// Menu bar frames the app drew from the pet picked in settings (8 PNGs in TRAY order).
+#[tauri::command]
+fn set_tray_frames(app: AppHandle, frames: Vec<Vec<u8>>) -> Result<(), String> {
+    if frames.len() != 8 {
+        return Err("8 frames expected".into());
+    }
+    for f in &frames {
+        tauri::image::Image::from_bytes(f).map_err(|e| e.to_string())?;
+    }
+    let shared = app.state::<Shared>();
+    let mut cur = shared.tray_frames.lock().unwrap();
+    let n = cur.as_ref().map_or(0, |f| f.0) + 1;
+    *cur = Some((n, Arc::new(frames)));
     Ok(())
 }
 
@@ -1325,7 +1353,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
+            hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
             tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {
