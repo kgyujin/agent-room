@@ -239,14 +239,15 @@ export default function App() {
   const saveSettings = useCallback(async (s: Settings) => {
     setSettings(s);
     await backend.saveSettings(s);
-    const w = await win();
-    if (w) await w.setAlwaysOnTop(s.alwaysOnTop);
   }, []);
 
+  // always-on-top is kept separately for the normal window and room-only mode
+  const onTop = mini ? settings.alwaysOnTopRoom : settings.alwaysOnTop;
+  const onTopKey = mini ? 'alwaysOnTopRoom' : 'alwaysOnTop';
   useEffect(() => {
     if (!ready) return;
-    win().then((w) => w?.setAlwaysOnTop(settings.alwaysOnTop));
-  }, [ready]); // apply saved always-on-top once
+    win().then((w) => w?.setAlwaysOnTop(onTop));
+  }, [ready, onTop]);
 
   // room-only mode: a borderless transparent window that floats just the room on the desktop.
   // Leaving it puts the window back where it was; inside it the window stays on its screen.
@@ -460,7 +461,7 @@ export default function App() {
         {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
-        <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
+        <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
         {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('look')} />

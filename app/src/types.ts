@@ -74,6 +74,8 @@ export interface Settings {
   staleMinutes: number;
   panelOpen: boolean;
   alwaysOnTop: boolean;
+  /** always-on-top while in room-only mode (separate from the normal window) */
+  alwaysOnTopRoom: boolean;
   showLimits: boolean;
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
   characters: Record<string, string>;
