@@ -106,6 +106,21 @@ impl ProcWatch {
         self.refresh_one(Pid::from_u32(pid))
     }
 
+    /// The app the agent runs inside (Terminal, iTerm, VS Code, the Claude or Codex app…): the
+    /// outermost `.app` bundle on the executable path of the agent or of the nearest parent that has one.
+    pub fn host_app(&mut self, pid: u32) -> Option<std::path::PathBuf> {
+        let mut pid = Pid::from_u32(pid);
+        for _ in 0..16 {
+            self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet));
+            let p = self.sys.process(pid)?;
+            if let Some(app) = p.exe().and_then(outer_app) {
+                return Some(app);
+            }
+            pid = p.parent()?;
+        }
+        None
+    }
+
     /// Counts running agent processes by executable name and path (no inspection of their content):
     /// the CLIs, Claude Code's versioned native builds, the copies the desktop apps run, and the
     /// Codex app server that runs the Codex app's threads and scheduled tasks.
@@ -144,9 +159,24 @@ pub fn agent_of(name: &str, exe: &str) -> Option<AgentKind> {
     }
 }
 
+/// `/Applications/Visual Studio Code.app` from `/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/…`
+fn outer_app(exe: &std::path::Path) -> Option<std::path::PathBuf> {
+    let s = exe.to_str()?;
+    let end = s.find(".app/")? + 4;
+    Some(std::path::PathBuf::from(&s[..end]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_app_is_the_outermost_bundle() {
+        use std::path::Path;
+        assert_eq!(outer_app(Path::new("/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)")).as_deref(), Some(Path::new("/Applications/Visual Studio Code.app")));
+        assert_eq!(outer_app(Path::new("/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal")).as_deref(), Some(Path::new("/System/Applications/Utilities/Terminal.app")));
+        assert_eq!(outer_app(Path::new("/Users/kim/.local/share/claude/versions/2.0.1")), None);
+    }
 
     #[test]
     fn tells_agents_from_their_apps() {

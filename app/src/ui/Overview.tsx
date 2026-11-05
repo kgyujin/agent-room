@@ -2,7 +2,7 @@
 // Everything shown comes from hook events; the only derived number is the remaining-time
 // estimate, which is labelled as one and only appears once a plan step has finished.
 import type { LimitWindow, RateLimits, Snapshot } from '../types';
-import { activityLabel, fmtAgo, fmtDuration, fmtUntil, stateLabel, stateTone, windowLabel } from '../labels';
+import { doingLabel, fmtAgo, fmtDuration, fmtUntil, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 
@@ -143,21 +143,33 @@ function AgentRow({ s, now, on, onClick }: { s: Snapshot; now: number; on: boole
   const t = turnMs(s, now);
   const eta = etaMs(s, now);
   const tone = stateTone(s);
+  const busy = isActive(s);
+  const doing = busy ? doingLabel(s) : null;
+  const top = (
+    <div className="ov-top">
+      <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
+      <span className="ov-proj">{s.project ?? '프로젝트 미확인'}</span>
+      <span className={`ov-state tone-${tone}`}>
+        <i className="pulse" />
+        {stateLabel(s)}
+      </span>
+    </div>
+  );
+  // resting sessions take one line, so the busy ones stand out
+  if (!busy)
+    return (
+      <button className={`ov-row quiet ${on ? 'on' : ''} t-${tone}`} onClick={onClick}>
+        {top}
+        <div className="ov-meta">
+          {t !== null && <span className="muted">소요 {fmtDuration(t)}</span>}
+          <span className="muted">마지막 활동 {fmtAgo(now - s.lastEventAt)}</span>
+        </div>
+      </button>
+    );
   return (
     <button className={`ov-row ${on ? 'on' : ''} t-${tone}`} onClick={onClick}>
-      <div className="ov-top">
-        <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-        <span className="ov-proj">{s.project ?? '프로젝트 미확인'}</span>
-        <span className={`ov-state tone-${tone}`}>
-          <i className="pulse" />
-          {stateLabel(s)}
-        </span>
-      </div>
-      {s.tool && s.connection === 'live' && isActive(s) && (
-        <div className="ov-doing">
-          {s.activity && <span className="chip">{activityLabel(s.activity)}</span>} {s.detail ?? s.tool}
-        </div>
-      )}
+      {top}
+      {doing && doing !== stateLabel(s) && <div className="ov-doing">{doing}</div>}
       <div className="ov-meta">
         {prog && (
           <span className="prog">

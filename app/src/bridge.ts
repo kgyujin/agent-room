@@ -45,6 +45,8 @@ export interface Backend {
   demoStart(): Promise<void>;
   demoStop(): Promise<void>;
   removeSession(key: string): Promise<void>;
+  /** brings the terminal, editor or app the session runs in to the front */
+  focusAgent(key: string): Promise<void>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
@@ -76,6 +78,7 @@ const tauriBackend: Backend = {
   demoStart: () => tauriInvoke('demo_start'),
   demoStop: () => tauriInvoke('demo_stop'),
   removeSession: (key) => tauriInvoke('remove_session', { key }),
+  focusAgent: (key) => tauriInvoke('focus_agent', { key }),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
@@ -179,6 +182,7 @@ function previewBackend(): Backend {
     demoStart: async () => undefined,
     demoStop: async () => undefined,
     removeSession: async () => undefined,
+    focusAgent: async () => undefined,
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
