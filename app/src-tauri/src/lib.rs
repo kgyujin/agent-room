@@ -956,11 +956,15 @@ fn show_island(app: &AppHandle, on: bool) {
         }
         return;
     }
-    let Some(w) = existing.or_else(|| extra_window(app, "island", ISLAND_WIN.0, ISLAND_WIN.1, true).ok()) else { return };
+    // already there: sync_island keeps it placed and shown or hidden. Showing it again on every
+    // settings change took the focus from the main window and flashed a hidden island.
+    if existing.is_some() {
+        return;
+    }
+    let Ok(w) = extra_window(app, "island", ISLAND_WIN.0, ISLAND_WIN.1, true) else { return };
     place_island(app, &w, ISLAND_WIN.0, ISLAND_WIN.1);
     // the hover watcher turns clicks back on while the pointer is over the pill
     let _ = w.set_ignore_cursor_events(true);
-    let _ = w.show();
 }
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
