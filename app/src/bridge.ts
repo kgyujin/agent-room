@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
 };
 
 export interface Backend {
@@ -29,7 +29,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */

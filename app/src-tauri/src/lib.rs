@@ -76,6 +76,9 @@ pub struct Settings {
     pub island_hide_idle: bool,
     /// lowest remaining usage on the closed island
     pub island_usage: bool,
+    /// which display holds the island: "auto" (the one with the camera notch, else the menu bar's),
+    /// "main" (the menu bar's) or "pointer" (the one the pointer is on)
+    pub island_screen: String,
     /// "작업 완료" notifications only for turns at least this long (seconds, 0 = all)
     pub notify_min_turn_sec: u32,
     /// look for a new version at launch and every few hours, and ask before installing it
@@ -116,6 +119,7 @@ impl Default for Settings {
             pet_bubbles: true,
             island_hide_idle: false,
             island_usage: true,
+            island_screen: "auto".into(),
             notify_min_turn_sec: 0,
             auto_update_check: true,
             ui_zoom: 1.0,
@@ -262,12 +266,47 @@ fn animate_tray(app: AppHandle) {
                 let builtin = [TRAY_RUN[0], TRAY_RUN[1], TRAY_RUN[2], TRAY_RUN[3], TRAY_WAIT, TRAY_DONE, TRAY_IDLE, TRAY_OFF];
                 let bytes = custom.as_ref().map_or(builtin[idx], |f| f.1[idx].as_slice());
                 if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
+                    let (w, h) = (img.width(), img.height());
                     let _ = tray.set_icon(Some(img));
+                    #[cfg(target_os = "macos")]
+                    mac_tray_points(&tray, w, h);
+                    #[cfg(not(target_os = "macos"))]
+                    let _ = (w, h);
                 }
             }
             std::thread::sleep(Duration::from_millis(wait_ms));
         }
     });
+}
+
+/// tray-icon draws every icon 18pt tall. The frames are drawn at 2 px per point, so the image gets
+/// its own size back: a 44 px frame shows 22pt tall and the pet fills the menu bar like other icons.
+#[cfg(target_os = "macos")]
+fn mac_tray_points(tray: &tauri::tray::TrayIcon, w_px: u32, h_px: u32) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    let _ = tray.with_inner_tray_icon(move |t| unsafe {
+        let Some(item) = t.ns_status_item() else { return };
+        let item = objc2::rc::Retained::as_ptr(&item) as *mut AnyObject;
+        let button: *mut AnyObject = msg_send![item, button];
+        if button.is_null() {
+            return;
+        }
+        let image: *mut AnyObject = msg_send![button, image];
+        if !image.is_null() {
+            let _: () = msg_send![image, setSize: MacSize(w_px as f64 / 2.0, h_px as f64 / 2.0)];
+        }
+    });
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MacSize(f64, f64);
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::encode::Encode for MacSize {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGSize", &[objc2::encode::Encoding::Double, objc2::encode::Encoding::Double]);
 }
 
 /// One notification per usage window and reset period once 10% or less is left.
@@ -463,6 +502,13 @@ fn follow_logs(app: &AppHandle) {
     let ev = |agent: AgentKind, id: &str, ts: u64, cwd: Option<String>, kind: EvKind| NormEvent {
         agent, session_id: id.to_string(), ts, cwd, model: None, transcript_path: None, permission_mode: None, kind,
     };
+    // Codex sessions seen only in their log (the desktop app, VS Code) read their remaining usage from it
+    let with_log = |mut e: NormEvent, f: &logs::LogSession| {
+        if f.agent == AgentKind::Codex {
+            e.transcript_path = Some(f.path.clone());
+        }
+        e
+    };
     let mut out = Vec::new();
     {
         let hooked = shared.hooked.lock().unwrap();
@@ -482,14 +528,14 @@ fn follow_logs(app: &AppHandle) {
             known.insert(key.clone(), f.modified);
             // new, or back after it ended: the session is there
             if matches!(state, None | Some(AgentState::Disconnected)) {
-                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, f.cwd.clone(), EvKind::SessionStart { source: Some("log".into()) })));
+                out.extend(store.apply(with_log(ev(f.agent, &f.session_id, f.modified, f.cwd.clone(), EvKind::SessionStart { source: Some("log".into()) }), &f)));
             }
             // the log is being written: the agent is working (a log first seen counts if it is fresh)
             let busy = matches!(state, Some(st) if !matches!(st, AgentState::Idle | AgentState::Completed | AgentState::Disconnected));
             if busy {
-                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::StillWorking)));
+                out.extend(store.apply(with_log(ev(f.agent, &f.session_id, f.modified, None, EvKind::StillWorking), &f)));
             } else if last.is_some() || now.saturating_sub(f.modified) < TURN_OVER_AFTER {
-                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::PromptSubmitted)));
+                out.extend(store.apply(with_log(ev(f.agent, &f.session_id, f.modified, None, EvKind::PromptSubmitted), &f)));
             }
         }
         // quiet logs: the turn is over, and after a long while the session is gone
@@ -595,6 +641,12 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
         // asks once for permission to control Terminal / iTerm2; without it the app still comes up below
         Reach::Tab { app, tty } => focus::tab_script(app, &tty).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
         Reach::Folder => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default())),
+        // the link goes to the editor's front window, so the session's folder comes to the front first
+        Reach::EditorTab(url) => {
+            let raised = ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default()));
+            std::thread::sleep(Duration::from_millis(400));
+            ok(Command::new("/usr/bin/open").arg(url)) || raised
+        }
         Reach::Link(url) => ok(Command::new("/usr/bin/open").arg(url)),
         Reach::App => false,
     };
@@ -794,8 +846,11 @@ fn show_island(app: &AppHandle, on: bool) {
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
     #[cfg(target_os = "macos")]
-    if mac_set_frame(w, width, height) {
-        return;
+    {
+        let mode = app.state::<Shared>().settings.lock().unwrap().island_screen.clone();
+        if mac_set_frame(app, w, width, height, mode) {
+            return;
+        }
     }
     let Ok(Some(mon)) = app.primary_monitor() else { return };
     let k = mon.scale_factor();
@@ -811,20 +866,19 @@ fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
 /// second display, a changed resolution or a different scale can't put the island mid-screen.
 /// Does nothing when the island is already there.
 #[cfg(target_os = "macos")]
-fn mac_set_frame(w: &WebviewWindow, width: f64, height: f64) -> bool {
+fn mac_set_frame(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64, mode: String) -> bool {
     use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send};
+    use objc2::msg_send;
     let Ok(ptr) = w.ns_window() else { return false };
     let ns = ptr as usize;
+    let app = app.clone();
     w.run_on_main_thread(move || unsafe {
         let ns = ns as *mut AnyObject;
-        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
-        let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
-        if ns.is_null() || count == 0 {
+        let Some((_, screen)) = mac_island_screen(&mode) else { return };
+        if ns.is_null() {
             return;
         }
         // Cocoa puts the origin at the bottom-left of the first screen
-        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
         let frame: MacRect = msg_send![screen, frame];
         let r = MacRect((frame.0 + (frame.2 - width) / 2.0).round(), frame.1 + frame.3 - height, width, height);
         let now: MacRect = msg_send![ns, frame];
@@ -832,8 +886,63 @@ fn mac_set_frame(w: &WebviewWindow, width: f64, height: f64) -> bool {
             return;
         }
         let _: () = msg_send![ns, setFrame: r, display: true];
+        // another display may have another notch (or none): the page sizes the pill again
+        let _ = app.emit_to("island", "island-screen", ());
     })
     .is_ok()
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MacInsets(f64, f64, f64, f64);
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::encode::Encode for MacInsets {
+    const ENCODING: objc2::encode::Encoding = {
+        use objc2::encode::Encoding;
+        Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double])
+    };
+}
+
+/// Height of the camera notch on a screen in points, or 0 without one (or before macOS 12).
+#[cfg(target_os = "macos")]
+unsafe fn mac_notch_h(screen: *mut objc2::runtime::AnyObject) -> f64 {
+    use objc2::{msg_send, sel};
+    let has: bool = msg_send![screen, respondsToSelector: sel!(auxiliaryTopLeftArea)];
+    if !has {
+        return 0.0;
+    }
+    let inset: MacInsets = msg_send![screen, safeAreaInsets];
+    inset.0.max(0.0)
+}
+
+/// The display that holds the island (index in NSScreen.screens, screen) for the island_screen
+/// setting. With several displays the notch is often on the laptop while the menu bar is on the
+/// big monitor, so "auto" follows the notch and falls back to the menu bar's display.
+#[cfg(target_os = "macos")]
+unsafe fn mac_island_screen(mode: &str) -> Option<(usize, *mut objc2::runtime::AnyObject)> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+    let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
+    if count == 0 {
+        return None;
+    }
+    let at = |i: usize| -> *mut AnyObject { msg_send![screens, objectAtIndex: i] };
+    let pick = match mode {
+        "main" => None,
+        "pointer" => {
+            let p: MacPoint = msg_send![class!(NSEvent), mouseLocation];
+            (0..count).find(|&i| {
+                let f: MacRect = msg_send![at(i), frame];
+                p.0 >= f.0 && p.0 < f.0 + f.2 && p.1 >= f.1 && p.1 <= f.1 + f.3
+            })
+        }
+        _ => (0..count).find(|&i| mac_notch_h(at(i)) > 0.0),
+    }
+    .unwrap_or(0);
+    Some((pick, at(pick)))
 }
 
 #[cfg(target_os = "macos")]
@@ -928,49 +1037,33 @@ unsafe impl objc2::encode::Encode for MacRect {
 /// Size of the camera notch on the primary screen in points (width, height); None without a notch.
 /// The island is drawn around it, so its collapsed height and empty middle match the notch.
 #[tauri::command]
-fn notch_size() -> Option<(f64, f64)> {
+fn notch_size(app: AppHandle) -> Option<(f64, f64)> {
     #[cfg(target_os = "macos")]
-    return mac_notch();
+    {
+        let mode = app.state::<Shared>().settings.lock().unwrap().island_screen.clone();
+        return mac_on_main(&app, move || mac_notch(&mode)).flatten();
+    }
     #[cfg(not(target_os = "macos"))]
-    None
+    {
+        let _ = app;
+        None
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn mac_notch() -> Option<(f64, f64)> {
-    use objc2::encode::{Encode, Encoding};
-    use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send, sel};
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct Insets(f64, f64, f64, f64);
-    unsafe impl Encode for Insets {
-        const ENCODING: Encoding = Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double]);
-    }
+fn mac_notch(mode: &str) -> Option<(f64, f64)> {
+    use objc2::msg_send;
     unsafe {
-        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
-        if screens.is_null() {
-            return None;
-        }
-        let count: usize = msg_send![screens, count];
-        if count == 0 {
-            return None;
-        }
-        // the first screen holds the menu bar, which is where the island is placed
-        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
-        // safeAreaInsets and the auxiliary areas exist from macOS 12
-        let has: bool = msg_send![screen, respondsToSelector: sel!(auxiliaryTopLeftArea)];
-        if !has {
-            return None;
-        }
-        let inset: Insets = msg_send![screen, safeAreaInsets];
-        if inset.0 <= 0.0 {
+        let (_, screen) = mac_island_screen(mode)?;
+        let h = mac_notch_h(screen);
+        if h <= 0.0 {
             return None;
         }
         let frame: MacRect = msg_send![screen, frame];
         let left: MacRect = msg_send![screen, auxiliaryTopLeftArea];
         let right: MacRect = msg_send![screen, auxiliaryTopRightArea];
         let width = frame.2 - left.2 - right.2;
-        (width > 0.0).then_some((width, inset.0))
+        (width > 0.0).then_some((width, h))
     }
 }
 
@@ -983,6 +1076,8 @@ fn watch_hover(app: AppHandle) {
     let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
         let mut last_island: Option<bool> = None;
         let mut last_main: Option<Option<(i32, i32)>> = None;
+        #[cfg(target_os = "macos")]
+        let mut last_screen: Option<usize> = None;
         loop {
             std::thread::sleep(Duration::from_millis(120));
             #[cfg(not(target_os = "macos"))]
@@ -1015,6 +1110,15 @@ fn watch_hover(app: AppHandle) {
                     let _ = w.set_ignore_cursor_events(!island);
                 }
                 let _ = app.emit_to("island", "hover-island", island);
+            }
+            // "pointer": move the island when the pointer goes to another display
+            #[cfg(target_os = "macos")]
+            if app.get_webview_window("island").is_some() && app.state::<Shared>().settings.lock().unwrap().island_screen == "pointer" {
+                let idx = mac_on_main(&app, || unsafe { mac_island_screen("pointer").map(|s| s.0) }).flatten();
+                if idx.is_some() && idx != last_screen {
+                    last_screen = idx;
+                    sync_island(&app);
+                }
             }
             let main = at("main");
             if last_main != Some(main) {

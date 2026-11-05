@@ -109,6 +109,8 @@ export interface Settings {
   islandHideIdle: boolean;
   /** lowest remaining usage on the closed island */
   islandUsage: boolean;
+  /** which display holds the island: the one with the notch (else the menu bar's), the menu bar's, or the pointer's */
+  islandScreen: 'auto' | 'main' | 'pointer';
   /** look for a new version at launch and every few hours, and ask before installing */
   autoUpdateCheck: boolean;
   /** size of the main window's contents, 1 = 100% (⌘+ / ⌘− / ⌘0) */

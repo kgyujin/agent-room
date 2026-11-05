@@ -15,6 +15,8 @@ pub struct LogSession {
     pub cwd: Option<String>,
     /// last write to the log, unix ms
     pub modified: u64,
+    /// the log file itself (Codex keeps its remaining usage in it)
+    pub path: String,
 }
 
 /// Where each agent keeps its session logs.
@@ -86,7 +88,7 @@ pub fn recent(dirs: &LogDirs, now: u64, within_ms: u64) -> Vec<LogSession> {
         for f in entries(&proj) {
             if f.extension().is_some_and(|e| e == "jsonl") {
                 if let (Some(m), Some(id)) = (fresh(&f), f.file_stem().and_then(|s| s.to_str())) {
-                    out.push(LogSession { agent: AgentKind::Claude, session_id: id.to_string(), cwd: cwd_near_start(&f), modified: m });
+                    out.push(LogSession { agent: AgentKind::Claude, session_id: id.to_string(), cwd: cwd_near_start(&f), modified: m, path: f.display().to_string() });
                 }
             }
         }
@@ -104,7 +106,7 @@ pub fn recent(dirs: &LogDirs, now: u64, within_ms: u64) -> Vec<LogSession> {
         for f in entries(day) {
             let Some(id) = f.file_stem().and_then(|s| s.to_str()).and_then(codex_id) else { continue };
             if let Some(m) = fresh(&f) {
-                out.push(LogSession { agent: AgentKind::Codex, session_id: id, cwd: cwd_near_start(&f), modified: m });
+                out.push(LogSession { agent: AgentKind::Codex, session_id: id, cwd: cwd_near_start(&f), modified: m, path: f.display().to_string() });
             }
         }
     }

@@ -241,6 +241,13 @@ export function SettingsModal(props: {
                         <option value="click">클릭할 때만</option>
                       </select>
                     </Field>
+                    <Field label="표시할 화면" sub>
+                      <select value={s.islandScreen ?? 'auto'} onChange={(e) => set('islandScreen', e.target.value as Settings['islandScreen'])}>
+                        <option value="auto">노치 있는 화면 (없으면 메뉴 막대 화면)</option>
+                        <option value="main">메뉴 막대가 있는 화면</option>
+                        <option value="pointer">마우스가 있는 화면</option>
+                      </select>
+                    </Field>
                     <Toggle label="일이 없을 땐 숨기기" sub v={s.islandHideIdle ?? false} on={(v) => set('islandHideIdle', v)} />
                     {s.showLimits && <Toggle label="접혔을 때 남은 사용량" sub v={s.islandUsage ?? true} on={(v) => set('islandUsage', v)} />}
                   </>
