@@ -1,141 +1,121 @@
-"""Menu bar icon frames (run `python3 gen_tray.py`): a small front-facing pixel cat that tells the state at a glance.
+"""Menu bar icon frames (run `python3 gen_tray.py`): the shiba from the app icon, in colour, telling the state at a glance.
 
-- run0..run3: the cat types on a laptop while agents work (the app plays them faster the more agents work)
-- wait: the cat sits up wide-eyed with a "!" when an agent waits for the user
-- done: the cat smiles with closed eyes next to a check mark when work just finished
-- idle: the cat naps as a loaf (closed eyes, "z") when nothing is going on
-- off: an outline only when no agent is connected
+- run0..run3: the shiba waddles while agents work (the app plays them faster the more agents work)
+- wait: a "!" bubble when an agent waits for the user
+- done: a check bubble when work just finished
+- idle: the shiba dozes (closed eyes, "z") when nothing is going on
+- off: a faded grey shiba when no agent is connected
 
-18x18 monochrome templates (black + alpha) exported at @2x (36x36), one colour per pixel.
-Eyes, mouth and the laptop's inside are holes, so the menu bar tints them like the rest.
+36x36 colour images (not templates). macOS draws the menu bar icon 18pt tall, so on a Retina screen
+each art pixel of the 25x27 pet sprite is exactly one screen pixel. One colour per pixel.
 """
 import os
 from PIL import Image
 
-OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'app', 'src-tauri', 'icons')
-N = 18
+HERE = os.path.dirname(__file__)
+OUT = os.path.join(HERE, '..', '..', 'app', 'src-tauri', 'icons')
+SHEET = os.path.join(HERE, '..', '..', 'app', 'public', 'assets', 'critters', 'shiba.png')
+N = 36
+W, H = 25, 27                      # sprite frame size; rows 4..25 hold the pet
+INK = (42, 34, 48, 255)            # the sprite's outline colour
+PAPER = (255, 255, 255, 255)
+FUR = (246, 160, 77, 255)
+EYES = [(4, 16), (4, 17), (12, 18), (12, 19)]   # (x, y) eye pixels in the front frame
+CLOSED = [(3, 17), (4, 17), (12, 19), (13, 19)]  # closed eyes: short lines
 
-# 12x9 head with pointy ears; faces cut eyes (rows 3-4) and the mouth (rows 6-7) out of it
-HEAD = [
-    '.x........x.',
-    '.xx......xx.',
-    '.xxxxxxxxxx.',
-    'xxxxxxxxxxxx',
-    'xxxxxxxxxxxx',
-    'xxxxxxxxxxxx',
-    'xxxxxxxxxxxx',
-    'xxxxxxxxxxxx',
-    '.xxxxxxxxxx.',
+BUBBLE = [
+    '.ooooooooo.',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    'opppppppppo',
+    '.oppoooooo.',
+    '.opo.......',
+    '.oo........',
 ]
-# holes per face as (row, col) inside HEAD
-FACES = {
-    # dot eyes and a small smiling mouth
-    'open': [(3, 3), (4, 3), (3, 8), (4, 8), (6, 4), (6, 7), (7, 5), (7, 6)],
-    'wide': [(3, 2), (3, 3), (4, 2), (4, 3), (3, 8), (3, 9), (4, 8), (4, 9), (6, 4), (6, 7), (7, 5), (7, 6)],
-    'happy': [(3, 3), (4, 2), (4, 4), (3, 8), (4, 7), (4, 9), (6, 4), (6, 7), (7, 5), (7, 6)],
-    'sleep': [(4, 2), (4, 3), (4, 8), (4, 9), (6, 4), (6, 7), (7, 5), (7, 6)],
-    'none': [],
-}
-
-# sitting body under the head (same 12 columns plus a tail on the right)
-BODY = [
-    '..xxxxxxxx....',
-    '.xxxxxxxxxx...',
-    '.xxxxxxxxxx...',
-    '.xxxxxxxxxx.x.',
-    '.xxxxxxxxxx.x.',
-    '.xxxxxxxxxxxx.',
-    '.xxxx..xxxx...',
-    '.xxxx..xxxx...',
-]
-
-LAPTOP = [
-    'xxxxxxxxxxxxxxxx',
-    'x..............x',
-    'x..............x',
-    'x..............x',
-    'xxxxxxxxxxxxxxxx',
-]
+EXCLAIM = ['..xx.', '..xx.', '..xx.', '..xx.', '.....', '..xx.']
+CHECK = ['.....', '....x', '...xx', 'x.xx.', 'xxx..', '.x...']
+Z_BIG = ['oooooo', 'oxxxxo', 'oooxoo', 'ooxooo', 'oxxxxo', 'oooooo']
+Z_SMALL = ['ooooo', 'oxxoo', 'ooxoo', 'ooxxo', 'ooooo']
 
 
-def grid():
-    return [['.'] * N for _ in range(N)]
+def frame(i):
+    return Image.open(SHEET).convert('RGBA').crop((i * W, 0, (i + 1) * W, H))
 
 
-def stamp(g, rows, top, left=0, ch='x'):
-    for r, line in enumerate(rows):
-        for c, v in enumerate(line):
-            y, x = top + r, left + c
-            if v == 'x' and 0 <= y < N and 0 <= x < N:
-                g[y][x] = ch
+def canvas():
+    return Image.new('RGBA', (N, N), (0, 0, 0, 0))
 
 
-def head(g, top, left, face):
-    stamp(g, HEAD, top, left)
-    for r, c in FACES[face]:
-        g[top + r][left + c] = '.'
+def put_pet(im, pet, dy=0):
+    im.alpha_composite(pet, (0, N - 26 + dy))   # feet on the bottom row
 
 
-def clear(g, cells):
-    for y, x in cells:
-        if 0 <= y < N and 0 <= x < N:
-            g[y][x] = '.'
+def draw(im, rows, x0, y0, colours):
+    for y, line in enumerate(rows):
+        for x, ch in enumerate(line):
+            if ch in colours:
+                im.putpixel((x0 + x, y0 + y), colours[ch])
 
 
-def hollow(g):
-    inner = [(y, x) for y in range(N) for x in range(N) if g[y][x] == 'x'
-             and all(0 <= y + dy < N and 0 <= x + dx < N and g[y + dy][x + dx] == 'x' for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)))]
-    clear(g, inner)
+def bubble(im, glyph, colour):
+    draw(im, BUBBLE, N - 11, 0, {'o': INK, 'p': PAPER})
+    draw(im, glyph, N - 8, 3, {'x': colour})
 
 
-def sitting(g, face, left=1):
-    head(g, 0, left, face)
-    stamp(g, BODY, 9, left - 1)
+def sleepy(pet):
+    pet = pet.copy()
+    for xy in EYES:
+        pet.putpixel(xy, FUR)
+    for xy in CLOSED:
+        pet.putpixel(xy, INK)
+    return pet
 
 
-def save(g, name):
-    im = Image.new('RGBA', (N, N), (0, 0, 0, 0))
-    for y in range(N):
-        for x in range(N):
-            if g[y][x] == 'x':
-                im.putpixel((x, y), (0, 0, 0, 255))
-    im.resize((N * 2, N * 2), Image.NEAREST).save(os.path.join(OUT, f'tray_{name}.png'))
+def save(im, name):
+    im.save(os.path.join(OUT, f'tray_{name}.png'))
 
 
 def main():
-    # typing: paws tap the laptop in turn, the head bobs while both paws are down
-    PAW = ['xx', 'xx']
-    for f, (left_up, right_up) in enumerate(((True, False), (False, False), (False, True), (False, False))):
-        g = grid()
-        bob = 0 if (left_up or right_up) else 1
-        head(g, bob, 3, 'open')
-        stamp(g, LAPTOP, 13, 1)
-        stamp(g, PAW, 9 if left_up else 11, 2)
-        stamp(g, PAW, 9 if right_up else 11, 14)
-        save(g, f'run{f}')
+    front, step_l, step_r = frame(0), frame(1), frame(2)
+    # waddle: left step, hop, right step, hop
+    for i, (pet, dy) in enumerate(((step_l, 0), (front, -1), (step_r, 0), (front, -1))):
+        im = canvas()
+        put_pet(im, pet, dy)
+        save(im, f'run{i}')
 
-    g = grid()
-    sitting(g, 'wide', left=0)
-    stamp(g, ['xx', 'xx', 'xx', 'xx', '..', 'xx'], 0, 15)  # "!"
-    save(g, 'wait')
+    im = canvas()
+    put_pet(im, front)
+    bubble(im, EXCLAIM, (232, 85, 61, 255))
+    save(im, 'wait')
 
-    g = grid()
-    sitting(g, 'happy', left=0)
-    stamp(g, ['....x', '...xx', 'x.xx.', 'xxx..', '.x...'], 0, 13)  # check mark
-    save(g, 'done')
+    im = canvas()
+    put_pet(im, front)
+    bubble(im, CHECK, (61, 154, 80, 255))
+    save(im, 'done')
 
-    g = grid()
-    head(g, 6, 1, 'sleep')
-    stamp(g, ['.xxxxxxxxxxxxxxx', 'xxxxxxxxxxxxxxxx', '.xxxxxxxxxxxxxx.'], 15, 0)  # loaf body
-    stamp(g, ['xxx', '.x.', 'xxx'], 0, 15)  # "z"
-    stamp(g, ['xx', 'x.', 'xx'], 3, 12)     # small "z"
-    clear(g, [(3, 13)])
-    save(g, 'idle')
+    im = canvas()
+    put_pet(im, sleepy(front))
+    draw(im, Z_BIG, N - 6, 0, {'o': INK, 'x': PAPER})
+    draw(im, Z_SMALL, N - 12, 6, {'o': INK, 'x': PAPER})
+    save(im, 'idle')
 
-    g = grid()
-    sitting(g, 'none', left=3)
-    hollow(g)
-    save(g, 'off')
+    # off: the dozing shiba in faded greys
+    im = canvas()
+    pet = sleepy(front)
+    for y in range(H):
+        for x in range(W):
+            p = pet.getpixel((x, y))
+            if p[3]:
+                v = 90 if p == INK else 160 + (p[0] * 30 + p[1] * 59 + p[2] * 11) // 300
+                pet.putpixel((x, y), (v, v, v, 255))
+    put_pet(im, pet)
+    save(im, 'off')
 
 
 if __name__ == '__main__':

@@ -1,9 +1,9 @@
-"""App icon + menu bar icon (pixel art, generated; run `python3 gen_icon.py`, then `npx tauri icon`).
+"""App icon (pixel art, generated; run `python3 gen_icon.py`, then `npx tauri icon`).
 
 App icon: the office corner with the shiba pet, drawn on a 64x64 pixel grid (one colour per pixel) and scaled x16 to 1024 with
 nearest-neighbour, so every art pixel stays a solid 16x16 block. Layout follows the macOS
 icon grid (rounded tile ~52/64 wide, centred).
-Menu bar icon: 18x18 monochrome template (black + alpha), exported at @2x.
+Menu bar icons are drawn by gen_tray.py.
 """
 import os
 from PIL import Image
@@ -97,31 +97,10 @@ def app_icon():
     return s
 
 
-def tray_icon():
-    """18x18 template glyph: two filled back walls (window cut in the left one) over a floor
-    diamond, separated by a 1px gap. Only alpha matters on macOS."""
-    s = Spr(18, 18)
-    ink = (0, 0, 0, 255)
-    for x in range(1, 17):
-        d = int(abs(x - 8.5) - 0.5)
-        top = 1 + d // 2
-        for y in range(top, top + 8):
-            s.put(x, y, ink)
-        for y in range(top + 9, 17 - d // 2):
-            s.put(x, y, ink)
-    for y in range(2, 9):                      # back corner seam between the two walls
-        s.px[8, y] = (0, 0, 0, 0)
-    for (x, y) in ((4, 6), (5, 6), (4, 7), (5, 7), (4, 8), (5, 8)):
-        s.px[x, y] = (0, 0, 0, 0)
-    return s
-
-
 def main():
     os.makedirs(OUT, exist_ok=True)
     a = app_icon()
     a.im.resize((1024, 1024), Image.NEAREST).save(os.path.join(OUT, 'source.png'))
-    t = tray_icon()
-    t.im.resize((36, 36), Image.NEAREST).save(os.path.join(OUT, 'tray.png'))
     print('icons written')
 
 
