@@ -4,14 +4,14 @@ import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
-import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
+import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
-import { SessionTabs } from './ui/SessionTabs';
+import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
-import { latestLimits, UsageStrip, userTodo } from './ui/Overview';
+import { UsageStrip, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
@@ -103,7 +103,8 @@ export default function App() {
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
-  const [settingsOpen, setSettingsOpen] = useState<null | 'look' | 'general' | 'agents' | 'dev'>(null);
+  // open: the pane to show ('last' = the one used last time)
+  const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
   const [detailTab, setDetailTab] = useState<Tab>('overview');
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
@@ -155,7 +156,7 @@ export default function App() {
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
-        await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'look')),
+        await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'last')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
         await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
@@ -234,13 +235,13 @@ export default function App() {
     sceneRef.current?.setSessions(inRoom);
   }, [list, ready, inRoomKey]);
 
-  // The status card and the banners change height as the agent's work changes (a tool line, a
-  // notice, a 4-second error banner). Re-centring the room on every change made the middle of the
-  // screen jump, so the room keeps the tallest space they needed until the layout itself changes.
-  const tall = useRef({ key: '', dock: 0, banners: 0 });
+  // The banners change height as things happen (a 4-second error banner). Re-centring the room on
+  // every change made the middle of the screen jump, so the room keeps the tallest space they needed
+  // until the layout itself changes. The status bar at the bottom is one line, so it keeps its height.
+  const tall = useRef({ key: '', banners: 0 });
   const layoutKey = `${vw}x${window.innerHeight}|${panelOpen}|${mini}|${tabsBelow}`;
-  if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, dock: 0, banners: 0 };
-  const dockRoom = dockH ? (tall.current.dock = Math.max(tall.current.dock, dockH)) : 0;
+  if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, banners: 0 };
+  const dockRoom = dockH;
   const bannersRoom = bannersH ? (tall.current.banners = Math.max(tall.current.banners, bannersH)) : 0;
   useEffect(() => {
     const sc = sceneRef.current;
@@ -274,9 +275,9 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.skins = skins;
-    sc.prefs = skinPrefs(settings.characters ?? {}, Object.keys(skins).filter((k) => !k.startsWith('builtin/')));
-    sc.assignSkins(true);
-  }, [settings.characters, skins, ready]);
+    sc.pool = petPool(settings.petPool, Object.keys(skins));
+    sc.assignSkins();
+  }, [settings.petPool, skins, ready]);
 
   useEffect(() => {
     const th = uiTheme(settings.uiTheme);
@@ -450,13 +451,6 @@ export default function App() {
     try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
   };
 
-  const toggleFullscreen = async () => {
-    const w = await win();
-    if (w) await w.setFullscreen(!(await w.isFullscreen()));
-    else if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.();
-    else void document.exitFullscreen?.();
-  };
-
   const [furnTip, setFurnTip] = useState<string | null>(null);
   // a short note at the top (e.g. when an agent's app window can't be found)
   const [flash, setFlash] = useState<string | null>(null);
@@ -542,11 +536,12 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
-      {!mini && !office && settings.showTabs && (
+      {!mini && !office && (
         <div className="topleft" style={{ right: (panelOpen ? PANEL_W : 0) + toolbarW + 24 }}>
-          <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
+          {!compact && <StatusPills sessions={list} now={now} onSelect={setPinned} />}
+          {settings.showTabs && <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />}
         </div>
       )}
       {/* a small window has no room for the welcome card, so a first-time user still gets one clear next step */}
@@ -556,7 +551,7 @@ export default function App() {
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && !centred ? PANEL_W + 12 : 12 }}>
           {selected ? (
-            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
+            <Hud s={selected} now={now} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
             <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
@@ -581,7 +576,8 @@ export default function App() {
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? PANEL_W + 12 : 12 }}>
         {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
-        {!compact && !office && !mini && settings.showLimits && (
+        {/* with little width left the pills keep the top bar; the panel's 사용량 tab still has the numbers */}
+        {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? PANEL_W : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
         {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
@@ -592,14 +588,13 @@ export default function App() {
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
-        {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
-        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('look')} />
+        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
       </div>
 
       {settingsOpen && (
         <SettingsModal
-          initialTab={settingsOpen}
+          initialTab={settingsOpen === 'agents' ? 'agents' : null}
           settings={settings}
           onChange={saveSettings}
           onClose={() => setSettingsOpen(null)}

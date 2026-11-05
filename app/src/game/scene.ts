@@ -57,8 +57,8 @@ export class Scene {
   bubbles = true;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
-  /** preferred skin order per agent ('claude', 'codex', 'generic'); first unused one wins */
-  prefs: Record<string, string[]> = {};
+  /** pets new critters may get (the user's checked list) */
+  pool: string[] = [];
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
   /** pixel ratio the canvas was last fitted at */
@@ -116,17 +116,22 @@ export class Scene {
     for (const m of this.mates) this.applyBehavior(m);
   }
 
-  /** each critter keeps its skin; new ones take the first preferred skin nobody else wears.
-   *  reset: re-pick every skin (the user changed the character settings) */
-  assignSkins(reset = false) {
-    const taken = new Set<string>();
+  /**
+   * Each critter keeps its pet while that pet is still in the pool. One without a pet gets a random
+   * pool pet nobody in the room has; only when every pool pet is already in the room is one repeated.
+   */
+  assignSkins() {
+    const inRoom = new Set<string>();
     for (const m of this.mates) {
-      if (reset) m.skin = '';
-      const pref = this.prefs[m.agent] ?? [];
-      if (!m.skin || !this.skins[m.skin] || taken.has(m.skin)) {
-        m.skin = pref.find((n) => this.skins[n] && !taken.has(n)) ?? pref.find((n) => this.skins[n]) ?? '';
-      }
-      taken.add(m.skin);
+      if (m.skin && this.skins[m.skin] && this.pool.includes(m.skin)) inRoom.add(m.skin);
+      else m.skin = '';
+    }
+    for (const m of this.mates) {
+      if (m.skin) continue;
+      const free = this.pool.filter((n) => !inRoom.has(n));
+      const from = free.length ? free : this.pool;
+      m.skin = from[Math.floor(Math.random() * from.length)] ?? '';
+      inRoom.add(m.skin);
     }
   }
 
@@ -197,7 +202,7 @@ export class Scene {
     const room = this.atlas.frames.room;
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
-    const margin = this.roomOnly ? 2 : 8;
+    const margin = this.roomOnly ? 2 : 4;
     const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / (room.w + margin), availH / (room.h + margin))));
     // opening the side panel keeps the room's size when it still fits beside the panel at the window's
     // centre (it stays put, see draw); otherwise it shrinks to the free area
