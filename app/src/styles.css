@@ -654,3 +654,90 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 /* first step in a small window (the welcome card needs a wide one) */
 .first-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; white-space: nowrap; }
 .pop-body .pad .btn { margin-top: 10px; }
+
+/* ------------------------------------------------ side panel: one grid, aligned columns, calm sections */
+.panel header { gap: 8px; padding: 10px 10px 10px 12px; }
+.panel nav { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); }
+.panel nav button { padding: 5px 0; text-align: center; }
+.panel-body .pad { padding: 12px 14px 18px; }
+.pn-sec + .pn-sec { margin-top: 16px; }
+.pn-sec h4, .ov h4 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: 0.02em; }
+.ov h4 { margin-top: 16px; }
+.pn-count { margin-left: auto; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pn-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-soft); }
+.pn-bar, .ov-bar { display: block; height: 6px; border-radius: 999px; background: var(--tint-2, rgba(122, 86, 70, 0.12)); overflow: hidden; }
+.pn-bar { margin-bottom: 10px; }
+.pn-bar i, .ov-bar i { display: block; height: 100%; border-radius: inherit; background: var(--ok); }
+
+/* overview: four counts in one strip */
+.ov-stats { gap: 0; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); overflow: hidden; }
+.ov .ov-stat { border: none; border-radius: 0; background: none; padding: 9px 2px 8px; gap: 3px; }
+.ov .ov-stat + .ov-stat { border-left: 1px solid var(--line-soft); }
+.ov .ov-stat b { font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
+.ov .ov-stat span { font-size: 11px; color: var(--ink-soft); }
+.ov .ov-stat.tone-wait:not(.zero) { background: color-mix(in srgb, var(--wait) 12%, var(--box)); }
+.ov .ov-stat.zero b { color: var(--muted); }
+
+/* overview: agent cards with fixed columns */
+.ov .ov-row { gap: 6px; padding: 10px 12px; border-left-width: 1px; position: relative; overflow: hidden; }
+.ov .ov-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--line-soft); }
+.ov .ov-row.t-wait::before { background: var(--wait); }
+.ov .ov-row.t-bad::before { background: var(--bad); }
+.ov .ov-row.t-work::before { background: var(--work); }
+.ov .ov-row.t-ok::before { background: var(--ok); }
+.ov-top { gap: 7px; }
+.ov-top .ov-proj { font-size: 13px; line-height: 18px; }
+.ov .ov-state { padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 11%, transparent); font-size: 11px; line-height: 15px; }
+.ov-doing { padding-left: 23px; line-height: 16px; }
+.ov .ov-meta { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding-left: 23px; flex-wrap: nowrap; }
+.ov .ov-meta:has(.ov-n) { grid-template-columns: 1fr 26px auto auto; }
+.ov .ov-meta .ov-n { font-size: 11px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.ov-time { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ov-time svg { width: 11px; height: 11px; }
+.ov .ov-eta { font-size: 11px; }
+.ov .ov-meta.quiet { display: flex; gap: 10px; color: var(--ink-soft); font-size: 11px; }
+.ov .ov-step { display: flex; align-items: center; gap: 5px; margin-left: 23px; padding: 0; background: none; color: var(--ink); font-size: 11.5px; line-height: 16px; }
+.ov-step svg { width: 10px; height: 10px; flex: none; color: var(--work-ink, var(--work)); }
+.ov-step span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-step em { margin-left: auto; font-style: normal; color: var(--ink-soft); flex: none; }
+.ov .ov-row.quiet { gap: 4px; }
+.ov .ov-row.quiet .ov-proj { font-weight: 600; }
+
+/* timeline: one rail, text then time, both on the same line */
+.panel .timeline { padding: 10px 14px 18px; position: relative; }
+.panel .timeline li { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; border: none; font-size: 12.5px; line-height: 18px; }
+.panel .timeline li::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--line-soft); }
+.panel .timeline li:first-child::before { top: 50%; }
+.panel .timeline li:last-child::before { bottom: 50%; }
+.tl-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; margin-left: 3px; background: var(--box); border: 2px solid var(--muted); box-sizing: border-box; }
+.timeline li.ok .tl-dot { border-color: var(--ok); background: var(--ok); }
+.timeline li.bad .tl-dot { border-color: var(--bad); background: var(--bad); }
+.timeline li.k-approval .tl-dot, .timeline li.k-input .tl-dot { border-color: var(--wait); background: var(--wait); }
+.timeline li.k-turn_start .tl-dot { border-color: var(--accent); }
+.tl-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel .timeline time { font-size: 11px; padding: 0; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* task list */
+.panel .tasks li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: start; padding: 5px 0; font-size: 12.5px; line-height: 17px; }
+.panel .tasks .box { width: 14px; height: 14px; margin-top: 1.5px; border-radius: 4px; display: grid; place-items: center; color: #fff; }
+.panel .tasks .box svg { width: 10px; height: 10px; }
+.panel .tasks .st-in_progress .box { border: 2px solid var(--wait); background: color-mix(in srgb, var(--wait) 25%, #fff); }
+.panel .files li { display: grid; grid-template-columns: 14px auto minmax(0, 1fr); align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--hair); }
+.panel .files li:last-child { border-bottom: none; }
+.files li svg { width: 12px; height: 12px; color: var(--ink-soft); }
+.files li b { font-weight: 600; white-space: nowrap; }
+.files li span { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+
+/* session info: label / value columns in small cards */
+.panel .info { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); padding: 0 12px; }
+.panel .info > div { grid-template-columns: 84px minmax(0, 1fr); align-items: baseline; padding: 8px 0; font-size: 12.5px; }
+.panel .info > div:last-child { border-bottom: none; }
+.panel .info dd { word-break: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.pn-forget { margin-top: 16px; width: 100%; }
+
+/* names: a little more room, the full text on hover */
+.tab span:not(.dot) { max-width: 150px; }
+.nametag .tag-project { max-width: 120px; }
+.ov-todo .ov-proj { max-width: 45%; }
+.hud-project { max-width: 220px; }
+.nametag span { max-width: 170px; }
