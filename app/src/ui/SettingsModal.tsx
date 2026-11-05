@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { autostartEnabled, backend, IN_TAURI, setAutostart } from '../bridge';
 import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_CHARACTERS } from '../game/skin';
 import type { Sfx, Sound } from '../game/audio';
-import type { HookStatus, Settings } from '../types';
+import type { CharacterFile, HookStatus, Settings } from '../types';
 import { Icon } from './icons';
 import { BACKDROPS, UI_THEMES, backdropOf, uiTheme } from '../themes';
 
@@ -214,6 +214,28 @@ const ROLES: [string, string][] = [['claude', 'Claude Code'], ['codex', 'Codex']
 function Characters({ settings: s, onChange, names, onAdded }: { settings: Settings; onChange: (s: Settings) => void; names: string[]; onAdded: () => Promise<void> }) {
   const [dir, setDir] = useState('~/.agent-room');
   const [note, setNote] = useState<string | null>(null);
+  const [files, setFiles] = useState<CharacterFile[]>([]);
+  useEffect(() => { backend.listCharacters().then(setFiles).catch(() => undefined); }, []);
+  // after any change on disk: this list and the pets in the room both reload
+  const refresh = async () => {
+    setFiles(await backend.listCharacters().catch(() => []));
+    await onAdded();
+  };
+  // agents that use `from` switch to `to` (or back to their default when `to` is null)
+  const repoint = (from: string, to: string | null) => {
+    const next = { ...s.characters };
+    for (const [agent, name] of Object.entries(next)) if (name === from) to ? (next[agent] = to) : delete next[agent];
+    onChange({ ...s, characters: next });
+  };
+  const run = async (job: () => Promise<void>) => {
+    try {
+      await job();
+      setNote(null);
+    } catch (e) {
+      setNote(String(e));
+    }
+    await refresh();
+  };
   const add = async (files: FileList | null) => {
     const added: string[] = [];
     for (const f of Array.from(files ?? [])) {
@@ -224,7 +246,7 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
         return;
       }
     }
-    await onAdded();
+    await refresh();
     if (added.length) setNote(`추가했어요: ${added.join(', ')} · 아래 목록에서 고르면 바로 바뀌어요`);
   };
   useEffect(() => {
@@ -265,7 +287,7 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
           </select>
         </Field>
       ))}
-      <h4>펫 색 바꾸기</h4>
+      <h4>펫 목록 · 색 바꾸기</h4>
       {BUILTIN_CRITTERS.map(([id, label]) => {
         const cur = s.critterColors?.[id];
         const setColor = (c?: string) => {
@@ -286,12 +308,55 @@ function Characters({ settings: s, onChange, names, onAdded }: { settings: Setti
           </div>
         );
       })}
+      {files.length > 0 && <h4>내 캐릭터</h4>}
+      {files.map((f) => (
+        <MyCharacter
+          key={f.name}
+          file={f}
+          onRename={(to) => run(async () => { const saved = await backend.renameCharacter(f.name, to); if (saved !== f.name) repoint(f.name, saved); })}
+          onReplace={(bytes) => run(() => backend.replaceCharacter(f.name, bytes))}
+          onRemove={() => run(async () => { await backend.removeCharacter(f.name); repoint(f.name, null); })}
+        />
+      ))}
       {note && <p className="small">{note}</p>}
       <p className="muted small">
         추가한 PNG는 <span className="mono">{dir}/characters/</span> 폴더에 저장되고, 이 폴더에 직접 넣어도 돼요. 확대된 도트는 1칸 = 1px
         원래 크기로 줄이고 단색 배경은 투명하게 처리해요. 파일은 이 컴퓨터에만 있고 어디에도 올리지 않아요.
       </p>
     </>
+  );
+}
+
+/** one added character: picture, name (click to rename), and buttons to swap its file or delete it */
+function MyCharacter({ file, onRename, onReplace, onRemove }: { file: CharacterFile; onRename: (to: string) => void; onReplace: (bytes: number[]) => void; onRemove: () => void }) {
+  const url = useMemo(() => URL.createObjectURL(new Blob([new Uint8Array(file.bytes)], { type: 'image/png' })), [file.bytes]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [sure, setSure] = useState(false);
+  const save = () => {
+    if (draft !== null && draft.trim() && draft.trim() !== file.name) onRename(draft.trim());
+    setDraft(null);
+  };
+  return (
+    <div className="field my-char">
+      <span className="pet-name">
+        <img className="my-char-thumb" src={url} alt="" />
+        {draft === null ? (
+          <button className="link" onClick={() => setDraft(file.name)} title="이름 바꾸기">{file.name}</button>
+        ) : (
+          <input autoFocus value={draft} maxLength={40} aria-label="새 이름" onChange={(e) => setDraft(e.target.value)} onBlur={save}
+            onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); } }} />
+        )}
+      </span>
+      <span className="my-char-actions">
+        <button className="btn" onClick={() => setDraft(file.name)}>이름</button>
+        <label className="btn">
+          파일 바꾸기
+          <input type="file" accept="image/png" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.arrayBuffer().then((b) => onReplace(Array.from(new Uint8Array(b)))); }} />
+        </label>
+        <button className={`btn ${sure ? 'danger' : ''}`} onClick={() => (sure ? onRemove() : (setSure(true), window.setTimeout(() => setSure(false), 3000)))}>{sure ? '정말 삭제' : '삭제'}</button>
+      </span>
+    </div>
   );
 }
 

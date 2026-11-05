@@ -50,6 +50,9 @@ export interface Backend {
   dataDir(): Promise<string>;
   listCharacters(): Promise<CharacterFile[]>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
+  replaceCharacter(name: string, bytes: number[]): Promise<void>;
+  renameCharacter(name: string, to: string): Promise<string>;
+  removeCharacter(name: string): Promise<void>;
   listSounds(): Promise<SoundFile[]>;
   saveSound(event: string, name: string, bytes: number[]): Promise<void>;
   removeSound(event: string): Promise<void>;
@@ -78,6 +81,9 @@ const tauriBackend: Backend = {
   dataDir: () => tauriInvoke('data_dir'),
   listCharacters: () => tauriInvoke('list_characters'),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
+  replaceCharacter: (name, bytes) => tauriInvoke('replace_character', { name, bytes }),
+  renameCharacter: (name, to) => tauriInvoke('rename_character', { name, to }),
+  removeCharacter: (name) => tauriInvoke('remove_character', { name }),
   listSounds: () => tauriInvoke('list_sounds'),
   saveSound: (event, name, bytes) => tauriInvoke('save_sound', { event, name, bytes }),
   removeSound: (event) => tauriInvoke('remove_sound', { event }),
@@ -183,6 +189,19 @@ function previewBackend(): Backend {
       const stem = name.replace(/\.png$/i, '');
       (w.__previewCharacters ??= []).push({ name: stem, bytes });
       return stem;
+    },
+    replaceCharacter: async (name, bytes) => {
+      const c = (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters?.find((x) => x.name === name);
+      if (c) c.bytes = bytes;
+    },
+    renameCharacter: async (name, to) => {
+      const c = (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters?.find((x) => x.name === name);
+      if (c) c.name = to;
+      return to;
+    },
+    removeCharacter: async (name) => {
+      const w = window as { __previewCharacters?: CharacterFile[] };
+      w.__previewCharacters = (w.__previewCharacters ?? []).filter((x) => x.name !== name);
     },
     // sounds live in memory only in the browser preview
     listSounds: async () => previewSounds,

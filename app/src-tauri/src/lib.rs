@@ -741,7 +741,7 @@ struct CharacterFile {
 /// Custom character PNGs from ~/.agent-room/characters (local only; nothing is uploaded).
 #[tauri::command]
 fn list_characters() -> Vec<CharacterFile> {
-    let dir = agent_room_core::paths::data_dir().join("characters");
+    let dir = characters_dir();
     let _ = std::fs::create_dir_all(&dir);
     let Ok(rd) = std::fs::read_dir(&dir) else { return vec![] };
     let mut out = vec![];
@@ -818,27 +818,81 @@ fn remove_sound(event: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
-#[tauri::command]
-fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
-    if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
-    }
+fn characters_dir() -> std::path::PathBuf {
+    agent_room_core::paths::data_dir().join("characters")
+}
+
+/// A file stem that is safe inside the characters folder: letters, digits, `-` and `_` only.
+fn character_stem(name: &str) -> String {
     let stem: String = name.trim_end_matches(".png").trim_end_matches(".PNG").chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
         .take(40)
         .collect();
-    let stem = if stem.is_empty() { "character".to_string() } else { stem };
-    let dir = agent_room_core::paths::data_dir().join("characters");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut saved = stem.clone();
+    if stem.is_empty() { "character".to_string() } else { stem }
+}
+
+/// `stem`, or `stem-2`, `stem-3`… when that name is taken.
+fn free_character_stem(dir: &std::path::Path, stem: &str) -> String {
+    let mut saved = stem.to_string();
     let mut n = 2;
     while dir.join(format!("{saved}.png")).exists() {
         saved = format!("{stem}-{n}");
         n += 1;
     }
+    saved
+}
+
+fn check_png(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
+    }
+    Ok(())
+}
+
+/// Path of an existing character file; the name must already be a safe stem.
+fn existing_character(name: &str) -> Result<std::path::PathBuf, String> {
+    let p = characters_dir().join(format!("{name}.png"));
+    if character_stem(name) != name || !p.is_file() {
+        return Err("캐릭터 파일을 찾지 못했어요".into());
+    }
+    Ok(p)
+}
+
+/// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
+#[tauri::command]
+fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
+    check_png(&bytes)?;
+    let dir = characters_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let saved = free_character_stem(&dir, &character_stem(&name));
     std::fs::write(dir.join(format!("{saved}.png")), &bytes).map_err(|e| e.to_string())?;
     Ok(saved)
+}
+
+/// Swaps the picture of an added character, keeping its name.
+#[tauri::command]
+fn replace_character(name: String, bytes: Vec<u8>) -> Result<(), String> {
+    check_png(&bytes)?;
+    std::fs::write(existing_character(&name)?, &bytes).map_err(|e| e.to_string())
+}
+
+/// Renames an added character. Returns the new name (made unique if it is taken).
+#[tauri::command]
+fn rename_character(name: String, to: String) -> Result<String, String> {
+    let from = existing_character(&name)?;
+    let stem = character_stem(to.trim());
+    if stem == name {
+        return Ok(name);
+    }
+    let dir = characters_dir();
+    let saved = free_character_stem(&dir, &stem);
+    std::fs::rename(from, dir.join(format!("{saved}.png"))).map_err(|e| e.to_string())?;
+    Ok(saved)
+}
+
+#[tauri::command]
+fn remove_character(name: String) -> Result<(), String> {
+    std::fs::remove_file(existing_character(&name)?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -862,7 +916,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app,
+            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
             tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {
@@ -968,4 +1022,18 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::character_stem;
+
+    #[test]
+    fn character_names_stay_inside_the_folder() {
+        assert_eq!(character_stem("pikachu.png"), "pikachu");
+        assert_eq!(character_stem("../../etc/passwd"), "______etc_passwd");
+        assert_eq!(character_stem(""), "character");
+        // an existing name must already be safe, so a crafted one never matches its file
+        assert_ne!(character_stem("../x"), "../x");
+    }
 }
