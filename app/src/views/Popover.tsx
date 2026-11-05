@@ -56,7 +56,7 @@ export function Popover() {
         {live.length ? (
           <>
             <h4>세션 <span>{live.length}</span></h4>
-            {rows.map((s) => <Row key={s.key} s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom ? 'select' : 'focus', s.key)} />)}
+            {rows.map((s) => <Row key={s.key} s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom || s.isDemo ? 'select' : 'focus', s.key)} />)}
             {more > 0 && <button className="pp-more" onClick={() => act('open')}>+{more}개 더 · 방에서 보기</button>}
           </>
         ) : (

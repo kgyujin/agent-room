@@ -150,7 +150,12 @@ export function sessionNames(list: Snapshot[]): Record<string, string> {
     if (twins.length < 2) { out[s.key] = base(s); continue; }
     const p = parent(s);
     const own = p !== null && twins.filter((o) => parent(o) === p).length === 1;
-    out[s.key] = `${base(s)} · ${own ? p : s.key.split(':').pop()!.slice(0, 4)}`;
+    if (own) { out[s.key] = `${base(s)} · ${p}`; continue; }
+    // ids can share a prefix (time-ordered ids do), so take the shortest tail no twin shares
+    const id = (o: Snapshot) => o.key.split(':').pop()!;
+    let n = 4;
+    while (n < id(s).length && twins.some((o) => o !== s && id(o).slice(-n) === id(s).slice(-n))) n++;
+    out[s.key] = `${base(s)} · ${id(s).slice(-n)}`;
   }
   return out;
 }
