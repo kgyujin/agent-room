@@ -60,23 +60,26 @@ export function Island() {
       shrink.current = window.setTimeout(() => setBig(false), 360);
     }, 450);
   };
+  // click-only: coming back before the close delay keeps the island open, but never opens it
+  const stay = () => clearTimeout(leave.current);
   const [w, h] = open ? openSize : COLLAPSED;
-  const hoverRef = useRef({ enter, exit, hoverOpens });
-  hoverRef.current = { enter, exit, hoverOpens };
+  const hoverRef = useRef({ enter, exit, stay, hoverOpens });
+  hoverRef.current = { enter, exit, stay, hoverOpens };
   useEffect(() => {
     let off: (() => void) | undefined;
     let dead = false;
     void backend.onTrayEvent('hover', (inside) => {
       const r = hoverRef.current;
-      if (inside && r.hoverOpens) r.enter();
-      else if (!inside) r.exit();
+      if (!inside) r.exit();
+      else if (r.hoverOpens) r.enter();
+      else r.stay();
     }).then((u) => (dead ? u() : (off = u)));
     return () => { dead = true; off?.(); };
   }, []);
 
   return (
     <div className={`island ${open ? 'open' : ''} ${todos.length ? 'alert' : ''}`} style={{ width: w, height: h, ['--bar-h' as string]: `${barH}px`, ['--notch-w' as string]: `${notchW}px` }}
-      onMouseEnter={hoverOpens ? enter : undefined} onMouseLeave={exit} onClick={enter}>
+      onMouseEnter={hoverOpens ? enter : stay} onMouseLeave={exit} onClick={enter}>
       <div className="is-bar">
         <div className="is-left">
           {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
