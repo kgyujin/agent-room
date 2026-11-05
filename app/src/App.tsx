@@ -108,7 +108,7 @@ export default function App() {
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
-        await backend.onTrayEvent('open-settings', () => setSettingsOpen('look')),
+        await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'look')),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
     })();
