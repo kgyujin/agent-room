@@ -491,6 +491,18 @@ fn open_app(path: &std::path::Path) -> Result<(), String> {
     if ok { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
 }
 
+/// the system's double-click interval in ms, so a single click on a pet can wait exactly that long
+#[tauri::command]
+fn double_click_ms() -> u32 {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::{class, msg_send};
+        let sec: f64 = msg_send![class!(NSEvent), doubleClickInterval];
+        if sec > 0.0 { return (sec * 1000.0).round().min(5000.0) as u32; }
+    }
+    500
+}
+
 #[cfg(not(target_os = "macos"))]
 fn open_app(_: &std::path::Path) -> Result<(), String> {
     Err("앱 창 열기는 아직 macOS에서만 돼요".into())
@@ -1089,7 +1101,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, focus_agent, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
+            hooks_remove_all, focus_agent, double_click_ms, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
             tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {
