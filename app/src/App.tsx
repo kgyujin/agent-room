@@ -459,12 +459,16 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact} />
 
       {!mini && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
+      )}
+      {/* a small window has no room for the welcome card, so a first-time user still gets one clear next step */}
+      {compact && !mini && !selected && (
+        <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
       )}
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
@@ -534,7 +538,7 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean }) {
+function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few, short }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean; short: boolean }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const fullRef = useRef(full);
   fullRef.current = full;
@@ -545,17 +549,28 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few 
   // narrow windows: only the tags that matter (selected, or waiting on the user), so the small room is not buried
   const fewRef = useRef(few);
   fewRef.current = few;
+  // small windows: just what the pet is doing ("코드 수정 중"), without the file or command
+  const shortRef = useRef(short);
+  shortRef.current = short;
   useEffect(() => {
     let last = '';
     const loop = () => {
       const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current);
+      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current, shortRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
         placed.push(p);
+      }
+      // keep every tag inside the window: one pushed past the top edge comes back down (it may then overlap
+      // a neighbour, which is better than being cut off), and one near a side edge slides inward
+      const vw = window.innerWidth;
+      for (const p of a) {
+        p.y = Math.max(p.y, TAG_H + 2);
+        const half = w(p) / 2;
+        p.x = Math.min(Math.max(p.x, half + 2), vw - half - 2);
       }
       const sig = selRef.current + '|' + a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
       if (sig !== last) {
@@ -578,7 +593,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few 
         const settled = s.state === 'completed' && !justDone(s, now);
         const tone = settled ? 'calm' : stateTone(s);
         const urgent = needsYou(s);
-        const doing = settled ? null : doingLabel(s);
+        const doing = settled ? null : tagLabel(s, short);
         return (
           <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${settled || (s.state === 'idle' && s.connection === 'live') ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
@@ -593,10 +608,14 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few 
   );
 }
 
+/** height of a name tag in CSS px (it is drawn above its anchor point) */
+const TAG_H = 22;
+const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
+
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
-function tagWidth(s: Snapshot | undefined, withProject: boolean): number {
+function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean): number {
   if (!s) return 40;
-  const doing = doingLabel(s) ?? (needsYou(s) ? s.project ?? '' : '');
+  const doing = tagLabel(s, short) ?? (needsYou(s) ? s.project ?? '' : '');
   const text = (withProject ? (s.project ?? AGENT_NAME[s.agent]).slice(0, 12) + ' ' : '') + doing;
   let w = 40;
   for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;

@@ -649,3 +649,6 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .modal nav button { white-space: nowrap; flex: none; }
 /* selects grow to fit their longest choice instead of cutting it off */
 .field select { width: auto; min-width: 150px; max-width: 64%; }
+
+/* first step in a small window (the welcome card needs a wide one) */
+.first-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; white-space: nowrap; }
