@@ -21,6 +21,8 @@ export interface Layout {
   windowWalls?: ('L' | 'R')[];
   /** screen point of the back floor corner (wall coordinates are measured from it) */
   wallOrigin?: [number, number];
+  /** wall clock centre (screen) and face radius; hand pixels are (x + k, floor(y + k / 2 - dz)) */
+  clock?: { x: number; y: number; r: number };
 }
 export type Facing = 'dr' | 'dl' | 'ur' | 'ul';
 

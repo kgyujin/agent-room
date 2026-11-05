@@ -411,6 +411,32 @@ def banner(s, wall, u, z0):
             s.put(q[0], q[1], col)
 
 
+CLOCK = (54, 32, 6)   # wall clock on the right wall: u and z of its centre, radius; the app draws the hands
+
+
+def wall_clock(s):
+    """round wall clock face (wooden rim, paper face, ticks at 12/3/6/9) between two windows.
+    k runs 1 screen pixel per step along the wall, so the face is a circle in (k, z)"""
+    u0, z0, r = CLOCK
+    for k in range(-r - 1, r + 2):
+        for dz in range(-r - 1, r + 2):
+            d = math.hypot(k, dz)
+            if d > r + 0.5:
+                continue
+            col = C['w_d'] if d > r - 0.7 else C['paper']
+            if d <= r - 0.7 and ((k == 0 and abs(dz) == r - 1) or (dz == 0 and abs(k) == r - 1)):
+                col = C['w_dd']
+            s.put(*P(u0 + k / 2, 0, z0 + dz), col)
+    # small brass hanger above the rim
+    s.put(*P(u0, 0, z0 + r + 1), C['gold_d'])
+
+
+def clock_origin():
+    """screen point of the clock centre, the radius, for the app's hands (pixel = (x + k, floor(y + k / 2 - dz)))"""
+    u0, z0, r = CLOCK
+    return {'x': OX + 2 * u0, 'y': OY + u0 - z0, 'r': r}
+
+
 def lamp(x, y, name):
     s = piece(name, (x + 2, y + 2), (x - 1, y - 1, x + 3, y + 3))
     wbox(s, x, y, 0, 2, 2, 2, C['iron_l'], C['iron'], C['iron_d'])
@@ -522,7 +548,7 @@ def build():
     banner(room, 'L', 26, 40)
     banner(room, 'L', 50, 40)
     banner(room, 'R', 4, 40)
-    banner(room, 'R', 52, 40)
+    wall_clock(room)
     # ivy draping over the wall caps
     ivy(room, [P(-1, y, Z + 1) for y in range(2, Y, 4)][:3] + [P(-1, y, Z + 1) for y in range(44, Y, 3)], seed=3)
     ivy(room, [P(x, -1, Z + 1) for x in range(0, 9, 3)] + [P(x, -1, Z + 1) for x in range(X - 8, X, 3)], seed=8)
