@@ -741,3 +741,34 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .ov-todo .ov-proj { max-width: 45%; }
 .hud-project { max-width: 220px; }
 .nametag span { max-width: 170px; }
+
+/* ------------------------------------------------ update dialog */
+.modal.upd { width: min(380px, calc(100vw - 32px)); }
+.modal.upd header b { font-size: 14px; font-family: var(--font-display); }
+.upd-msg { display: flex; align-items: center; gap: 6px; margin: 4px 0 12px; font-size: 13px; line-height: 1.5; }
+.upd-msg svg { color: var(--ok); flex: none; }
+.upd-msg.bad { color: var(--bad); font-size: 12.5px; }
+.upd-ver { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
+.upd-ver > div { border: 1px solid var(--line-soft); border-radius: 10px; background: var(--box); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.upd-ver dt { font-size: 11px; color: var(--ink-soft); }
+.upd-ver dd { margin: 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.upd-ver dd.new { color: var(--ok); }
+.upd-prog { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.upd-prog small { color: var(--ink-soft); font-size: 11.5px; }
+.upd-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.upd-actions:empty { display: none; }
+.field .ver { margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------ remaining usage on the main screen (start of the toolbar) */
+.usage-strip { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 8px; margin-right: 2px; border-right: 1px solid var(--line-soft); align-self: stretch; }
+.us-agent { display: flex; align-items: center; gap: 8px; font-size: 11.5px; white-space: nowrap; }
+.us-agent + .us-agent { padding-left: 12px; border-left: 1px dashed var(--line-soft); }
+.us-win { display: inline-flex; align-items: center; gap: 4px; }
+.us-win em { font-style: normal; color: var(--ink-soft); }
+.us-win .ov-lim-bar { width: 28px; height: 5px; }
+.us-win b { min-width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
+.us-win.mid .ov-lim-bar i { background: var(--wait); }
+.us-win.low .ov-lim-bar i { background: var(--bad); }
+.us-win.low b { color: var(--bad); }
+.us-agent small, .ov-lim-age { font-size: 10.5px; color: var(--ink-soft); }
+.pop-lim { padding: 0; margin-top: 14px; }

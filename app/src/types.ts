@@ -106,6 +106,8 @@ export interface Settings {
   islandHideIdle: boolean;
   /** lowest remaining usage on the closed island */
   islandUsage: boolean;
+  /** look for a new version at launch and every few hours, and ask before installing */
+  autoUpdateCheck: boolean;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

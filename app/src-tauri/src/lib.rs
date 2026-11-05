@@ -76,6 +76,8 @@ pub struct Settings {
     pub island_usage: bool,
     /// "작업 완료" notifications only for turns at least this long (seconds, 0 = all)
     pub notify_min_turn_sec: u32,
+    /// look for a new version at launch and every few hours, and ask before installing it
+    pub auto_update_check: bool,
 }
 
 impl Default for Settings {
@@ -110,6 +112,7 @@ impl Default for Settings {
             island_hide_idle: false,
             island_usage: true,
             notify_min_turn_sec: 0,
+            auto_update_check: true,
         }
     }
 }
@@ -323,6 +326,7 @@ fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<taur
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&MenuItem::with_id(app, "settings", "설정…", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "update", "업데이트 확인…", true, None::<&str>)?)?;
     menu.append(&MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?)?;
     Ok(menu)
 }
@@ -1180,6 +1184,7 @@ fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let sep = || P::separator(app);
     let main = Submenu::with_items(app, "Agent Room", true, &[
         &P::about(app, Some("Agent Room에 관하여"), None)?,
+        &MenuItem::with_id(app, "app-update", "업데이트 확인…", true, None::<&str>)?,
         &sep()?,
         &MenuItem::with_id(app, "app-settings", "설정…", true, Some("CmdOrCtrl+,"))?,
         &sep()?,
@@ -1211,9 +1216,16 @@ pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
     let builder = builder.menu(app_menu).on_menu_event(|app, ev| {
-        if ev.id().as_ref() == "app-settings" {
-            show_main(app);
-            let _ = app.emit("open-settings", ());
+        match ev.id().as_ref() {
+            "app-settings" => {
+                show_main(app);
+                let _ = app.emit("open-settings", ());
+            }
+            "app-update" => {
+                show_main(app);
+                let _ = app.emit_to("main", "check-update", ());
+            }
+            _ => {}
         }
     });
     builder
@@ -1296,6 +1308,10 @@ pub fn run() {
                     "settings" => {
                         show_main(app);
                         let _ = app.emit("open-settings", ());
+                    }
+                    "update" => {
+                        show_main(app);
+                        let _ = app.emit_to("main", "check-update", ());
                     }
                     "quit" => app.exit(0),
                     id if id.starts_with("session:") => {
