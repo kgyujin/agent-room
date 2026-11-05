@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { backend, IN_TAURI } from '../bridge';
 import type { HookStatus, Overview } from '../types';
-import { AgentMark } from './icons';
+import { AgentMark, Icon } from './icons';
 
-export function Welcome({ detected, onDemo, onSettings }: { detected: Overview['detected']; onDemo: () => void; onSettings: () => void }) {
+export function Welcome({ detected, onDemo, onSettings, onClose }: { detected: Overview['detected']; onDemo: () => void; onSettings: () => void; onClose: () => void }) {
   const [hooks, setHooks] = useState<HookStatus[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -22,6 +22,7 @@ export function Welcome({ detected, onDemo, onSettings }: { detected: Overview['
   const running = detected.claude + detected.codex;
   return (
     <div className="card welcome">
+      <button className="tool wl-close" onClick={onClose} aria-label="닫기" title="닫기"><Icon name="close" /></button>
       <div className="wl-head">
         <b>Agent Room에 오신 걸 환영해요</b>
         <span className="muted">Claude Code·Codex가 일하는 모습을 작은 사무실로 보여줘요. 에이전트 대화에 끼어들지 않고, 추가 토큰도 쓰지 않아요.</span>
