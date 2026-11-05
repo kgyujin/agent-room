@@ -368,14 +368,20 @@ export default function App() {
     if (f.w <= 1600) await resizeOnScreen(f.w, f.h);
   };
 
+  const petClick = useRef(0);
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
     if (mini) {
-      if (hit && sessions[hit]) openDetails(hit);
+      // room-only: a single click starts dragging the window, so a double-click on a pet opens its app
+      if (hit && sessions[hit]) openApp(hit);
       return;
     }
-    if (hit) return;
+    if (hit) {
+      window.clearTimeout(petClick.current);
+      if (sessions[hit]) openDetails(hit);
+      return;
+    }
     sceneRef.current?.resetZoom();
     try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
   };
@@ -413,7 +419,12 @@ export default function App() {
     if (mini) return;
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
-    if (hit && sessions[hit]) openDetails(hit);
+    // a pet brings up the app its agent works in; a double-click shows the details instead, so the
+    // single click waits a moment (otherwise the other app would already be in front)
+    if (hit && sessions[hit]) {
+      window.clearTimeout(petClick.current);
+      petClick.current = window.setTimeout(() => openApp(hit), 260);
+    }
   };
 
   const toggleDemo = async () => {
@@ -435,8 +446,10 @@ export default function App() {
         title={furnTip ?? undefined} onMouseMove={(e) => {
           // what each piece of furniture is for, as a tooltip
           const r = e.currentTarget.getBoundingClientRect();
-          const n = sceneRef.current?.furnitureAt(e.clientX - r.left, e.clientY - r.top) ?? null;
-          const tip = n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
+          const [x, y] = [e.clientX - r.left, e.clientY - r.top];
+          const pet = sceneRef.current?.hitActor(x, y);
+          const n = pet ? null : sceneRef.current?.furnitureAt(x, y) ?? null;
+          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 에이전트가 일하는 앱 열기' : '눌러서 이 에이전트가 일하는 앱 열기 · 두 번 누르면 자세히') : n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
           if (tip !== furnTip) setFurnTip(tip);
         }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
