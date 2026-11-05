@@ -1,5 +1,5 @@
 // The view through the office windows, following the local clock: sky colours,
-// drifting clouds, sun and moon crossing, stars at night, and two rows of hills.
+// drifting clouds, sun and moon, stars at night, and two rows of hills.
 // Drawn into each window's clear glass (the room sprite leaves those pixels transparent).
 // Pixel art rules hold: every pixel gets exactly one solid colour.
 
@@ -55,11 +55,21 @@ function hsh(x: number, y: number, s: number): number {
 
 export type Box = [number, number, number, number];
 
+/** world height of the far horizon (eye level), the same on both walls */
+const HORIZON = 18;
+/** world height where the sky colour reaches its top band */
+const SKY_TOP = 40;
+
 /**
  * Paint each window box (scene coordinates) into an RGBA image the size of the scene's
  * window span. `span` = [x, y, w, h] of the union of boxes. Returns ImageData for that span.
+ *
+ * The view is laid out in each wall's own coordinates (u along the wall, z up), so the
+ * horizon sits at one height in every window and the hills run on from window to window.
+ * The left wall faces the sunrise and the right wall the sunset: the sun (and the moon)
+ * is only ever in one place, rising on the left in the morning and setting on the right.
  */
-export function paintSky(boxes: Box[], span: Box, d: Date, tick: number): ImageData {
+export function paintSky(boxes: Box[], span: Box, d: Date, tick: number, walls: ('L' | 'R')[] = [], origin: [number, number] = [0, 0]): ImageData {
   const [sx, sy, sw, sh] = span;
   const img = new ImageData(sw, sh);
   const px = img.data;
@@ -70,58 +80,87 @@ export function paintSky(boxes: Box[], span: Box, d: Date, tick: number): ImageD
   const night = h < 5 || h > 20 ? 1 : h < 6 ? 6 - h : h > 19 ? h - 19 : 0;
   // clouds drift ~1 px every 40 s, wrapping on a 400 px loop
   const drift = Math.floor((d.getTime() / 40000) % 400);
-  // sun 6:00-18:30 and moon 19:00-5:00 cross the whole window span left to right
-  const sunT = (h - 6) / 12.5;
-  const moonT = ((h + 24 - 19) % 24) / 10;
-  const body = sunT >= 0 && sunT <= 1 ? { t: sunT, sun: true } : moonT <= 1 ? { t: moonT, sun: false } : null;
-  const minX = Math.min(...boxes.map((b) => b[0]));
-  const maxX = Math.max(...boxes.map((b) => b[0] + b[2]));
-  const bodyX = body ? minX + body.t * (maxX - minX) : -99;
+  const [OX, OY] = origin;
+  const wallOf = (i: number): 'L' | 'R' => walls[i] ?? 'R';
+  // u (along the wall) and z (height) of a screen pixel on a wall, and back
+  const uOf = (w: 'L' | 'R', x: number) => (w === 'L' ? OX - x - 0.5 : x + 0.5 - OX) / 2;
+  const toScreen = (w: 'L' | 'R', u: number, z: number): [number, number] => [w === 'L' ? OX - 2 * u - 0.5 : OX + 2 * u - 0.5, OY + u - z - 0.5];
+  // span of each wall's windows along the wall
+  const range: Record<string, [number, number]> = {};
+  boxes.forEach(([bx, , bw], i) => {
+    const w = wallOf(i);
+    const a = uOf(w, bx);
+    const b = uOf(w, bx + bw);
+    const r = (range[w] ??= [Infinity, -Infinity]);
+    r[0] = Math.min(r[0], a, b);
+    r[1] = Math.max(r[1], a, b);
+  });
+  // sun 6:00-11:00 rising on the left wall, 13:00-18:30 setting on the right; the moon likewise 19-24 / 0-5
+  const arc = (from: number, to: number) => (h >= from && h <= to ? (h - from) / (to - from) : null);
+  const bodies: { wall: 'L' | 'R'; t: number; up: boolean; sun: boolean }[] = [];
+  for (const [wall, from, to, up, sun] of [['L', 6, 11, true, true], ['R', 13, 18.5, false, true], ['L', 19, 24, true, false], ['R', 0, 5, false, false]] as const) {
+    const t = arc(from, to);
+    if (t !== null && range[wall]) bodies.push({ wall, t, up, sun });
+  }
+  const body = bodies[0];
+  let bodyXY: [number, number] = [-99, -99];
+  if (body) {
+    const [u0, u1] = range[body.wall];
+    const lift = body.up ? body.t : 1 - body.t;
+    bodyXY = toScreen(body.wall, u0 + body.t * (u1 - u0), HORIZON - 1 + lift * 18);
+  }
 
   const put = (x: number, y: number, c: RGB) => {
     const o = ((y - sy) * sw + (x - sx)) * 4;
     px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = 255;
   };
 
-  for (const [bx, by, bw, bh] of boxes) {
-    const horizon = Math.round(bh * 0.74);
-    const bodyY = body ? by + Math.round(horizon - 3 - Math.sin(Math.PI * body.t) * (horizon - 9)) : -99;
+  boxes.forEach(([bx, by, bw, bh], i) => {
+    const wall = wallOf(i);
+    // each wall looks out on its own stretch of country
+    const seed = wall === 'L' ? 100 : 0;
     for (let y = by; y < by + bh; y++) {
-      const ly = y - by;
       for (let x = bx; x < bx + bw; x++) {
-        // hills: far row then near row, continuous across windows (scene x)
-        const far = horizon - 2 + Math.round(Math.sin(x * 0.11) * 2 + Math.sin(x * 0.037 + 1) * 2);
-        const near = horizon + 3 + Math.round(Math.sin(x * 0.19 + 2) * 1.5 + Math.sin(x * 0.05) * 2);
-        if (ly >= near) { put(x, y, ly === near ? mix(hillN, hillF, 0.4) : hillN); continue; }
-        if (ly >= far) { put(x, y, ly === far ? mix(hillF, cloud, 0.25) : hillF); continue; }
-        // sky in four flat bands
-        const band = Math.min(3, Math.floor((ly / horizon) * 4));
+        const u = uOf(wall, x);
+        const z = Math.floor(OY + u - y - 0.5 + 0.5);
+        // hills: far row then near row, continuous along the wall
+        const far = HORIZON + 2 + Math.round(Math.sin((u + seed) * 0.22) * 2 + Math.sin((u + seed) * 0.074 + 1) * 2);
+        const near = HORIZON - 3 + Math.round(Math.sin((u + seed) * 0.38 + 2) * 1.5 + Math.sin((u + seed) * 0.1) * 2);
+        if (z <= near) { put(x, y, z === near ? mix(hillN, hillF, 0.4) : hillN); continue; }
+        if (z <= far) { put(x, y, z === far ? mix(hillF, cloud, 0.25) : hillF); continue; }
+        // sky in four flat bands by height
+        const band = Math.max(0, Math.min(3, Math.floor(((SKY_TOP - z) / (SKY_TOP - HORIZON)) * 4)));
         let c = mix(top, bot, band / 3);
-        // sun / moon disc
-        const dx = x - bodyX;
-        const dy = y - bodyY;
+        // sun / moon disc (round on screen)
+        const dx = x - bodyXY[0];
+        const dy = y - bodyXY[1];
         const r2 = dx * dx + dy * dy;
-        if (body && r2 <= 9.5) {
+        if (body && wall === body.wall && r2 <= 9.5) {
           if (body.sun) c = r2 <= 4.5 ? hex('#fff6c8') : hex('#ffd36b');
           else c = dx + 1.5 > 0 && (dx - 1) * (dx - 1) + (dy + 1) * (dy + 1) <= 6 ? mix(top, bot, 0.3) : hex('#f4f1ff');
         } else if (night > 0.5 && hsh(x, y, 5) < 0.035 && (hsh(x, y, Math.floor(tick / 12)) > 0.25 || night < 0.8)) {
           c = hex('#fffbe6');
         } else {
-          // clouds: one puffy cloud per 64 px cell, at a per-cell height in the upper sky
-          const gx = x + drift;
+          // clouds: one puffy cloud per 64 px of wall, at a per-cell height in the upper sky,
+          // shaped in screen space so they stay level on the slanted walls
+          const gx = 2 * (u + seed) + drift;
           const cell = Math.floor(gx / 64);
-          const cx = cell * 64 + 12 + hsh(cell, 0, 1) * 36;
-          const cy = 3 + hsh(cell, 0, 2) * (horizon * 0.45);
-          const rx = 6 + hsh(cell, 0, 3) * 5;
-          const ex = (gx - cx) / rx;
-          const ey = (ly + 0.5 - cy) / 2.2;
-          const ex2 = (gx - cx - rx * 0.35) / (rx * 0.55);
-          const ey2 = (ly + 0.5 - cy + 1.6) / 2.2;
+          const cx = cell * 64 + 12 + hsh(cell, seed, 1) * 36;
+          const cz = HORIZON + 7 + hsh(cell, seed, 2) * 12;
+          const uc = (cx - drift) / 2 - seed;
+          const rx = 6 + hsh(cell, seed, 3) * 5;
+          // screen offset from the cloud centre: x along the wall, y down the screen
+          const ox = gx - cx;
+          const oy = u - uc - (z - cz);
+          const ex = ox / rx;
+          const ey = oy / 2.2;
+          const ex2 = (ox - rx * 0.35) / (rx * 0.55);
+          const ey2 = (oy + 1.6) / 2.2;
           if (ex * ex + ey * ey <= 1 || ex2 * ex2 + ey2 * ey2 <= 1) c = ey > 0.35 ? mix(cloud, bot, 0.35) : cloud;
         }
         put(x, y, c);
       }
     }
-  }
+  });
   return img;
 }

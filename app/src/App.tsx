@@ -5,7 +5,7 @@ import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, skinPrefs, type Skin } from './game/skin';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
-import { Hud, MiniPill } from './ui/Hud';
+import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
@@ -13,8 +13,9 @@ import { Welcome } from './ui/Welcome';
 import { latestLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
-import { AGENT_NAME, stateTone } from './labels';
+import { AGENT_NAME, doingLabel, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
+import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
@@ -43,6 +44,9 @@ export default function App() {
   const [pinned, setPinned] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [mini, setMini] = useState(false);
+  // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
+  // so the room-only controls would otherwise only appear after a click
+  const [hovered, setHovered] = useState(false);
   // update available on GitHub Releases (checked at launch and every 6 hours)
   const [update, setUpdate] = useState<AppUpdate | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
@@ -72,6 +76,8 @@ export default function App() {
   const realSessions = list.filter((s) => !s.isDemo);
   const selected = (pinned && sessions[pinned]) || list[0] || null;
   const compact = mini || vw < 560;
+  // narrow window: the session tabs move under the room
+  const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
 
   // ---------------------------------------------------------------- data
@@ -103,6 +109,7 @@ export default function App() {
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', () => setSettingsOpen('look')),
+        await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
     })();
     return () => unsub.forEach((u) => u());
@@ -180,10 +187,10 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
-    sc.insetBottom = dockH ? dockH + 24 : 0;
+    sc.insetBottom = dockH ? dockH + 24 : tabsBelow ? 36 : 0;
     sc.insetTop = mini ? 0 : bannersH ? bannersH + 66 : 56;
     sc.resize();
-  }, [panelOpen, ready, mini, dockH, bannersH]);
+  }, [panelOpen, ready, mini, dockH, bannersH, tabsBelow]);
 
   // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
@@ -218,6 +225,7 @@ export default function App() {
     document.documentElement.classList.remove('font-mixed', 'font-system', 'font-pixel');
     document.documentElement.classList.add(`font-${settings.font ?? 'mixed'}`);
     sceneRef.current?.setTheme(settings.theme);
+    if (sceneRef.current) sceneRef.current.energy = settings.petEnergy ?? 'normal';
     const snd = soundRef.current;
     snd.sfxOn = settings.sfx;
     snd.setBgm(settings.bgm);
@@ -233,17 +241,25 @@ export default function App() {
   const saveSettings = useCallback(async (s: Settings) => {
     setSettings(s);
     await backend.saveSettings(s);
-    const w = await win();
-    if (w) await w.setAlwaysOnTop(s.alwaysOnTop);
   }, []);
 
+  // always-on-top is kept separately for the normal window and room-only mode
+  const onTop = mini ? settings.alwaysOnTopRoom : settings.alwaysOnTop;
+  const onTopKey = mini ? 'alwaysOnTopRoom' : 'alwaysOnTop';
   useEffect(() => {
     if (!ready) return;
-    win().then((w) => w?.setAlwaysOnTop(settings.alwaysOnTop));
-  }, [ready]); // apply saved always-on-top once
+    win().then((w) => w?.setAlwaysOnTop(onTop));
+  }, [ready, onTop]);
 
-  // room-only mode: a borderless transparent window that floats just the room on the desktop
-  const windowSize = useRef<[number, number]>([980, 700]);
+  // room-only mode: a borderless transparent window that floats just the room on the desktop.
+  // Leaving it puts the window back where it was; inside it the window stays on its screen.
+  const windowFrame = useRef<Rect | null>(null);
+  // the floating window is cut to the room at a whole pixel scale, so no clear margin is left
+  // around it and a room pushed into a screen corner sits right in that corner
+  const roomOnlyFit = (scale?: number) => {
+    const sc = sceneRef.current;
+    return sc ? sc.roomOnlySize(scale ?? sc.roomOnlyScale(440, 360)) : { w: 440, h: 360 };
+  };
   const toggleMini = async (force?: boolean) => {
     const next = force ?? !mini;
     if (next === mini) return;
@@ -251,30 +267,74 @@ export default function App() {
     document.documentElement.classList.toggle('room-only', next);
     if (sceneRef.current) sceneRef.current.roomOnly = next;
     setMini(next);
+    setHovered(false);
+    void backend.setRoomOnly(next);
     if (w) {
-      const { LogicalSize } = await import('@tauri-apps/api/dpi');
       if (await w.isFullscreen()) await w.setFullscreen(false);
-      if (next) {
-        const sz = (await w.innerSize()).toLogical(await w.scaleFactor());
-        windowSize.current = [sz.width, sz.height];
-      }
+      if (next) windowFrame.current = await windowRect();
       await w.setDecorations(!next);
       // macOS: keep the grey title bar hidden (traffic lights float over the app) when decorations return
       if (!next && IS_MAC) await w.setTitleBarStyle('overlay').catch(() => undefined);
       await w.setShadow(!next);
-      await w.setSize(next ? new LogicalSize(440, 360) : new LogicalSize(...windowSize.current));
+      const { LogicalSize } = await import('@tauri-apps/api/dpi');
+      await w.setMinSize(next ? new LogicalSize(120, 80) : new LogicalSize(300, 260));
+      if (next) {
+        const f = roomOnlyFit();
+        await resizeOnScreen(f.w, f.h);
+      }
+      else await placeOnScreen(windowFrame.current ?? { x: 80, y: 80, w: 980, h: 700 });
     }
   };
+
+  // room-only: the controls show while the pointer is over the room itself (or the buttons),
+  // not over the clear part of the window
+  const pointAt = useRef<(p: [number, number] | null) => void>(() => undefined);
+  pointAt.current = (p) => {
+    if (!p) return setHovered(false);
+    if (!mini) return setHovered(true);
+    const t = toolbarRef.current?.getBoundingClientRect();
+    const onBar = !!t && p[0] >= t.left - 8 && p[0] <= t.right + 8 && p[1] >= t.top - 8 && p[1] <= t.bottom + 8;
+    setHovered(onBar || !!sceneRef.current?.hitRoom(p[0], p[1]));
+  };
+
+  // room-only: a window dragged partly off the screen slides back once it is let go
+  useEffect(() => {
+    if (!mini) return;
+    let off: (() => void) | undefined;
+    let t = 0;
+    void win().then(async (w) => {
+      if (!w) return;
+      off = await w.onMoved(() => { clearTimeout(t); t = window.setTimeout(() => void keepOnScreen(), 400); });
+    });
+    return () => { clearTimeout(t); off?.(); };
+  }, [mini]);
+
+  // room-only: settings get a window large enough for them, and the room size comes back after
+  const beforeSettings = useRef<Rect | null>(null);
+  useEffect(() => {
+    if (!IN_TAURI) return;
+    if (mini && settingsOpen && !beforeSettings.current) {
+      void windowRect().then((r) => {
+        if (!r) return;
+        beforeSettings.current = r;
+        void resizeOnScreen(Math.max(r.w, 720), Math.max(r.h, 600));
+      });
+    } else if (!settingsOpen && beforeSettings.current) {
+      const r = beforeSettings.current;
+      beforeSettings.current = null;
+      if (mini) void placeOnScreen(r);
+    } else if (!mini) beforeSettings.current = null;
+  }, [settingsOpen, mini]);
   const toggleRef = useRef(toggleMini);
   toggleRef.current = toggleMini;
 
-  // in room-only mode the room itself is the drag handle (except the character, which opens details);
-  // in window mode dragging pans the room while it is zoomed in
+  // in room-only mode the whole room, pets included, is the drag handle (double-click a pet for its
+  // details); in window mode dragging pans the room while it is zoomed in
   const onCanvasDown = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
+    if (mini) return void (await win())?.startDragging();
     const r = e.currentTarget.getBoundingClientRect();
     if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
-    if (mini) return void (await win())?.startDragging();
     let last = [e.clientX, e.clientY];
     const move = (ev: MouseEvent) => {
       sceneRef.current?.panBy(ev.clientX - last[0], ev.clientY - last[1]);
@@ -299,18 +359,22 @@ export default function App() {
       try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
       return;
     }
-    const w = await win();
-    if (!w) return;
-    const { LogicalSize } = await import('@tauri-apps/api/dpi');
-    const sz = (await w.innerSize()).toLogical(await w.scaleFactor());
-    const k = dir > 0 ? 1.15 : 1 / 1.15;
-    const nw = Math.max(300, Math.min(1600, Math.round(sz.width * k)));
-    await w.setSize(new LogicalSize(nw, Math.max(260, Math.round((sz.height * nw) / sz.width))));
+    // one whole pixel scale per step; grows from the corner it sits in, so a room in a screen
+    // corner stays fully visible
+    const sc = sceneRef.current;
+    if (!sc || sc.scale + dir < 1) return;
+    const f = roomOnlyFit(sc.scale + dir);
+    if (f.w <= 1600) await resizeOnScreen(f.w, f.h);
   };
 
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    if (mini || sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
+    const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
+    if (mini) {
+      if (hit && sessions[hit]) openDetails(hit);
+      return;
+    }
+    if (hit) return;
     sceneRef.current?.resetZoom();
     try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
   };
@@ -322,16 +386,33 @@ export default function App() {
     else void document.exitFullscreen?.();
   };
 
+  const [furnTip, setFurnTip] = useState<string | null>(null);
+  // a short note at the top (e.g. when an agent's app window can't be found)
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const t = window.setTimeout(() => setFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
+  /** selects the session and brings the app it runs in (terminal, editor, desktop app) to the front */
+  const openApp = (key: string) => {
+    setPinned(key);
+    if (!IN_TAURI || sessions[key]?.isDemo) return;
+    backend.focusAgent(key).catch((e) => setFlash(String(e)));
+  };
+  const openDetails = (key: string) => {
+    setPinned(key);
+    setDetailTab('session');
+    if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
+    if (mini) void toggleMini(false);
+  };
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     soundRef.current.unlock();
+    // room-only: a click (or the end of a drag) never pops the window open
+    if (mini) return;
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
-    if (hit && sessions[hit]) {
-      setPinned(hit);
-      setDetailTab('session');
-      if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
-      if (mini) void toggleMini(false);
-    }
+    if (hit && sessions[hit]) openDetails(hit);
   };
 
   const toggleDemo = async () => {
@@ -347,8 +428,16 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}>
-      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble} />
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
+      onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
+      <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble}
+        title={furnTip ?? undefined} onMouseMove={(e) => {
+          // what each piece of furniture is for, as a tooltip
+          const r = e.currentTarget.getBoundingClientRect();
+          const n = sceneRef.current?.furnitureAt(e.clientX - r.left, e.clientY - r.top) ?? null;
+          const tip = n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
+          if (tip !== furnTip) setFurnTip(tip);
+        }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
@@ -360,18 +449,19 @@ export default function App() {
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}
-        {update && !compact && (
+        {update && (
           <div className="banner update">
-            {updating === null ? <>새 버전 {update.version}이 나왔어요</> : <>업데이트 받는 중… {updating}%</>}
+            {updating === null ? (compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>) : <>업데이트 받는 중… {updating}%</>}
             {updating === null && <button onClick={() => { setUpdating(0); update.install(setUpdating).catch(() => setUpdating(null)); }}>업데이트</button>}
           </div>
         )}
+        {flash && <div className="banner error">{flash}</div>}
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={mini || settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact} />
+      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
 
-      {!compact && !office && settings.showTabs && (
+      {!mini && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
@@ -379,14 +469,12 @@ export default function App() {
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
-            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} />
+            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
             <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
         </div>
       )}
-
-      {compact && <MiniPill s={selected} now={now} onExpand={mini ? () => toggleMini(false) : undefined} onConnect={() => setSettingsOpen('agents')} />}
 
       {panelOpen && selected && (
         <DetailPanel
@@ -405,10 +493,14 @@ export default function App() {
       )}
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
-        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
+        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
+          // the office-only view hides the panel, so asking for the panel leaves that view
+          if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
+          else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
+        }} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
-        <ToolBtn icon="pin" label="항상 위에 표시" on={settings.alwaysOnTop} onClick={() => saveSettings({ ...settings, alwaysOnTop: !settings.alwaysOnTop })} />
+        <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
         {!compact && <ToolBtn icon="full" label="전체 화면" onClick={toggleFullscreen} />}
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('look')} />
@@ -459,7 +551,7 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
       const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 40);
+      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
@@ -484,10 +576,12 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
         const prog = progressOf(s);
         const tone = stateTone(s);
         const urgent = needsYou(s);
+        const doing = doingLabel(s);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {(full || selected === a.key || urgent) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
+            {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
             <i className={`dot tone-${tone}`} />
             {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
           </button>
@@ -496,6 +590,29 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
     </div>
   );
 }
+
+/** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
+function tagWidth(s: Snapshot | undefined, withProject: boolean): number {
+  if (!s) return 40;
+  const doing = doingLabel(s) ?? (needsYou(s) ? s.project ?? '' : '');
+  const text = (withProject ? (s.project ?? AGENT_NAME[s.agent]).slice(0, 12) + ' ' : '') + doing;
+  let w = 40;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
+  return Math.min(w, 260);
+}
+
+/** what the furniture is for (hover tooltip); keys are sprite names without their number */
+const FURN_TIPS: Record<string, string> = {
+  desk: '작업 책상 · 생각하거나 코드를 고칠 때 앉아서 종이에 적어요. 종이에 지금 상태가 그려져요',
+  stool: '작업 책상 의자',
+  rig: '테스트 장치 · 테스트나 명령을 실행할 때 여기서 작동시켜요. 불빛이 통과(초록)·실패(빨강)를 보여줘요',
+  shelf: '책장 · 파일이나 자료를 찾을 때 와요',
+  board: '게시판 · 작업 계획(할 일 목록)을 세울 때 와요',
+  sofa: '소파 · 일이 끝나면 쉬는 곳',
+  beanbag: '빈백 · 쉬는 자리',
+  coffee: '커피 카트 · 쉬는 동안 들러요',
+  table: '찻상',
+};
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
 

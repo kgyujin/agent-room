@@ -39,6 +39,8 @@ pub struct Settings {
     pub stale_minutes: u32,
     pub panel_open: bool,
     pub always_on_top: bool,
+    /// always-on-top while in room-only mode (kept apart from the normal window's)
+    pub always_on_top_room: bool,
     /// remaining plan usage (5-hour / weekly) in the overview and HUD
     pub show_limits: bool,
     /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
@@ -57,6 +59,10 @@ pub struct Settings {
     pub tag_style: String,
     pub show_dock: bool,
     pub show_tabs: bool,
+    /// how much idle pets move around: "calm", "normal" or "lively"
+    pub pet_energy: String,
+    /// the island opens on "hover" or only on "click"
+    pub island_open: String,
 }
 
 impl Default for Settings {
@@ -72,6 +78,7 @@ impl Default for Settings {
             stale_minutes: 3,
             panel_open: true,
             always_on_top: false,
+            always_on_top_room: true,
             show_limits: true,
             characters: Default::default(),
             critter_colors: Default::default(),
@@ -82,6 +89,8 @@ impl Default for Settings {
             tag_style: "compact".into(),
             show_dock: true,
             show_tabs: true,
+            pet_energy: "normal".into(),
+            island_open: "hover".into(),
         }
     }
 }
@@ -96,6 +105,10 @@ struct Shared {
     demo_stop: Mutex<Option<Arc<AtomicBool>>>,
     /// (agent, window minutes) -> reset time already warned about (low remaining usage)
     limit_warned: Mutex<std::collections::HashMap<(String, u32), u64>>,
+    /// sessions that sent hook events (their logs are not followed)
+    hooked: Mutex<std::collections::HashSet<String>>,
+    /// sessions known only from their log: key -> last write seen
+    log_only: Mutex<std::collections::HashMap<String, u64>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -274,6 +287,9 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
     let pid = env.ppid.and_then(|p| shared.procs.lock().unwrap().resolve_agent_pid(p));
     for ev in normalize(&env) {
         let key = format!("{}:{}", ev.agent.as_str(), ev.session_id);
+        if shared.hooked.lock().unwrap().insert(key.clone()) {
+            shared.log_only.lock().unwrap().remove(&key);
+        }
         let update = {
             let mut store = shared.store.lock().unwrap();
             let u = store.apply(ev);
@@ -287,6 +303,74 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
         if let Some(u) = update {
             publish(app, u);
         }
+    }
+}
+
+/// Sessions that only show up in the agents' own logs: started before Agent Room, run by the
+/// desktop apps, or by a schedule (Codex automations, `codex exec`). A log being written means the
+/// agent is working; a quiet log means its turn is over; long quiet ends the session. Only the log
+/// files' times and their `cwd` are read (see agent_room_core::logs).
+fn follow_logs(app: &AppHandle) {
+    use agent_room_core::logs;
+    use agent_room_core::model::{AgentKind, EvKind};
+    const FIND_WITHIN: u64 = 10 * 60_000;
+    const TURN_OVER_AFTER: u64 = 60_000;
+    const END_AFTER: u64 = 30 * 60_000;
+    let shared = app.state::<Shared>();
+    let now = now_ms();
+    let found = logs::recent(&logs::LogDirs::from_env(), now, FIND_WITHIN);
+    let ev = |agent: AgentKind, id: &str, ts: u64, cwd: Option<String>, kind: EvKind| NormEvent {
+        agent, session_id: id.to_string(), ts, cwd, model: None, transcript_path: None, permission_mode: None, kind,
+    };
+    let mut out = Vec::new();
+    {
+        let hooked = shared.hooked.lock().unwrap();
+        let mut known = shared.log_only.lock().unwrap();
+        let mut store = shared.store.lock().unwrap();
+        for f in found {
+            let key = format!("{}:{}", f.agent.as_str(), f.session_id);
+            if hooked.contains(&key) {
+                continue;
+            }
+            let state = store.snapshots().into_iter().find(|s| s.key == key).map(|s| s.state);
+            let last = known.get(&key).copied();
+            let written = last.is_none_or(|l| f.modified > l);
+            if !written {
+                continue;
+            }
+            known.insert(key.clone(), f.modified);
+            // new, or back after it ended: the session is there
+            if matches!(state, None | Some(AgentState::Disconnected)) {
+                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, f.cwd.clone(), EvKind::SessionStart { source: Some("log".into()) })));
+            }
+            // the log is being written: the agent is working (a log first seen counts if it is fresh)
+            let busy = matches!(state, Some(st) if !matches!(st, AgentState::Idle | AgentState::Completed | AgentState::Disconnected));
+            if busy {
+                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::StillWorking)));
+            } else if last.is_some() || now.saturating_sub(f.modified) < TURN_OVER_AFTER {
+                out.extend(store.apply(ev(f.agent, &f.session_id, f.modified, None, EvKind::PromptSubmitted)));
+            }
+        }
+        // quiet logs: the turn is over, and after a long while the session is gone
+        // (the key stays in `known` after the session ends, so an unchanged old log never brings it back)
+        for (key, &m) in known.iter() {
+            let Some(snap) = store.snapshots().into_iter().find(|s| &s.key == key) else { continue };
+            if snap.state == AgentState::Disconnected {
+                continue;
+            }
+            let (agent, id) = (snap.agent, snap.session_id.clone());
+            let quiet = now.saturating_sub(m);
+            if quiet > END_AFTER {
+                out.extend(store.apply(ev(agent, &id, now, None, EvKind::SessionEnd { reason: Some("log quiet".into()) })));
+            } else if quiet > TURN_OVER_AFTER && !matches!(snap.state, AgentState::Idle | AgentState::Completed) {
+                out.extend(store.apply(ev(agent, &id, m, None, EvKind::TurnComplete)));
+            }
+        }
+    }
+    for mut u in out {
+        // guessed from file times only: no notifications for these
+        u.notice = None;
+        publish(app, u);
     }
 }
 
@@ -321,6 +405,32 @@ fn remove_session(app: AppHandle, key: String) {
     if let Some(u) = u {
         publish(&app, u);
     }
+}
+
+/// Brings the app an agent session runs in (its terminal, editor or desktop app) to the front.
+/// Sessions found only from their logs have no process; those open the agent's own desktop app if installed.
+#[tauri::command]
+fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
+    let shared = app.state::<Shared>();
+    let pid = shared.store.lock().unwrap().pid_of(&key);
+    let host = pid.and_then(|p| shared.procs.lock().unwrap().host_app(p)).or_else(|| {
+        let name = if key.starts_with("codex:") { "Codex.app" } else { "Claude.app" };
+        let p = std::path::Path::new("/Applications").join(name);
+        p.exists().then_some(p)
+    });
+    let host = host.ok_or("이 세션이 실행 중인 앱 창을 찾지 못했어요")?;
+    open_app(&host)
+}
+
+#[cfg(target_os = "macos")]
+fn open_app(path: &std::path::Path) -> Result<(), String> {
+    let ok = std::process::Command::new("/usr/bin/open").arg(path).status().map_err(|e| e.to_string())?.success();
+    if ok { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_app(_: &std::path::Path) -> Result<(), String> {
+    Err("앱 창 열기는 아직 macOS에서만 돼요".into())
 }
 
 #[tauri::command]
@@ -476,6 +586,113 @@ fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
     let _ = w.set_position(tauri::LogicalPosition::new(x.round(), y));
 }
 
+/// Size of the camera notch on the primary screen in points (width, height); None without a notch.
+/// The island is drawn around it, so its collapsed height and empty middle match the notch.
+#[tauri::command]
+fn notch_size() -> Option<(f64, f64)> {
+    #[cfg(target_os = "macos")]
+    return mac_notch();
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn mac_notch() -> Option<(f64, f64)> {
+    use objc2::encode::{Encode, Encoding};
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send, sel};
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Insets(f64, f64, f64, f64);
+    unsafe impl Encode for Insets {
+        const ENCODING: Encoding = Encoding::Struct("NSEdgeInsets", &[Encoding::Double, Encoding::Double, Encoding::Double, Encoding::Double]);
+    }
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Rect(f64, f64, f64, f64);
+    const PAIR: [Encoding; 2] = [Encoding::Double, Encoding::Double];
+    unsafe impl Encode for Rect {
+        const ENCODING: Encoding = Encoding::Struct("CGRect", &[Encoding::Struct("CGPoint", &PAIR), Encoding::Struct("CGSize", &PAIR)]);
+    }
+    unsafe {
+        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+        if screens.is_null() {
+            return None;
+        }
+        let count: usize = msg_send![screens, count];
+        if count == 0 {
+            return None;
+        }
+        // the first screen holds the menu bar, which is where the island is placed
+        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
+        // safeAreaInsets and the auxiliary areas exist from macOS 12
+        let has: bool = msg_send![screen, respondsToSelector: sel!(auxiliaryTopLeftArea)];
+        if !has {
+            return None;
+        }
+        let inset: Insets = msg_send![screen, safeAreaInsets];
+        if inset.0 <= 0.0 {
+            return None;
+        }
+        let frame: Rect = msg_send![screen, frame];
+        let left: Rect = msg_send![screen, auxiliaryTopLeftArea];
+        let right: Rect = msg_send![screen, auxiliaryTopRightArea];
+        let width = frame.2 - left.2 - right.2;
+        (width > 0.0).then_some((width, inset.0))
+    }
+}
+
+/// Tells the main window and the island where the pointer is. macOS sends no hover events to a
+/// window of an app that is not frontmost, so without this the island only opened and the
+/// room-only controls only showed after a click. Only the pointer position is read.
+/// Each window gets its own event name: a page's `listen` hears events sent to any window.
+/// "hover-island": true / false. "hover-main": the pointer in window (CSS px) or null outside.
+fn watch_hover(app: AppHandle) {
+    let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
+        let mut last_island: Option<bool> = None;
+        let mut last_main: Option<Option<(i32, i32)>> = None;
+        loop {
+            std::thread::sleep(Duration::from_millis(120));
+            let Ok(c) = app.cursor_position() else { continue };
+            let at = |label: &str| -> Option<(i32, i32)> {
+                let w = app.get_webview_window(label)?;
+                if !w.is_visible().unwrap_or(false) {
+                    return None;
+                }
+                let (p, s, k) = (w.inner_position().ok()?, w.inner_size().ok()?, w.scale_factor().ok()?);
+                let (x, y) = (c.x - p.x as f64, c.y - p.y as f64);
+                (x >= 0.0 && y >= 0.0 && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
+            };
+            let island = at("island").is_some();
+            if last_island != Some(island) {
+                last_island = Some(island);
+                let _ = app.emit_to("island", "hover-island", island);
+            }
+            let main = at("main");
+            if last_main != Some(main) {
+                last_main = Some(main);
+                let _ = app.emit_to("main", "hover-main", main);
+            }
+        }
+    });
+}
+
+/// Room-only mode keeps Agent Room out of the Dock and the ⌘Tab switcher, so moving the little
+/// room around or switching apps never brings the app forward. Window mode puts it back.
+#[tauri::command]
+fn set_room_only(app: AppHandle, on: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = if on { tauri::ActivationPolicy::Accessory } else { tauri::ActivationPolicy::Regular };
+        let _ = app.set_activation_policy(policy);
+        if !on {
+            show_main(&app);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, on);
+}
+
 /// The island grows when hovered/clicked and shrinks back; it stays centred at the top.
 #[tauri::command]
 fn island_layout(app: AppHandle, width: f64, height: f64) {
@@ -550,7 +767,7 @@ struct CharacterFile {
 /// Custom character PNGs from ~/.agent-room/characters (local only; nothing is uploaded).
 #[tauri::command]
 fn list_characters() -> Vec<CharacterFile> {
-    let dir = agent_room_core::paths::data_dir().join("characters");
+    let dir = characters_dir();
     let _ = std::fs::create_dir_all(&dir);
     let Ok(rd) = std::fs::read_dir(&dir) else { return vec![] };
     let mut out = vec![];
@@ -627,27 +844,85 @@ fn remove_sound(event: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
-#[tauri::command]
-fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
-    if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
-    }
+fn characters_dir() -> std::path::PathBuf {
+    agent_room_core::paths::data_dir().join("characters")
+}
+
+/// A file stem that is safe inside the characters folder: letters, digits, `-` and `_` only.
+fn character_stem(name: &str) -> String {
     let stem: String = name.trim_end_matches(".png").trim_end_matches(".PNG").chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
         .take(40)
         .collect();
-    let stem = if stem.is_empty() { "character".to_string() } else { stem };
-    let dir = agent_room_core::paths::data_dir().join("characters");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut saved = stem.clone();
+    if stem.is_empty() { "character".to_string() } else { stem }
+}
+
+/// `stem`, or `stem-2`, `stem-3`… when that name is taken.
+fn free_character_stem(dir: &std::path::Path, stem: &str) -> String {
+    let mut saved = stem.to_string();
     let mut n = 2;
     while dir.join(format!("{saved}.png")).exists() {
         saved = format!("{stem}-{n}");
         n += 1;
     }
+    saved
+}
+
+fn check_png(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
+    }
+    Ok(())
+}
+
+/// Path of a character file that is listed in the characters folder (any `.png` case, any name
+/// the user gave it there). Only entries of that folder are matched, so a name can't reach outside it.
+fn existing_character(name: &str) -> Result<std::path::PathBuf, String> {
+    let found = std::fs::read_dir(characters_dir()).ok().and_then(|rd| {
+        rd.flatten().map(|e| e.path()).find(|p| {
+            p.is_file()
+                && p.file_stem().and_then(|x| x.to_str()) == Some(name)
+                && p.extension().and_then(|x| x.to_str()).is_some_and(|x| x.eq_ignore_ascii_case("png"))
+        })
+    });
+    found.ok_or_else(|| "캐릭터 파일을 찾지 못했어요".into())
+}
+
+/// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
+#[tauri::command]
+fn save_character(name: String, bytes: Vec<u8>) -> Result<String, String> {
+    check_png(&bytes)?;
+    let dir = characters_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let saved = free_character_stem(&dir, &character_stem(&name));
     std::fs::write(dir.join(format!("{saved}.png")), &bytes).map_err(|e| e.to_string())?;
     Ok(saved)
+}
+
+/// Swaps the picture of an added character, keeping its name.
+#[tauri::command]
+fn replace_character(name: String, bytes: Vec<u8>) -> Result<(), String> {
+    check_png(&bytes)?;
+    std::fs::write(existing_character(&name)?, &bytes).map_err(|e| e.to_string())
+}
+
+/// Renames an added character. Returns the new name (made unique if it is taken).
+#[tauri::command]
+fn rename_character(name: String, to: String) -> Result<String, String> {
+    let from = existing_character(&name)?;
+    let stem = character_stem(to.trim());
+    if stem == name {
+        return Ok(name);
+    }
+    let dir = characters_dir();
+    let saved = free_character_stem(&dir, &stem);
+    std::fs::rename(from, dir.join(format!("{saved}.png"))).map_err(|e| e.to_string())?;
+    Ok(saved)
+}
+
+#[tauri::command]
+fn remove_character(name: String) -> Result<(), String> {
+    std::fs::remove_file(existing_character(&name)?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -671,8 +946,8 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout
+            hooks_remove_all, focus_agent, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
+            tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -707,6 +982,7 @@ pub fn run() {
                         publish(&h, u);
                     }
                     if n % 5 == 0 {
+                        follow_logs(&h);
                         let d = shared.procs.lock().unwrap().scan_agents();
                         let changed = { let mut cur = shared.detected.lock().unwrap(); let c = *cur != d; *cur = d; c };
                         if changed {
@@ -751,6 +1027,7 @@ pub fn run() {
                 .build(app)?;
 
             show_island(&handle, island_on);
+            watch_hover(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| match event {
@@ -775,4 +1052,16 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::character_stem;
+
+    #[test]
+    fn character_names_stay_inside_the_folder() {
+        assert_eq!(character_stem("pikachu.png"), "pikachu");
+        assert_eq!(character_stem("../../etc/passwd"), "______etc_passwd");
+        assert_eq!(character_stem(""), "character");
+    }
 }

@@ -18,8 +18,9 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
+  petEnergy: 'normal', islandOpen: 'hover',
 };
 
 export interface Backend {
@@ -27,11 +28,15 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown' | 'settings-changed', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
   islandLayout(width: number, height: number): Promise<void>;
+  /** room-only mode: keep the app out of the Dock and the app switcher (macOS) */
+  setRoomOnly(on: boolean): Promise<void>;
+  /** camera notch of the menu bar screen [width, height] in points; null without one */
+  notchSize(): Promise<[number, number] | null>;
   hooksStatus(): Promise<HookStatus[]>;
   hooksInstall(agent: string): Promise<HookStatus>;
   hooksUninstall(agent: string): Promise<HookStatus>;
@@ -40,11 +45,16 @@ export interface Backend {
   demoStart(): Promise<void>;
   demoStop(): Promise<void>;
   removeSession(key: string): Promise<void>;
+  /** brings the terminal, editor or app the session runs in to the front */
+  focusAgent(key: string): Promise<void>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
   listCharacters(): Promise<CharacterFile[]>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
+  replaceCharacter(name: string, bytes: number[]): Promise<void>;
+  renameCharacter(name: string, to: string): Promise<string>;
+  removeCharacter(name: string): Promise<void>;
   listSounds(): Promise<SoundFile[]>;
   saveSound(event: string, name: string, bytes: number[]): Promise<void>;
   removeSound(event: string): Promise<void>;
@@ -58,6 +68,8 @@ const tauriBackend: Backend = {
   onTrayEvent: (name, cb) => tauriListen(name, cb),
   trayAction: (action, key) => tauriInvoke('tray_action', { action, key: key ?? null }),
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
+  notchSize: () => tauriInvoke('notch_size'),
+  setRoomOnly: (on) => tauriInvoke('set_room_only', { on }),
   hooksStatus: () => tauriInvoke('hooks_status'),
   hooksInstall: (agent) => tauriInvoke('hooks_install', { agent }),
   hooksUninstall: (agent) => tauriInvoke('hooks_uninstall', { agent }),
@@ -66,11 +78,15 @@ const tauriBackend: Backend = {
   demoStart: () => tauriInvoke('demo_start'),
   demoStop: () => tauriInvoke('demo_stop'),
   removeSession: (key) => tauriInvoke('remove_session', { key }),
+  focusAgent: (key) => tauriInvoke('focus_agent', { key }),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
   listCharacters: () => tauriInvoke('list_characters'),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
+  replaceCharacter: (name, bytes) => tauriInvoke('replace_character', { name, bytes }),
+  renameCharacter: (name, to) => tauriInvoke('rename_character', { name, to }),
+  removeCharacter: (name) => tauriInvoke('remove_character', { name }),
   listSounds: () => tauriInvoke('list_sounds'),
   saveSound: (event, name, bytes) => tauriInvoke('save_sound', { event, name, bytes }),
   removeSound: (event) => tauriInvoke('remove_sound', { event }),
@@ -153,6 +169,8 @@ function previewBackend(): Backend {
     onTrayEvent: async () => () => {},
     trayAction: async () => undefined,
     islandLayout: async () => undefined,
+    notchSize: async () => null,
+    setRoomOnly: async () => undefined,
     hooksStatus: async () => [
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },
       { agent: 'codex', configPath: '~/.codex/hooks.json', agentDetected: false, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },
@@ -164,6 +182,7 @@ function previewBackend(): Backend {
     demoStart: async () => undefined,
     demoStop: async () => undefined,
     removeSession: async () => undefined,
+    focusAgent: async () => undefined,
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
@@ -174,6 +193,19 @@ function previewBackend(): Backend {
       const stem = name.replace(/\.png$/i, '');
       (w.__previewCharacters ??= []).push({ name: stem, bytes });
       return stem;
+    },
+    replaceCharacter: async (name, bytes) => {
+      const c = (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters?.find((x) => x.name === name);
+      if (c) c.bytes = bytes;
+    },
+    renameCharacter: async (name, to) => {
+      const c = (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters?.find((x) => x.name === name);
+      if (c) c.name = to;
+      return to;
+    },
+    removeCharacter: async (name) => {
+      const w = window as { __previewCharacters?: CharacterFile[] };
+      w.__previewCharacters = (w.__previewCharacters ?? []).filter((x) => x.name !== name);
     },
     // sounds live in memory only in the browser preview
     listSounds: async () => previewSounds,

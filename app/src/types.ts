@@ -74,6 +74,8 @@ export interface Settings {
   staleMinutes: number;
   panelOpen: boolean;
   alwaysOnTop: boolean;
+  /** always-on-top while in room-only mode (separate from the normal window) */
+  alwaysOnTopRoom: boolean;
   showLimits: boolean;
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
   characters: Record<string, string>;
@@ -90,6 +92,10 @@ export interface Settings {
   tagStyle: 'compact' | 'full' | 'off';
   showDock: boolean;
   showTabs: boolean;
+  /** how much idle pets move around */
+  petEnergy: 'calm' | 'normal' | 'lively';
+  /** the island opens when the pointer is over it, or only on click */
+  islandOpen: 'hover' | 'click';
 }
 
 export interface CharacterFile { name: string; bytes: number[] }

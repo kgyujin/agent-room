@@ -5,7 +5,8 @@ use crate::paths;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+use crate::model::AgentKind;
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 const MAX_LINE: u64 = 512 * 1024;
 
@@ -105,19 +106,91 @@ impl ProcWatch {
         self.refresh_one(Pid::from_u32(pid))
     }
 
-    /// Counts running agent CLI processes by executable name (no inspection of their content).
+    /// The app the agent runs inside (Terminal, iTerm, VS Code, the Claude or Codex app…): the
+    /// outermost `.app` bundle on the executable path of the agent or of the nearest parent that has one.
+    pub fn host_app(&mut self, pid: u32) -> Option<std::path::PathBuf> {
+        let mut pid = Pid::from_u32(pid);
+        for _ in 0..16 {
+            self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet));
+            let p = self.sys.process(pid)?;
+            if let Some(app) = p.exe().and_then(outer_app) {
+                return Some(app);
+            }
+            pid = p.parent()?;
+        }
+        None
+    }
+
+    /// Counts running agent processes by executable name and path (no inspection of their content):
+    /// the CLIs, Claude Code's versioned native builds, the copies the desktop apps run, and the
+    /// Codex app server that runs the Codex app's threads and scheduled tasks.
     pub fn scan_agents(&mut self) -> (u32, u32) {
-        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet));
         let mut claude = 0;
         let mut codex = 0;
         for p in self.sys.processes().values() {
-            let n = p.name().to_string_lossy().to_ascii_lowercase();
-            if n == "claude" {
-                claude += 1;
-            } else if n == "codex" {
-                codex += 1;
+            let exe = p.exe().map(|e| e.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+            match agent_of(&p.name().to_string_lossy(), &exe) {
+                Some(AgentKind::Claude) => claude += 1,
+                Some(AgentKind::Codex) => codex += 1,
+                _ => {}
             }
         }
         (claude, codex)
+    }
+}
+
+/// Which agent a process is, from its name and executable path. The desktop apps' own windows
+/// (`…/Claude.app/Contents/MacOS/Claude`, `…/Codex.app/Contents/MacOS/Codex`) are not agents.
+pub fn agent_of(name: &str, exe: &str) -> Option<AgentKind> {
+    let n = name.to_ascii_lowercase();
+    let e = exe.to_ascii_lowercase();
+    if e.contains(".app/contents/macos/") {
+        return None;
+    }
+    let file = e.rsplit('/').next().unwrap_or("");
+    let file = file.strip_suffix(".exe").unwrap_or(file);
+    if n == "claude" || n == "claude.exe" || file == "claude" || e.contains("/claude/versions/") || e.contains("/claude-code/") {
+        Some(AgentKind::Claude)
+    } else if n == "codex" || n == "codex.exe" || file == "codex" || file.starts_with("codex-") {
+        Some(AgentKind::Codex)
+    } else {
+        None
+    }
+}
+
+/// `/Applications/Visual Studio Code.app` from `/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/…`
+fn outer_app(exe: &std::path::Path) -> Option<std::path::PathBuf> {
+    let s = exe.to_str()?;
+    let end = s.find(".app/")? + 4;
+    Some(std::path::PathBuf::from(&s[..end]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_app_is_the_outermost_bundle() {
+        use std::path::Path;
+        assert_eq!(outer_app(Path::new("/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)")).as_deref(), Some(Path::new("/Applications/Visual Studio Code.app")));
+        assert_eq!(outer_app(Path::new("/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal")).as_deref(), Some(Path::new("/System/Applications/Utilities/Terminal.app")));
+        assert_eq!(outer_app(Path::new("/Users/kim/.local/share/claude/versions/2.0.1")), None);
+    }
+
+    #[test]
+    fn tells_agents_from_their_apps() {
+        assert_eq!(agent_of("claude", "/opt/homebrew/bin/claude"), Some(AgentKind::Claude));
+        // native installs run as a binary named after its version
+        assert_eq!(agent_of("2.0.37", "/Users/kim/.local/share/claude/versions/2.0.37"), Some(AgentKind::Claude));
+        // the copy the Claude desktop app runs for its Code tab
+        assert_eq!(agent_of("claude", "/Users/kim/Library/Application Support/Claude/claude-code/2.0.37/claude"), Some(AgentKind::Claude));
+        assert_eq!(agent_of("Claude", "/Applications/Claude.app/Contents/MacOS/Claude"), None);
+        assert_eq!(agent_of("codex", "/opt/homebrew/bin/codex"), Some(AgentKind::Codex));
+        // the Codex app's server, which also runs scheduled tasks
+        assert_eq!(agent_of("codex", "/Applications/Codex.app/Contents/Resources/codex"), Some(AgentKind::Codex));
+        assert_eq!(agent_of("Codex", "/Applications/Codex.app/Contents/MacOS/Codex"), None);
+        assert_eq!(agent_of("node", "/usr/local/bin/node"), None);
+        assert_eq!(agent_of("claudette", "/usr/bin/claudette"), None);
     }
 }

@@ -23,7 +23,6 @@ P = iso.p
 C = {k: hexc(v) for k, v in {
     # stone (walls, pavers, pots)
     'st_hi': '#fbf3e3', 'st_l': '#f1e3c9', 'st': '#e6d2b2', 'st_m': '#d9c19c', 'st_d': '#c4a77f', 'st_dd': '#a3876a', 'st_ln': '#8a6f58',
-    'mortar': '#cdb593', 'pv_a': '#ead9bc', 'pv_b': '#e1cdac', 'pv_c': '#f1e4cc', 'pv_d': '#d8c19e', 'inlay': '#cbb08a', 'inlay_l': '#f6ecda',
     # greens
     'g_dd': '#24503a', 'g_d': '#2f6b3f', 'g': '#4a8c43', 'g_l': '#6fb04c', 'g_h': '#a6d468', 'g_ln': '#1d3a2e',
     # hydrangea / flowers
@@ -32,6 +31,7 @@ C = {k: hexc(v) for k, v in {
     # glass
     'gl_1': '#9ec3e6', 'gl_2': '#c9b8ea', 'gl_3': '#7d8fd0', 'gl_4': '#e8f2fb', 'gl_5': '#f4c98a', 'lead': '#4f4569',
     # wood
+    'fw_a': '#e8b97f', 'fw_b': '#dcaa70', 'fw_c': '#efc690', 'fw_d': '#d19d63', 'fw_ln': '#b5804c', 'fw_gr': '#c99459',
     'w_hi': '#e9b47c', 'w_l': '#cf9460', 'w': '#b07444', 'w_d': '#87532f', 'w_dd': '#5f3a22', 'w_ln': '#4a2c1c',
     # navy + gold (banners, iron)
     'nv': '#3e4486', 'nv_l': '#5a62ae', 'nv_d': '#2b2f63', 'gold': '#ecbf55', 'gold_d': '#c08f2c',
@@ -67,32 +67,23 @@ def to_world(sx, sy, z=0):
 
 # ---------------------------------------------------------------- floor
 def floor_color(x, y):
-    # central star medallion (inlaid lighter stone)
-    cx, cy = 22, 44
-    dx, dy = x - cx, y - cy
-    r = math.hypot(dx, dy)
-    ang = math.atan2(dy, dx)
-    # 4-point star: |cos| profile gives sharp points; outline only, like an inlaid brass line
-    star = 4.5 + 7.5 * abs(math.cos(2 * ang)) ** 3
-    if abs(r - 12.5) < 0.6 or abs(r - 11) < 0.45 or abs(r - star) < 0.6:
-        return C['inlay']
-    if r < star:
-        return C['inlay_l'] if r < 2.5 else C['pv_c']
-    if 11 < r < 12.5:
-        return C['pv_d']
-    # running-bond pavers 6 x 4 world units
-    row = math.floor(y / 4)
-    off = 3 if row % 2 else 0
-    col = math.floor((x + off) / 6)
-    fx, fy = (x + off) % 6, y % 4
-    if fx < 0.55 or fy < 0.55:
-        return C['mortar'] if (math.floor(x * 2) + math.floor(y * 2)) % 3 else shade(C['mortar'], 0.94)
+    """warm honey planks running along x, 3 units wide, staggered ends, a little grain"""
+    row = math.floor(y / 3)
+    fy = y % 3
+    # each row has its own joint rhythm (plank lengths 10..16)
+    shift = hsh(row, 5) * 16
+    ln = 10 + math.floor(hsh(row, 6) * 7)
+    col = math.floor((x + shift) / ln)
+    fx = (x + shift) % ln
+    if fy < 0.5 or fx < 0.5:
+        return C['fw_ln']
     t = hsh(row, col)
-    base = C['pv_a'] if t < 0.45 else C['pv_b'] if t < 0.75 else C['pv_c'] if t < 0.92 else C['pv_d']
-    if fy < 1.1 or fx < 1.1:
-        return shade(base, 1.18)    # lit top edge of each paver
-    if fy > 3.4:
-        return shade(base, 0.95)
+    base = C['fw_a'] if t < 0.4 else C['fw_b'] if t < 0.7 else C['fw_c'] if t < 0.88 else C['fw_d']
+    if fy < 1.0:
+        return shade(base, 1.07)    # lit edge of each board
+    # a few grain streaks along the board
+    if abs(fy - (1.4 + hsh(row, col, 2) * 1.0)) < 0.25 and hsh(row, col, math.floor(x / 2)) < 0.55:
+        return shade(base, 0.93)
     return base
 
 
@@ -106,10 +97,17 @@ def draw_floor(s):
 
 # ---------------------------------------------------------------- walls
 def stone(u, z, lit):
-    """cream ashlar: 8 x 6 blocks in running bond, mortar lines, soft per-block tone"""
-    if z < 3:
-        base = C['st_d'] if z >= 1 else C['st_dd']
-        return shade(base, 1.06) if lit else base
+    """wooden wainscot below, cream ashlar above (8 x 6 blocks in running bond)"""
+    if z < 9:
+        if z >= 7.5:                              # rail cap
+            c = C['w_hi'] if z >= 8.4 else C['w_l']
+        elif z < 1:                               # skirting
+            c = C['w_d']
+        elif u % 4 < 0.5:                         # board seams
+            c = C['w_d']
+        else:
+            c = C['w_l'] if u % 4 < 1.2 else C['w']
+        return c if lit else shade(c, 0.92)
     row = math.floor((z - 3) / 6)
     off = 4 if row % 2 else 0
     col = math.floor((u + off) / 8)
@@ -275,12 +273,14 @@ def ivy(s, pts, seed=0):
 
 
 # ---------------------------------------------------------------- furniture
-FURN = []    # (name, Spr, base_y)
+FURN = []    # (name, Spr, base_y, floor box [x0, y0, x1, y1] in world units)
 
 
-def piece(name, base_xy):
+def piece(name, base_xy, box):
+    """`base_xy` is the front corner (its screen y orders drawing); `box` the floor area the piece
+    covers, so the app can tell whether a critter stands in front of it or behind it"""
     s = Spr(SW, SH)
-    FURN.append((name, s, P(*base_xy)[1]))
+    FURN.append((name, s, P(*base_xy)[1], [round(v, 2) for v in box]))
     return s
 
 
@@ -289,27 +289,37 @@ def wbox(s, x, y, z, lx, ly, lz, top, left, right):
 
 
 def desk(i, x, y):
-    """wooden desk with a cream CRT facing +y (towards the sitter, who faces the back wall)"""
-    s = piece(f'desk{i}', (x + 14, y + 7))
+    """writing desk, long side along y, with the sitter on its -x side facing +x, so the viewer sees
+    the critter's face across the desk. The work lies flat on the top: a sheet of paper the app draws
+    on (writing lines, a check mark…), an open notebook, a pencil cup, a mug and an acorn."""
+    s = piece(f'desk{i}', (x + 9, y + 16), (x - 0.5, y - 0.5, x + 9.5, y + 16.5))
     # legs
-    for (lx, ly) in ((0, 0), (12, 0), (0, 5), (12, 5)):
+    for (lx, ly) in ((0, 0), (7, 0), (0, 14), (7, 14)):
         wbox(s, x + lx, y + ly, 0, 2, 2, 7, C['w_d'], C['w_dd'], C['w_d'])
-    # top slab with grain
-    wbox(s, x - 1, y - 1, 7, 16, 9, 2, lambda px, py: C['w_l'] if (py + px // 6) % 4 else C['w'], C['w_d'], C['w'])
-    # drawer block on the right
-    wbox(s, x + 10, y, 2, 4, 7, 5, C['w'], lambda px, py: C['w_d'] if py % 3 else C['w_dd'], C['w'])
-    # monitor on a little stand; the screen is on its +y face, towards the sitter
-    wbox(s, x + 5, y + 2, 9, 2, 2, 1.5, C['iron'], C['iron_d'], C['iron'])
-    wbox(s, x + 2, y + 2, 10.5, 8, 2, 7, C['cr_l'], C['cr'], C['cr_d'])
-    s.poly(screen_poly(x + 2, y + 4, 10.5, 8, 7), lambda px, py: C['scr_l'] if (px + py) % 9 == 0 else C['scr'])
-    # keyboard + mug + paper stack
-    wbox(s, x + 3, y + 5, 9, 6, 2, 0.6, C['cr'], C['cr_d'], C['cr_d'])
-    wbox(s, x + 11, y + 4, 9, 2, 2, 2, C['fl_w'], C['fl_r'], C['fl_rd'])
-    wbox(s, x + 0, y + 4, 9, 2, 3, 1, C['paper'], C['cr_d'], C['cr'])
-    # stool for the sitter
-    st = piece(f'stool{i}', (x + 8, y + 13))
-    wbox(st, x + 6, y + 10, 0, 3, 3, 3, C['sofa_l'], C['sofa_d'], C['sofa'])
-    return (x + 2, y + 4, 10.5, 8, 7)   # screen: +y face of the monitor
+    # modesty panel on the viewer's side with two drawers and brass pulls
+    wbox(s, x + 7.5, y + 1, 1.5, 1, 14, 5.5, C['w'], C['w_d'], lambda px, py: C['w_d'] if py % 4 == 0 else C['w'])
+    for dy in (4, 11):
+        px, py = P(x + 9, y + dy, 4.5)
+        s.put(px, py, C['gold'])
+        s.put(px + 1, py, C['gold'])
+    # top slab with grain running along the long side
+    wbox(s, x - 0.5, y - 0.5, 7, 10, 17, 2, lambda px, py: C['w_l'] if (px // 2 + py) % 5 else C['w'], C['w_d'], C['w'])
+    # sheet of paper (the app draws the work on it), notebook, pencil cup, mug, acorn
+    wbox(s, x + 1.5, y + 4, 9, 6, 8, 0.3, C['paper'], C['cr_d'], C['cr_d'])
+    wbox(s, x + 2, y + 12.5, 9, 4, 3, 0.6, C['cr'], C['cr_d'], C['cr_d'])           # closed notebook
+    wbox(s, x + 2, y + 12.5, 9.6, 4, 3, 0.4, C['book1'], C['fl_rd'], C['book1'])   # its cover
+    wbox(s, x + 1, y + 1, 9, 2, 2, 2.5, C['w_d'], C['w_dd'], C['w_d'])             # pencil cup
+    for (dx, dy, col) in ((1.5, 1.5, C['fl_y']), (2, 2, C['fl_r']), (2.5, 1.5, C['hy_b'])):
+        px, py = P(x + dx, y + dy, 12.5)
+        s.put(px, py, col)
+        s.put(px, py - 1, col)
+    wbox(s, x + 6, y + 1.5, 9, 1.5, 1.5, 2, C['fl_w'], C['fl_r'], C['fl_rd'])      # mug
+    wbox(s, x + 6.5, y + 13, 9, 1.5, 1.5, 1.5, C['w'], C['w_d'], C['w_dd'])        # acorn
+    wbox(s, x + 6.5, y + 13, 10.5, 1.5, 1.5, 0.6, C['w_dd'], C['w_dd'], C['w_dd'])
+    # stool for the sitter, on the far side
+    st = piece(f'stool{i}', (x - 1, y + 9.5), (x - 4, y + 6.5, x - 1, y + 9.5))
+    wbox(st, x - 4, y + 6.5, 0, 3, 3, 3, C['sofa_l'], C['sofa_d'], C['sofa'])
+    return (x + 1.5, y + 4, 9.3, 6, 8)   # the sheet on the top: x0, y0, z, lx, ly
 
 
 def screen_poly(x, y, z, lx, lz):
@@ -318,7 +328,7 @@ def screen_poly(x, y, z, lx, lz):
 
 
 def bookshelf(x0, y0):
-    s = piece('shelf', (3, y0 + 14))
+    s = piece('shelf', (3, y0 + 14), (0, y0, 4, y0 + 14))
     wbox(s, 0, y0, 0, 4, 14, 26, C['w'], C['w_d'], C['w_l'])
     # shelves on the +x face: books
     for row in range(4):
@@ -338,27 +348,30 @@ def bookshelf(x0, y0):
 
 
 def rig(y0):
-    """test machine against the left wall; status panel on the +x face"""
-    s = piece('rig', (4, y0 + 10))
-    wbox(s, 0, y0, 0, 5, 10, 20, C['iron_l'], C['iron'], lambda px, py: C['iron_l'] if (px + py) % 7 else C['iron'])
-    wbox(s, 1, y0 + 2, 20, 2, 2, 3, C['led_off'], C['iron_d'], C['iron'])
-    wbox(s, 1, y0 + 6, 20, 3, 3, 1, C['iron_l'], C['iron_d'], C['iron'])
+    """wooden test contraption against the left wall: a cabinet with brass trim, a bell and a
+    hopper of acorns on top; firefly lamps and a slate on the +x face show the run"""
+    s = piece('rig', (4, y0 + 10), (0, y0, 5, y0 + 10))
+    wbox(s, 0, y0, 0, 5, 10, 20, C['w_l'], C['w'], lambda px, py: C['w_l'] if (px // 2 + py) % 6 else C['w'])
+    wbox(s, 1, y0 + 2, 20, 3, 3, 3, C['w_hi'], C['w_d'], C['w'])                 # hopper
+    for (ay, az) in ((2.5, 23), (3.5, 23.5), (3, 24)):
+        wbox(s, 1.5, y0 + ay, az, 1, 1, 1, C['w_d'], C['w_dd'], C['w_d'])       # acorns
+    wbox(s, 2, y0 + 7, 20, 2, 2, 1, C['gold'], C['gold_d'], C['gold'])          # bell
+    wbox(s, 2.5, y0 + 7.5, 21, 1, 1, 1, C['gold'], C['gold_d'], C['gold'])
     for z in range(1, 20):
-        px, py = P(5, y0 + 1, z)
-        s.put(px, py, C['iron_d'])
-        px, py = P(5, y0 + 9, z)
-        s.put(px, py, C['iron_d'])
-    # vents
-    for z in (3, 5, 7):
-        for yy in range(int((y0 + 2) * 2), int((y0 + 8) * 2)):
+        for yy in (y0 + 1, y0 + 9):
+            px, py = P(5, yy, z)
+            s.put(px, py, C['gold_d'])
+    # drawer pulls under the slate
+    for z in (3, 6):
+        for yy in range(int((y0 + 4) * 2), int((y0 + 6) * 2)):
             px, py = P(5, yy / 2, z)
-            s.put(px, py, C['iron_d'])
+            s.put(px, py, C['gold'])
     return (5, y0 + 2, 11)     # panel origin on the +x face
 
 
 def board():
     """notice board on the right wall (drawn as part of the wall)"""
-    s = piece('board', (90, 1))
+    s = piece('board', (90, 1), (76, 0, 90, 1))
     u0, u1, z0, z1 = 76, 90, 14, 30
     for u in range(u0 * 2, u1 * 2):
         for z in range(z0, z1):
@@ -399,7 +412,7 @@ def banner(s, wall, u, z0):
 
 
 def lamp(x, y, name):
-    s = piece(name, (x + 2, y + 2))
+    s = piece(name, (x + 2, y + 2), (x - 1, y - 1, x + 3, y + 3))
     wbox(s, x, y, 0, 2, 2, 2, C['iron_l'], C['iron'], C['iron_d'])
     for z in range(2, 20):
         px, py = P(x + 1, y + 1, z)
@@ -414,7 +427,7 @@ def lamp(x, y, name):
 
 
 def planter(name, x, y, kind, w=7):
-    s = piece(name, (x + w, y + w))
+    s = piece(name, (x + w, y + w), (x - 0.5, y - 0.5, x + w + 0.5, y + w + 0.5))
     wbox(s, x, y, 0, w, w, 5, C['st_m'], C['st'], C['st_d'])
     wbox(s, x - 0.5, y - 0.5, 5, w + 1, w + 1, 1, C['st_hi'], C['st_l'], C['st_m'])
     cx, cy = P(x + w / 2, y + w / 2, 7)
@@ -435,7 +448,7 @@ def planter(name, x, y, kind, w=7):
 
 def sofa(x, y):
     """two-seat sofa facing +x (towards the viewer's lower right) in the lounge"""
-    s = piece('sofa', (x + 8, y + 16))
+    s = piece('sofa', (x + 8, y + 16), (x, y, x + 8, y + 16))
     wbox(s, x, y, 0, 8, 16, 4, C['sofa'], C['sofa_d'], C['sofa_d'])          # base
     wbox(s, x, y, 4, 3, 16, 7, C['sofa_l'], C['sofa_d'], C['sofa'])           # back
     wbox(s, x + 3, y, 4, 5, 2, 4, C['sofa_l'], C['sofa_d'], C['sofa'])        # arms
@@ -446,11 +459,38 @@ def sofa(x, y):
 
 
 def table(x, y):
-    s = piece('table', (x + 6, y + 6))
+    s = piece('table', (x + 6, y + 6), (x, y, x + 6, y + 6))
     wbox(s, x + 2, y + 2, 0, 2, 2, 4, C['w_d'], C['w_dd'], C['w_d'])
     wbox(s, x, y, 4, 6, 6, 1.5, C['w_l'], C['w_d'], C['w'])
     wbox(s, x + 2, y + 2, 5.5, 2, 2, 2, C['fl_w'], C['cr'], C['cr_d'])        # tea cup
     return P(x + 3, y + 3, 8)
+
+
+def coffee(x, y):
+    """wooden cart with a coffee machine and two cups, against the left wall"""
+    s = piece('coffee', (x + 5, y + 7), (x - 0.5, y - 0.5, x + 4.5, y + 6.5))
+    for (lx, ly) in ((0, 0), (3, 0), (0, 5), (3, 5)):
+        wbox(s, x + lx, y + ly, 0, 1, 1, 6, C['w_d'], C['w_dd'], C['w_d'])
+    wbox(s, x, y, 2, 4, 6, 1, C['w'], C['w_d'], C['w'])                          # lower shelf
+    wbox(s, x + 1, y + 1, 3, 1.5, 1.5, 2, C['book3'], C['gold_d'], C['book3'])  # bean jars
+    wbox(s, x + 1, y + 3.5, 3, 1.5, 1.5, 2, C['book1'], C['fl_rd'], C['book1'])
+    wbox(s, x - 0.5, y - 0.5, 6, 5, 7, 1.5, C['w_l'], C['w_d'], C['w'])         # top
+    wbox(s, x + 0.5, y + 0.5, 7.5, 3, 3, 6, C['iron_l'], C['iron'], C['iron_d'])  # machine
+    wbox(s, x + 0.5, y + 0.5, 13.5, 3, 3, 1, C['iron_d'], C['iron_d'], C['iron_d'])
+    px, py = P(x + 3.5, y + 2, 11)
+    s.put(px, py, C['led_g'])
+    for cy in (4, 5.5):
+        wbox(s, x + 1.5, y + cy, 7.5, 1, 1, 1.5, C['fl_w'], C['cr'], C['cr_d'])  # cups
+    return s
+
+
+def beanbag(x, y):
+    """mustard beanbag facing +x; the critter sits in its hollow"""
+    s = piece('beanbag', (x + 5, y + 5), (x, y, x + 5, y + 5))
+    wbox(s, x, y, 0, 5, 5, 2, C['gold'], C['gold_d'], C['gold_d'])
+    wbox(s, x + 0.5, y + 0.5, 2, 4, 4, 1, C['fl_y'], C['gold_d'], C['gold'])
+    wbox(s, x, y + 0.5, 3, 1.5, 4, 3, C['fl_y'], C['gold_d'], C['gold'])          # back rest
+    return s
 
 
 def rug(s, cx, cy, rx, ry):
@@ -464,11 +504,13 @@ def rug(s, cx, cy, rx, ry):
 
 
 # ---------------------------------------------------------------- build
-DESKS = [(14, 4), (36, 4), (58, 4), (14, 30), (36, 30), (58, 30)]
+DESKS = [(18, 4), (38, 4), (58, 4), (18, 28), (38, 28), (58, 28)]
 DESK_ORDER = [1, 4, 2, 5, 0, 3]   # who sits where first: middle and right before the crowded left corner
 SHELF_Y = 6
 RIG_Y = 24
 LOUNGE = (68, 44)
+COFFEE = (1, 47)
+BEANBAG = (77, 31)
 
 
 def build():
@@ -497,10 +539,12 @@ def build():
     planter('flowerB', 1, 38, 'b', 5)
     planter('flowerC', X - 8, Y - 8, 'r', 6)
     planter('flowerD', 22, Y - 6, 'b', 5)
+    coffee(*COFFEE)
+    beanbag(*BEANBAG)
     lamp(X - 4, 26, 'lampA')
     lamp(13, Y - 3, 'lampB')
 
-    for name, s, base in FURN:
+    for name, s, base, _box in FURN:
         s.outline(factor=0.5)
     return room, screens, rig_panel, tea
 
@@ -520,11 +564,12 @@ def walk_graph(screens):
     """grid of free floor points (screen coords) + named spots, 8-connected"""
     blocked = []
     for (x, y) in DESKS:
-        blocked.append((x - 2, y - 2, x + 16, y + 9))
-        blocked.append((x + 4, y + 9, x + 11, y + 15))       # stool + the critter sitting on it
+        blocked.append((x - 2, y - 2, x + 11, y + 18))
+        blocked.append((x - 8, y + 5, x - 1, y + 11))        # stool + the critter sitting on it
     blocked += [(0, SHELF_Y - 1, 6, SHELF_Y + 15), (0, RIG_Y - 1, 7, RIG_Y + 11), (LOUNGE[0] - 1, LOUNGE[1] - 1, LOUNGE[0] + 9, LOUNGE[1] + 17),
                 (LOUNGE[0] + 10, LOUNGE[1] + 4, LOUNGE[0] + 18, LOUNGE[1] + 12), (X - 10, 1, X, 10), (0, Y - 9, 9, Y),
-                (X - 8, 35, X, 42), (0, 37, 7, 44), (X - 9, Y - 9, X, Y), (21, Y - 7, 28, Y), (X - 6, 24, X, 30), (24, 14, 30, 20)]
+                (X - 8, 35, X, 42), (0, 37, 7, 44), (X - 9, Y - 9, X, Y), (21, Y - 7, 28, Y), (X - 6, 24, X, 30), (24, 14, 30, 20),
+                (COFFEE[0] - 1, COFFEE[1] - 1, COFFEE[0] + 5, COFFEE[1] + 7), (BEANBAG[0] - 1, BEANBAG[1] - 1, BEANBAG[0] + 5, BEANBAG[1] + 5)]
 
     def free(x, y):
         if not (2 <= x <= X - 2 and 2 <= y <= Y - 2):
@@ -556,8 +601,8 @@ def walk_graph(screens):
             edges.append([name, b])
 
     for i, (x, y) in enumerate(DESKS):
-        # drawn after its own desk and stool (it sits on the stool, in front of the desk)
-        spot(f'desk{i}', x + 7, y + 12, 'ur', z=4, sit=True, depth=P(x + 16, y + 14)[1])
+        # sits on the stool behind the desk, facing the viewer: drawn after the stool, before the desk
+        spot(f'desk{i}', x - 2.5, y + 8, 'dr', z=4, sit=True, depth=P(x - 1, y + 9.5)[1] + 0.5)
     # waiting / calling spots out in the open, facing the viewer
     for i, (fx, fy) in enumerate(((26, 50), (36, 54), (18, 56), (46, 58), (54, 51), (30, 60))):
         spot(f'front{i}', fx, fy, 'dr')
@@ -565,11 +610,15 @@ def walk_graph(screens):
     spot("bench", 12, RIG_Y + 5, "ul")
     spot('board', 82, 8, 'ur')
     for k, dy in enumerate((4, 11)):
-        spot(f'sofa{k}', LOUNGE[0] + 5, LOUNGE[1] + dy + 1, 'dr', z=4, sit=True)
+        # drawn after the sofa: sitting on it, not behind it
+        spot(f'sofa{k}', LOUNGE[0] + 5, LOUNGE[1] + dy + 1, 'dr', z=4, sit=True, depth=P(LOUNGE[0] + 8, LOUNGE[1] + 16)[1] + 1)
     spot('sofa2', LOUNGE[0] + 4, LOUNGE[1] + 20, 'dr')
     spot('sofa3', LOUNGE[0] + 13, LOUNGE[1] + 18, 'dl')
-    spot('sofa4', LOUNGE[0] - 2, LOUNGE[1] + 8, 'dr')
-    spot('sofa5', LOUNGE[0] + 12, LOUNGE[1] + 1, 'dl')
+    # standing spots beside the lounge, kept in front of the sofa and the table so nobody hides behind them
+    spot('sofa4', LOUNGE[0] + 20, LOUNGE[1] + 3, 'dl')
+    spot('sofa5', LOUNGE[0] + 20, LOUNGE[1] + 12, 'dl')
+    spot('coffee', COFFEE[0] + 9, COFFEE[1] + 4, 'ul')
+    spot('beanbag', BEANBAG[0] + 2.5, BEANBAG[1] + 2.5, 'dr', z=3, sit=True, depth=P(BEANBAG[0] + 5, BEANBAG[1] + 5)[1] + 1)
     spot('window', 8, 40, 'ul')
     spot('plantcorner', 44, 56, 'dr')
     spot('center', 26, 46, 'dr')

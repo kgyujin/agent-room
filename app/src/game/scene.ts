@@ -5,7 +5,7 @@
 import type { Snapshot } from '../types';
 import { Actor } from './actor';
 import type { Atlas } from './assets';
-import { behaviorFor, REST_KEYS, restBehavior, type Behavior } from './behaviors';
+import { behaviorFor, NAP_AFTER, REST_HOLD, REST_POOL, restBehavior, type Behavior, type Energy } from './behaviors';
 import type { Skin } from './skin';
 import { lightAt, paintSky, type Box } from './sky';
 
@@ -16,7 +16,7 @@ export type Theme = 'day' | 'sunset' | 'night' | 'auto';
 interface Spark { x: number; y: number; t: number }
 
 /** what a shared spot falls back to when another critter is already there */
-const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center']);
+const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center', 'coffee', 'beanbag']);
 
 interface Mate {
   key: string;
@@ -27,7 +27,8 @@ interface Mate {
   skin: string;
   sparks: Spark[];
   restVariant: string;
-  restSince: number;
+  /** when the current rest variant ends */
+  restUntil: number;
 }
 
 export interface Anchor { key: string; agent: string; x: number; y: number }
@@ -36,7 +37,7 @@ export class Scene {
   private ctx: CanvasRenderingContext2D;
   private buf = document.createElement('canvas');
   private bctx: CanvasRenderingContext2D;
-  private scale = 3;
+  scale = 3;
   private theme: Theme = 'day';
   private mates: Mate[] = [];
   private tickN = 0;
@@ -50,6 +51,8 @@ export class Scene {
   backdrop: string | null = null;
   /** room-only mode: transparent around the room */
   roomOnly = false;
+  /** how much idle pets roam (setting) */
+  energy: Energy = 'normal';
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
   /** preferred skin order per agent ('claude', 'codex', 'generic'); first unused one wins */
@@ -100,7 +103,7 @@ export class Scene {
         const slot = order.find((i) => !used.has(i)) ?? 0;
         const agent = s ? (s.agent === 'demo' ? 'generic' : s.agent) : 'generic';
         const actor = new Actor(agent, this.atlas.layout, `sofa${slot}`);
-        m = { key: k, agent, slot, actor, session: s, skin: '', sparks: [], restVariant: REST_KEYS[slot % REST_KEYS.length], restSince: Date.now() };
+        m = { key: k, agent, slot, actor, session: s, skin: '', sparks: [], restVariant: 'tea', restUntil: 0 };
         this.mates.push(m);
       }
       m.session = s;
@@ -134,15 +137,26 @@ export class Scene {
 
   private applyBehavior(m: Mate) {
     const now = Date.now();
-    if (now - m.restSince > 30_000 + Math.random() * 20_000) {
-      m.restVariant = REST_KEYS[Math.floor(Math.random() * REST_KEYS.length)];
-      m.restSince = now;
+    if (now >= m.restUntil) {
+      m.restVariant = this.pickRest(m);
+      const [lo, hi] = REST_HOLD[this.energy];
+      m.restUntil = now + lo + Math.random() * (hi - lo);
     }
     const s = m.session;
-    const b: Behavior = s ? behaviorFor(s, now, m.restVariant) : restBehavior(m.restVariant, true);
+    // with no session at all, the one critter in the room just idles (and dozes off when calm)
+    const b: Behavior = s ? behaviorFor(s, now, m.restVariant, NAP_AFTER[this.energy]) : restBehavior(m.restVariant, this.energy === 'calm');
     const prev = m.actor.current?.key;
     m.actor.setBehavior({ ...b, spot: b.spot ? this.spotFor(m, b.spot) : '' }, now);
     if (prev !== b.key && b.fx === 'sparkle') this.burst(m);
+  }
+
+  /** a new idle activity, different from the last; 'stroll' becomes a random free floor point */
+  private pickRest(m: Mate): string {
+    const pool = REST_POOL[this.energy].filter((v) => v !== m.restVariant.split(':')[0] || v === 'stroll');
+    const v = pool[Math.floor(Math.random() * pool.length)];
+    if (v !== 'stroll') return v;
+    const floor = Object.keys(this.atlas.layout.nodes).filter((k) => k.startsWith('g'));
+    return `stroll:${floor[Math.floor(Math.random() * floor.length)]}`;
   }
 
   /** frames per second target; 0 pauses rendering entirely */
@@ -190,6 +204,51 @@ export class Scene {
     this.draw();
   }
 
+  /**
+   * Draw order of a critter among the furniture. Sorting by the screen y of the feet alone puts a
+   * critter that stands beside a long piece (e.g. right of a desk) behind it, so it is placed from
+   * the floor boxes instead: after every piece it stands in front of (past its right or left front
+   * side) and before every piece it stands behind. A piece the critter stands on is ignored, and a
+   * seat keeps its own depth.
+   */
+  private depthOf(a: Actor): number {
+    const seat = a.depth();
+    if (seat !== a.y + 0.5) return seat;
+    const o = this.atlas.layout.wallOrigin;
+    if (!o) return seat;
+    const u = (a.x + 0.5 - o[0]) / 2;        // x - y
+    const v = a.y + 0.5 - o[1];              // x + y
+    const wx = (u + v) / 2;
+    const wy = (v - u) / 2;
+    let lo = -Infinity;
+    let hi = Infinity;
+    for (const f of this.atlas.layout.furniture) {
+      const b = f.box;
+      const r = this.atlas.frames[f.name];
+      // only pieces whose picture can overlap the critter's (about 24 x 30 px above its feet) matter
+      if (!b || !r || a.x + 12 < r.dx || a.x - 12 > r.dx + r.w || a.y < r.dy || a.y - 30 > r.dy + r.h) continue;
+      if (wx >= b[2] || wy >= b[3]) lo = Math.max(lo, f.base);
+      else if (wx <= b[0] || wy <= b[1]) hi = Math.min(hi, f.base);
+    }
+    if (lo === -Infinity) return Math.min(seat, hi - 0.01);
+    if (hi === Infinity || lo >= hi) return Math.max(seat, lo + 0.01);
+    return Math.min(Math.max(seat, lo + 0.01), hi - 0.01);
+  }
+
+  /** largest whole scale at which the room-only window still fits in w x h CSS px */
+  roomOnlyScale(cssW: number, cssH: number): number {
+    const dpr = window.devicePixelRatio || 1;
+    const room = this.atlas.frames.room;
+    return Math.max(1, Math.floor(Math.min((cssW * dpr) / (room.w + 2), (cssH * dpr) / (room.h + 2))));
+  }
+
+  /** CSS size of a room-only window that holds the room at `scale` with no spare clear margin */
+  roomOnlySize(scale: number): { w: number; h: number } {
+    const dpr = window.devicePixelRatio || 1;
+    const room = this.atlas.frames.room;
+    return { w: Math.ceil(((room.w + 2) * scale) / dpr), h: Math.ceil(((room.h + 2) * scale) / dpr) };
+  }
+
   /** zoom one step in (dir 1) or out (-1), keeping the art pixel under the cursor in place */
   zoomAt(dir: number, cssX: number, cssY: number) {
     const dpr = window.devicePixelRatio || 1;
@@ -231,6 +290,40 @@ export class Scene {
       if (bx > f.x - 12 && bx < f.x + 12 && by > f.y - 28 && by < f.y + 2) return m.key;
     }
     return null;
+  }
+
+  private alpha: Uint8ClampedArray | null = null;
+
+  /** name of the topmost furniture piece drawn under this CSS point, if any */
+  furnitureAt(cssX: number, cssY: number): string | null {
+    const dpr = window.devicePixelRatio || 1;
+    const x = Math.floor((cssX * dpr) / this.scale) - this.off.x;
+    const y = Math.floor((cssY * dpr) / this.scale) - this.off.y;
+    const A = this.atlas;
+    if (!this.alpha) {
+      const c = document.createElement('canvas');
+      c.width = A.img.naturalWidth;
+      c.height = A.img.naturalHeight;
+      const g = c.getContext('2d', { willReadFrequently: true })!;
+      g.drawImage(A.img, 0, 0);
+      this.alpha = g.getImageData(0, 0, c.width, c.height).data;
+    }
+    const W = A.img.naturalWidth;
+    for (const f of [...A.layout.furniture].reverse()) {
+      const r = A.frames[f.name];
+      if (!r || x < r.dx || y < r.dy || x >= r.dx + r.w || y >= r.dy + r.h) continue;
+      if (this.alpha[((r.y + y - r.dy) * W + r.x + x - r.dx) * 4 + 3] > 0) return f.name;
+    }
+    return null;
+  }
+
+  /** is there any room (wall, floor, furniture, pet) drawn under this CSS point? */
+  hitRoom(cssX: number, cssY: number): boolean {
+    const dpr = window.devicePixelRatio || 1;
+    const bx = Math.floor((cssX * dpr) / this.scale);
+    const by = Math.floor((cssY * dpr) / this.scale);
+    if (bx < 0 || by < 0 || bx >= this.buf.width || by >= this.buf.height) return false;
+    return this.bctx.getImageData(bx, by, 1, 1).data[3] > 0;
   }
 
   /** CSS-pixel points above each critter's head, for the HTML name tags */
@@ -301,7 +394,7 @@ export class Scene {
       },
     }));
     for (const m of this.mates) {
-      items.push({ y: m.actor.depth(), draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
+      items.push({ y: this.depthOf(m.actor), draw: () => m.actor.draw(g, A, ox, oy, this.skins[m.skin]) });
     }
     items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 
@@ -376,7 +469,7 @@ export class Scene {
     const key = `${Math.floor(d.getTime() / 1000)}`;
     if (key === this.skyKey) return;
     this.skyKey = key;
-    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN), 0, 0);
+    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN, this.atlas.layout.windowWalls, this.atlas.layout.wallOrigin), 0, 0);
   }
 
   private screenFrame(desk: number, b: Behavior | null): string {

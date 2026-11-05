@@ -123,16 +123,16 @@ def face_frames(poly, to_uv, fn):
 
 
 def desk_screens(i, scr):
-    x0, y0, z0, lx, lz = scr
-    yf = y0  # the +y face sits at y = y0
+    """states of the sheet lying on desk i: u runs along the sheet's long side (world y), v across it"""
+    x0, y0, z0, lx, ly = scr
+    P = office.P
 
     def to_uv(px, py):
-        xw = (px + 0.5 - office.OX) / 2 + yf
-        z = office.OY + xw + yf - (py + 0.5)
-        return int((xw - x0 - 1) * 2), int(z0 + lz - 1 - z)
+        wx, wy = office.to_world(px, py, z0)
+        return int((wy - y0) * 2), int((wx - x0) * 2)
 
-    poly = office.screen_poly(x0, yf, z0, lx, lz)
-    W, H = int((lx - 2) * 2), int(lz - 2)
+    poly = [P(x0 + 0.5, y0 + 0.5, z0), P(x0 + lx - 0.5, y0 + 0.5, z0), P(x0 + lx - 0.5, y0 + ly - 0.5, z0), P(x0 + 0.5, y0 + ly - 0.5, z0)]
+    W, H = int(ly * 2), int(lx * 2)
 
     def glyph(rows, col, bg):
         gh, gw = len(rows), len(rows[0])
@@ -140,20 +140,25 @@ def desk_screens(i, scr):
         return lambda u, v: col if 0 <= v - ov < gh and 0 <= u - ou < gw and rows[v - ov][u - ou] == 'x' else bg
 
     C2 = office.C
-    out = {'off': lambda u, v: C2['scr_l'] if u + v < 3 else C2['scr'],
-           'idle': glyph(['xx'], C2['code1'], C2['scr_l']),
-           'err': glyph(['x.x', '.x.', 'x.x'], C2['led_r'], shade(C2['led_r'], 0.4)),
-           'ok': glyph(['..x', 'xx.', '.x.'], C2['led_g'], shade(C2['led_g'], 0.35)),
-           'wait': glyph(['x', 'x', '.', 'x'], C2['led_a'], shade(C2['led_a'], 0.4))}
+    paper, ink = C2['paper'], C2['nv_d']
+    big = lambda rows: [''.join(ch * 2 for ch in r) for r in rows for _ in (0, 1)]   # each mark 2 x 2
+    out = {'off': lambda u, v: paper,
+           'idle': glyph(big(['x.x', 'xxx', '.x.']), C2['fl_r'], paper),
+           'err': glyph(big(['x.x', '.x.', 'x.x']), C2['fl_rd'], paper),
+           'ok': glyph(big(['..x', 'x.x', '.x.']), C2['g_d'], paper),
+           'wait': glyph(big(['x', 'x', '.', 'x']), C2['gold_d'], paper)}
+    # writing: lines of pencil and ink appear one by one, a little more each frame
     for f in range(4):
-        def code(u, v, f=f):
-            line = v + f
-            ind = 1 + (line * 7) % 3
-            ln = 3 + (line * 5) % 7
-            return (C2['code1'], C2['code2'], C2['code3'])[line % 3] if ind <= u < ind + ln else C2['scr']
-        out[f'code{f}'] = code
+        def write(u, v, f=f):
+            line = (v - 2) // 3
+            if v < 2 or (v - 2) % 3 != 0 or line > f:
+                return paper
+            ind = 2 + (line * 5) % 4
+            ln = 6 + (line * 7) % 7
+            return (ink, C2['w_dd'], C2['fl_rd'])[line % 3] if ind <= u < ind + ln else paper
+        out[f'code{f}'] = write
     for f in range(2):
-        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and (v + f) % 2 == 0 else C2['paper']
+        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and v % 3 == 1 + f else paper
     return {f'scr{i}_{k}': face_frames(poly, to_uv, fn) for k, fn in out.items()}
 
 
@@ -179,14 +184,15 @@ def rig_overlays(panel):
     for name, cols in states.items():
         fill = {'rig_idle': 0, 'rig_run0': 1, 'rig_run1': 2, 'rig_run2': 3, 'rig_pass': 3, 'rig_fail': 3}[name]
         bar = C2['led_r'] if name == 'rig_fail' else C2['led_g']
+        slate, dark = C2['w_dd'], C2['w_d']
 
         def fn(u, v, cols=cols, fill=fill, bar=bar):
             k = (u - 1) // 4
             if 1 <= v <= 2 and 0 <= k < 3 and (u - 1) % 4 < 2:
-                return cols[k]
+                return dark if cols[k] == C2['led_off'] else cols[k]
             if v == 4 and 0 <= k < 3 and (u - 1) % 4 < 3:
-                return bar if k < fill else C2['led_off']
-            return C2['scr']
+                return bar if k < fill else dark
+            return slate
         out[name] = face_frames(poly, to_uv, fn)
     return out
 
@@ -198,10 +204,10 @@ def main():
     room, screens, rig_panel, tea = office.build()
     sprites['room'] = (room, 0, 0)
     furniture = []
-    for (name, s, base_y) in sorted(office.FURN, key=lambda f: f[2]):
+    for (name, s, base_y, box) in sorted(office.FURN, key=lambda f: f[2]):
         c, x, y = s.crop()
         sprites[name] = (c, x, y)
-        furniture.append({'name': name, 'base': base_y})
+        furniture.append({'name': name, 'base': base_y, 'box': box})
     overlays = {}
     for i, scr in enumerate(screens):
         overlays.update(desk_screens(i, scr))
@@ -248,6 +254,10 @@ def main():
         'edges': edges,
         'steam': list(tea),
         'windows': office.window_boxes(),
+        # wall of each window ('L' = plane x = 0, 'R' = plane y = 0) and the screen point of the back floor corner,
+        # so the app can place the view outside at a fixed height along each wall
+        'windowWalls': [k[0] for k in sorted(office.WINDOW_PX)],
+        'wallOrigin': [office.OX, office.OY],
     }
     with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
         json.dump({'frames': frames, 'layout': layout}, f, separators=(',', ':'))

@@ -184,18 +184,14 @@ h4 { margin: 16px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04
 .agent-card { border: 1px solid var(--hair); border-radius: 12px; padding: 10px; margin-top: 10px; background: #fff; }
 
 /* ------------------------------------------------ mini mode */
-.mini-pill { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 7px; background: var(--glass); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid var(--hair); border-radius: 12px; padding: 4px 4px 4px 9px; box-shadow: var(--shadow); font-size: 12px; z-index: 3; }
-.mini-state { font-weight: 800; white-space: nowrap; }
-.mini-detail { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
-.mini-time { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
 .app.mini .toolbar { top: 8px; bottom: auto; right: 8px !important; opacity: 0; transition: opacity 0.15s; }
-.app.mini:hover .toolbar { opacity: 1; }
+.app.mini:not(.room-only):hover .toolbar, .app.mini.hovered .toolbar { opacity: 1; }
 .app.mini .banner.demo { top: 8px; font-size: 10.5px; padding: 3px 8px; }
+/* narrow window: the session tabs sit along the bottom, under the room */
+.app.mini:not(.room-only) .topleft { top: auto; bottom: 8px; left: 8px; right: 8px !important; }
 
 /* room-only: transparent window around the room; status and controls appear on hover */
 html.room-only, html.room-only body, html.room-only #root { background: transparent; }
-.app.room-only .mini-pill { opacity: 0; transition: opacity 0.15s; }
-.app.room-only:hover .mini-pill { opacity: 1; }
 
 /* night theme: slightly dimmer UI */
 .theme-night .card, .theme-night .panel, .theme-night .toolbar { background: rgba(251, 242, 230, 0.9); }
@@ -206,7 +202,7 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 
 /* ------------------------------------------------ handheld RPG dialog-box skin
    solid white boxes with a thick two-tone frame and hard shadow (no blur, no glass) */
-.card, .panel, .toolbar, .mini-pill, .tab, .banner, .banner.preview {
+.card, .panel, .toolbar, .tab, .banner, .banner.preview {
   background: var(--box);
   -webkit-backdrop-filter: none; backdrop-filter: none;
   border: 3px solid var(--frame);
@@ -302,7 +298,7 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
   --tint-2: #f6e3df;
   --page: #fbe8e0;
 }
-.card, .panel, .toolbar, .mini-pill, .tab, .banner, .banner.preview {
+.card, .panel, .toolbar, .tab, .banner, .banner.preview {
   border: 2px solid var(--frame);
   border-radius: 14px;
   box-shadow: inset 0 0 0 2px var(--box), inset 0 0 0 3px var(--frame-l), 0 3px 0 color-mix(in srgb, var(--frame) 35%, transparent);
@@ -373,6 +369,11 @@ html.room-only, html.room-only body, html.room-only #root { background: transpar
 .pet-name { display: flex; align-items: center; gap: 8px; }
 .pet-thumb { width: 50px; height: 54px; flex: none; background-size: 300px 54px; background-position: 0 0; image-rendering: pixelated; }
 .char-add { margin: 4px 0 10px; }
+.my-char-thumb { width: 50px; height: 50px; flex: none; object-fit: contain; image-rendering: pixelated; }
+.my-char .link { border: none; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline dotted; cursor: text; }
+.my-char input:not([type]) { width: 140px; font: inherit; padding: 2px 6px; }
+.my-char-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.my-char-actions .btn { padding: 3px 8px; font-size: 12px; }
 
 /* ------------------------------------------------ agent marks + status-coloured name tags */
 .agent-mark { flex: none; image-rendering: pixelated; display: block; }
@@ -444,10 +445,10 @@ html.view-island, html.view-island body, html.view-island #root { background: tr
 .island.open .is-list { animation: is-in 0.26s 0.08s ease-out both; }
 .island.open .is-lim { animation: is-in 0.26s 0.14s ease-out both; }
 @keyframes is-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
-.is-bar { height: 34px; display: flex; align-items: center; padding: 0 12px; }
+.is-bar { height: var(--bar-h, 34px); display: flex; align-items: center; padding: 0 12px; }
 .is-left, .is-right { flex: 1; display: flex; align-items: center; gap: 5px; min-width: 0; }
 .is-right { justify-content: flex-end; }
-.is-notch { width: 190px; flex: none; }   /* camera notch: nothing is drawn here */
+.is-notch { width: var(--notch-w, 190px); flex: none; }   /* camera notch: nothing is drawn here */
 .is-who { display: flex; padding: 1px; border-radius: 4px; }
 .is-who.t-wait { box-shadow: 0 0 0 1.5px var(--wait); }
 .is-who.t-bad { box-shadow: 0 0 0 1.5px var(--bad); }
@@ -455,7 +456,7 @@ html.view-island, html.view-island body, html.view-island #root { background: tr
 .is-alert { color: #ffb648; font-weight: 800; animation: isblink 1.2s ease-in-out infinite; }
 @keyframes isblink { 50% { opacity: 0.6; } }
 .is-work { display: flex; align-items: center; gap: 5px; color: #9fd0ff; font-weight: 700; }
-.is-work i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.4s ease-in-out infinite; }
+.is-work svg { animation: pulse 1.4s ease-in-out infinite; }
 .is-ok { color: #8be09a; font-weight: 700; }
 .is-list { list-style: none; margin: 0; padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 2px; }
 .is-list button { width: 100%; height: 38px; display: flex; align-items: center; gap: 8px; border: none; background: transparent; color: inherit; border-radius: 10px; padding: 0 8px; text-align: left; }
@@ -478,7 +479,7 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .small, .chip, .tag, .timeline time, .callout code, .callout .since, .files li, .tasks li, .hud-tool, .hud-grid, .timeline li, .info > div { font-size: 12.5px; }
 .tab { font-size: 12.5px; }
 
-.card, .panel, .toolbar, .mini-pill, .tab, .banner, .banner.preview {
+.card, .panel, .toolbar, .tab, .banner, .banner.preview {
   border: 1px solid color-mix(in srgb, var(--frame) 45%, transparent);
   border-radius: 14px;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent), 0 8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
@@ -573,7 +574,12 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .is-lim span { display: inline-flex; align-items: center; gap: 6px; }
 .is-lim em { font-style: normal; font-variant-numeric: tabular-nums; }
 .is-lim em.mid { color: #f2b45a; } .is-lim em.low { color: #ff7a6b; }
-.is-low { display: inline-flex; align-items: center; gap: 3px; color: #ff7a6b; font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 6px; }
+.is-low { display: inline-flex; align-items: center; gap: 2px; color: #8fd6a0; font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 4px; font-size: 11px; }
+.is-low.mid { color: #f2b45a; } .is-low.low { color: #ff7a6b; }
+.is-lim em { display: inline-flex; align-items: center; gap: 4px; }
+.is-lim-bar { display: inline-block; width: 34px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.is-lim-bar i { display: block; height: 100%; background: #8fd6a0; border-radius: 999px; }
+.is-lim em.mid .is-lim-bar i { background: #f2b45a; } .is-lim em.low .is-lim-bar i { background: #ff7a6b; }
 /* session tabs that run under the toolbar fade out instead of being cut */
 .tabs { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
 
@@ -616,3 +622,19 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .modal { height: min(600px, calc(100vh - 40px)); }
 .modal-body { flex: 1; }
 .island.open .is-head, .island.open .is-right { animation: fade 0.22s 0.06s ease-out both; }
+
+/* island status icons sit inline with their words */
+.is-alert, .is-ok, .is-dim, .is-state, .is-time, .is-lim b { display: inline-flex; align-items: center; gap: 4px; }
+.is-alert svg, .is-work svg, .is-ok svg, .is-dim svg, .is-state svg, .is-time svg, .is-lim b svg { flex: none; }
+.is-time { width: auto; min-width: 50px; justify-content: flex-end; }
+
+/* jump to the app an agent works in */
+.hud-state .open-app { margin-left: auto; font-size: 11.5px; padding: 3px 9px; letter-spacing: 0; align-self: center; }
+.nametag .tag-project { font-weight: 700; color: var(--ink); max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.nametag span { max-width: 130px; }
+.ov-row.quiet { padding-top: 7px; padding-bottom: 7px; gap: 3px; }
+.ov-row.quiet .ov-proj { font-weight: 600; }
+.ov-doing { font-weight: 600; color: var(--ink); }
+.is-lim { flex-direction: column; gap: 4px; }
+.is-lim b, .is-lim em, .is-lim span { white-space: nowrap; }
+.is-lim > span { gap: 12px; }

@@ -1,6 +1,6 @@
 import type { RateLimits, Snapshot } from '../types';
 import { activityLabel, AGENT_NAME, fmtAgo, fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
-import { AgentMark, Icon } from './icons';
+import { AgentMark } from './icons';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
   if (!s.plan.length) return null;
@@ -9,7 +9,7 @@ export function progressOf(s: Snapshot): { done: number; total: number } | null 
 
 const ACTIVE = ['starting', 'planning', 'reading', 'editing', 'running', 'testing', 'waiting', 'error'];
 
-export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: RateLimits | null }) {
+export function Hud({ s, now, limits, onOpenApp }: { s: Snapshot; now: number; limits: RateLimits | null; onOpenApp?: () => void }) {
   const tone = stateTone(s);
   const prog = progressOf(s);
   const active = ACTIVE.includes(s.state) && s.connection === 'live';
@@ -26,6 +26,7 @@ export function Hud({ s, now, limits }: { s: Snapshot; now: number; limits: Rate
         <div className={`hud-state tone-${tone}`}>
           <span className="pulse" />
           {stateLabel(s)}
+          {onOpenApp && <button className="btn open-app" onClick={onOpenApp} title="이 에이전트가 일하는 터미널·편집기·앱을 앞으로 가져와요">앱 열기 ↗</button>}
         </div>
         {s.tool && s.connection === 'live' && (
           <div className="hud-tool">
@@ -92,33 +93,4 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
       </div>
     );
   return null;
-}
-
-export function MiniPill({ s, now, onExpand, onConnect }: { s: Snapshot | null; now: number; onExpand?: () => void; onConnect?: () => void }) {
-  const prog = s ? progressOf(s) : null;
-  return (
-    <div className="mini-pill">
-      {s ? (
-        <>
-          <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-          <span className={`tone-${stateTone(s)} mini-state`}>{stateLabel(s)}</span>
-          {s.detail && s.connection === 'live' && <span className="mini-detail">{s.detail}</span>}
-          <span className="mini-time">
-            {prog ? `${prog.done}/${prog.total} · ` : ''}
-            {s.turnStartedAt ? fmtDuration((s.turnEndedAt && s.state === 'completed' ? s.turnEndedAt : now) - s.turnStartedAt) : ''}
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="mini-state">연결된 에이전트 없음</span>
-          {onConnect && <button className="btn small primary" onClick={onConnect}>연결하기</button>}
-        </>
-      )}
-      {onExpand && (
-        <button className="tool" onClick={onExpand} title="창으로 보기" aria-label="창으로 보기">
-          <Icon name="expand" />
-        </button>
-      )}
-    </div>
-  );
 }
