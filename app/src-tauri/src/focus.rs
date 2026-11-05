@@ -28,15 +28,17 @@ const EDITORS: &[&str] = &[
     "IntelliJ IDEA", "PyCharm", "WebStorm", "GoLand", "RustRover", "CLion", "Rider", "PhpStorm", "RubyMine", "Android Studio", "Fleet",
 ];
 
-pub fn reach(host: &Path, codex: bool, session_id: &str, tty: Option<String>, has_cwd: bool) -> Reach {
+/// `desktop` is the Claude desktop app's own id for a Code-tab session (`local_…`), when its hook sent one.
+pub fn reach(host: &Path, codex: bool, session_id: &str, desktop: Option<&str>, tty: Option<String>, has_cwd: bool) -> Reach {
     let name = host.file_stem().and_then(|n| n.to_str()).unwrap_or("");
     match name {
         "Terminal" if tty.is_some() => Reach::Tab { app: "Terminal", tty: tty.unwrap() },
         "iTerm" | "iTerm2" if tty.is_some() => Reach::Tab { app: "iTerm2", tty: tty.unwrap() },
         // thread ids are uuids; anything else is not put in a link
         "Codex" if codex && is_uuid(session_id) => Reach::Link(format!("codex://threads/{session_id}")),
-        // the desktop app opens one Claude Code session by its id (as other notch apps do)
-        "Claude" if !codex && is_uuid(session_id) => Reach::Link(format!("claude://resume?session={session_id}")),
+        // the desktop app opens one Code-tab session by its own id (not the CLI's session id), the
+        // link its Dock menu uses too
+        "Claude" if !codex && desktop.is_some_and(is_desktop_id) => Reach::Link(format!("claude://code/continue?session={}", desktop.unwrap())),
         "Ghostty" if has_cwd => Reach::Ghostty,
         // no terminal device: the extension's own panel, not a `claude` typed in the editor's terminal
         _ if has_cwd && !codex && tty.is_none() && is_uuid(session_id) && editor_scheme(name).is_some() => {
@@ -57,6 +59,11 @@ fn editor_scheme(app: &str) -> Option<&'static str> {
         "Windsurf" => "windsurf",
         _ => return None,
     })
+}
+
+/// The shape the desktop app accepts for a session: `local_` and up to 64 letters, digits or `-`.
+fn is_desktop_id(s: &str) -> bool {
+    s.strip_prefix("local_").is_some_and(|b| (1..=64).contains(&b.len()) && b.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
 }
 
 fn is_uuid(s: &str) -> bool {
@@ -136,21 +143,24 @@ mod tests {
     fn picks_the_way_to_the_session() {
         let tty = || Some("/dev/ttys003".to_string());
         let id = "019a2b3c-4d5e-6f70-8192-a3b4c5d6e7f8";
-        assert_eq!(reach(Path::new("/System/Applications/Utilities/Terminal.app"), false, "x", tty(), true), Reach::Tab { app: "Terminal", tty: "/dev/ttys003".into() });
-        assert_eq!(reach(Path::new("/Applications/iTerm.app"), false, "x", tty(), true), Reach::Tab { app: "iTerm2", tty: "/dev/ttys003".into() });
-        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, "x", tty(), true), Reach::Folder);
-        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, "x", None, false), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, id, None, true), Reach::Link(format!("codex://threads/{id}")));
-        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, true), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, true), Reach::Link(format!("claude://resume?session={id}")));
-        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, "x", None, true), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), true), Reach::Ghostty);
-        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), false), Reach::App);
+        assert_eq!(reach(Path::new("/System/Applications/Utilities/Terminal.app"), false, "x", None, tty(), true), Reach::Tab { app: "Terminal", tty: "/dev/ttys003".into() });
+        assert_eq!(reach(Path::new("/Applications/iTerm.app"), false, "x", None, tty(), true), Reach::Tab { app: "iTerm2", tty: "/dev/ttys003".into() });
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, "x", None, tty(), true), Reach::Folder);
+        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, "x", None, None, false), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, id, None, None, true), Reach::Link(format!("codex://threads/{id}")));
+        assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, None, true), Reach::App);
+        let local = "local_0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, Some(local), None, true), Reach::Link(format!("claude://code/continue?session={local}")));
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, Some("local_a&b"), None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, "x", None, None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", None, tty(), true), Reach::Ghostty);
+        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", None, tty(), false), Reach::App);
         // the extension's panel has no terminal; `claude` in the editor's own terminal does
-        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, true), Reach::EditorTab(format!("vscode://anthropic.claude-code/open?session={id}")));
-        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, id, None, true), Reach::EditorTab(format!("cursor://anthropic.claude-code/open?session={id}")));
-        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, tty(), true), Reach::Folder);
-        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), true, id, None, true), Reach::Folder);
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, None, true), Reach::EditorTab(format!("vscode://anthropic.claude-code/open?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, id, None, None, true), Reach::EditorTab(format!("cursor://anthropic.claude-code/open?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, tty(), true), Reach::Folder);
+        assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), true, id, None, None, true), Reach::Folder);
     }
 
     #[test]

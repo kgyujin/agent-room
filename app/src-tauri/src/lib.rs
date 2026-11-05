@@ -150,6 +150,8 @@ struct Shared {
     /// menu bar frames drawn by the app from the chosen pet (run0..3, wait, done, idle, off);
     /// None until then, and the bundled shiba frames are used. The number counts the updates.
     tray_frames: Mutex<Option<(u64, Arc<Vec<Vec<u8>>>)>>,
+    /// session key -> the Claude desktop app's own id for it (Code-tab sessions only)
+    desktop_ids: Mutex<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -270,12 +272,10 @@ fn animate_tray(app: AppHandle) {
                 let builtin = [TRAY_RUN[0], TRAY_RUN[1], TRAY_RUN[2], TRAY_RUN[3], TRAY_WAIT, TRAY_DONE, TRAY_IDLE, TRAY_OFF];
                 let bytes = custom.as_ref().map_or(builtin[idx], |f| f.1[idx].as_slice());
                 if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
-                    let (w, h) = (img.width(), img.height());
-                    let _ = tray.set_icon(Some(img));
                     #[cfg(target_os = "macos")]
-                    mac_tray_points(&tray, w, h);
+                    mac_tray_image(&tray, bytes.to_vec(), img.width(), img.height());
                     #[cfg(not(target_os = "macos"))]
-                    let _ = (w, h);
+                    let _ = tray.set_icon(Some(img));
                 }
             }
             std::thread::sleep(Duration::from_millis(wait_ms));
@@ -283,12 +283,15 @@ fn animate_tray(app: AppHandle) {
     });
 }
 
-/// tray-icon draws every icon 18pt tall. The frames are drawn at 2 px per point, so the image gets
-/// its own size back: a 44 px frame shows 22pt tall and the pet fills the menu bar like other icons.
+/// tray-icon draws every icon 18pt tall. The frames are drawn at 2 px per point, so each one is put
+/// on the menu bar button at its own size (a 44 px frame shows 22pt tall and the pet fills the menu
+/// bar like other icons), in one step on the main thread: setting the icon through tray-icon first
+/// and resizing it after showed some frames at 18pt and others at 22pt.
 #[cfg(target_os = "macos")]
-fn mac_tray_points(tray: &tauri::tray::TrayIcon, w_px: u32, h_px: u32) {
-    use objc2::msg_send;
+fn mac_tray_image(tray: &tauri::tray::TrayIcon, png: Vec<u8>, w_px: u32, h_px: u32) {
+    use objc2::rc::{Allocated, Retained};
     use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
     let _ = tray.with_inner_tray_icon(move |t| unsafe {
         let Some(item) = t.ns_status_item() else { return };
         let item = objc2::rc::Retained::as_ptr(&item) as *mut AnyObject;
@@ -296,9 +299,21 @@ fn mac_tray_points(tray: &tauri::tray::TrayIcon, w_px: u32, h_px: u32) {
         if button.is_null() {
             return;
         }
-        let image: *mut AnyObject = msg_send![button, image];
-        if !image.is_null() {
-            let _: () = msg_send![image, setSize: MacSize(w_px as f64 / 2.0, h_px as f64 / 2.0)];
+        let data: *mut AnyObject = msg_send![class!(NSData), dataWithBytes: png.as_ptr().cast::<std::ffi::c_void>(), length: png.len()];
+        let alloc: Allocated<AnyObject> = msg_send![class!(NSImage), alloc];
+        let Some(image): Option<Retained<AnyObject>> = msg_send![alloc, initWithData: data] else { return };
+        let _: () = msg_send![&*image, setSize: MacSize(w_px as f64 / 2.0, h_px as f64 / 2.0)];
+        let _: () = msg_send![button, setImage: &*image];
+        // tray-icon's click target sits over the button at the button's size; keep it matching
+        let frame: MacRect = msg_send![button, frame];
+        let subviews: *mut AnyObject = msg_send![button, subviews];
+        let count: usize = if subviews.is_null() { 0 } else { msg_send![subviews, count] };
+        for i in 0..count {
+            let v: *mut AnyObject = msg_send![subviews, objectAtIndex: i];
+            let name: *const std::ffi::c_char = objc2::ffi::object_getClassName(v);
+            if !name.is_null() && std::ffi::CStr::from_ptr(name).to_bytes() == b"TaoTrayTarget" {
+                let _: () = msg_send![v, setFrame: frame];
+            }
         }
     });
 }
@@ -470,6 +485,9 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
         if shared.hooked.lock().unwrap().insert(key.clone()) {
             shared.log_only.lock().unwrap().remove(&key);
         }
+        if let Some(h) = &env.host_session {
+            shared.desktop_ids.lock().unwrap().insert(key.clone(), h.clone());
+        }
         let update = {
             // same lock order as the tick thread (procs, then store)
             let mut procs = shared.procs.lock().unwrap();
@@ -618,14 +636,15 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
         p.exists().then_some(p)
     });
     drop(procs);
+    let desktop = shared.desktop_ids.lock().unwrap().get(&key).cloned();
     let host = host.ok_or(if pid.is_some() { "이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)" } else { "이 세션의 에이전트 프로세스를 찾지 못했어요" })?;
-    open_session(&host, &key, pid, cwd.as_deref())
+    open_session(&host, &key, pid, cwd.as_deref(), desktop.as_deref())
 }
 
 /// Opens the session itself where possible (its terminal tab, its editor window, its Codex chat),
 /// otherwise just the app it runs in.
 #[cfg(target_os = "macos")]
-fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option<&str>) -> Result<(), String> {
+fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option<&str>, desktop: Option<&str>) -> Result<(), String> {
     use focus::Reach;
     use std::process::Command;
     // Since macOS 14 an app that is not frontmost can't hand the focus to another app, and a click
@@ -641,7 +660,7 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
     }
     let ok = |c: &mut Command| c.status().is_ok_and(|s| s.success());
     let (agent, id) = key.split_once(':').unwrap_or(("", key));
-    let done = match focus::reach(host, agent == "codex", id, pid.and_then(focus::tty_of), cwd.is_some()) {
+    let done = match focus::reach(host, agent == "codex", id, desktop, pid.and_then(focus::tty_of), cwd.is_some()) {
         // asks once for permission to control Terminal / iTerm2; without it the app still comes up below
         Reach::Tab { app, tty } => focus::tab_script(app, &tty).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
         Reach::Folder => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default())),
@@ -774,7 +793,7 @@ fn double_click_ms() -> u32 {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn open_session(_: &std::path::Path, _: &str, _: Option<u32>, _: Option<&str>) -> Result<(), String> {
+fn open_session(_: &std::path::Path, _: &str, _: Option<u32>, _: Option<&str>, _: Option<&str>) -> Result<(), String> {
     Err("앱 창 열기는 아직 macOS에서만 돼요".into())
 }
 
