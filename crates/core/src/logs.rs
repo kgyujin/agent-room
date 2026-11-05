@@ -79,6 +79,39 @@ fn codex_id(stem: &str) -> Option<String> {
 /// How many of the newest Codex day folders are checked for fresh rollouts.
 const CODEX_DAYS: usize = 7;
 
+/// Codex's remaining usage from its newest rollout log, whichever app wrote it (limits are per
+/// account). Only the last 512 KB is read, and only the numbers of the last `rate_limits` line.
+pub fn newest_codex_limits(dirs: &LogDirs) -> Option<crate::model::RateLimits> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut days = Vec::new();
+    for y in entries(&dirs.codex) {
+        for m in entries(&y) {
+            days.extend(entries(&m).into_iter().filter(|d| d.is_dir()));
+        }
+    }
+    days.sort();
+    let newest = days
+        .iter()
+        .rev()
+        .take(CODEX_DAYS)
+        .flat_map(|d| entries(d))
+        .filter(|f| f.extension().is_some_and(|e| e == "jsonl"))
+        .filter_map(|f| modified_ms(&f).map(|m| (m, f)))
+        .max_by_key(|(m, _)| *m)?;
+    let mut file = std::fs::File::open(&newest.1).ok()?;
+    let len = file.metadata().ok()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(512 * 1024))).ok()?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).ok()?;
+    buf.split(|b| *b == b'\n').rev().find_map(|line| {
+        if !line.windows(11).any(|w| w == b"rate_limits") {
+            return None;
+        }
+        let v: serde_json::Value = serde_json::from_slice(line).ok()?;
+        crate::limits::from_codex(v.pointer("/payload/rate_limits")?, newest.0)
+    })
+}
+
 /// Sessions whose log was written in the last `within_ms`.
 pub fn recent(dirs: &LogDirs, now: u64, within_ms: u64) -> Vec<LogSession> {
     let fresh = |p: &Path| modified_ms(p).filter(|&m| now.saturating_sub(m) <= within_ms);
@@ -163,6 +196,22 @@ mod tests {
         assert_eq!((found[2].agent, found[2].session_id.as_str(), found[2].cwd.as_deref()), (AgentKind::Claude, "abc-123", Some("/Users/kim/app")));
         // nothing counts once it is older than the window
         assert!(recent(&dirs, now + 120_000, 60_000).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn codex_limits_come_from_the_newest_rollout() {
+        let root = std::env::temp_dir().join(format!("agent-room-limits-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let day = root.join("codex/2025/11/05");
+        std::fs::create_dir_all(&day).unwrap();
+        let line = |pct: u32| format!("{{\"type\":\"event_msg\",\"payload\":{{\"type\":\"token_count\",\"rate_limits\":{{\"primary\":{{\"used_percent\":{pct}.0,\"window_minutes\":300,\"resets_at\":1700000000}},\"secondary\":null}}}}}}\n");
+        let f = day.join("rollout-2025-11-05T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl");
+        std::fs::write(&f, format!("{}{{\"type\":\"response_item\"}}\n{}{{\"type\":\"other\"}}\n", line(10), line(42))).unwrap();
+        let dirs = LogDirs { claude: root.join("claude"), codex: root.join("codex") };
+        let l = newest_codex_limits(&dirs).unwrap();
+        assert_eq!((l.windows.len(), l.windows[0].used_pct, l.windows[0].minutes), (1, 42.0, 300), "last line wins, null window skipped");
+        assert!(newest_codex_limits(&LogDirs { claude: root.join("x"), codex: root.join("none") }).is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

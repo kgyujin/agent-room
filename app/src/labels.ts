@@ -138,6 +138,20 @@ export function fmtUntil(ms: number): string {
 }
 
 /**
+ * "이 속도면 40분 후 소진" when the use so far in a window, kept at the same rate, runs out before the
+ * window resets. Nothing in a window's first tenth (too early to tell) or when it lasts. `at` is when
+ * the numbers were reported.
+ */
+export function paceNote(w: { minutes: number; usedPct: number; resetsAt: number | null }, at: number): string | null {
+  if (!w.resetsAt || w.minutes <= 0 || w.usedPct <= 0 || w.usedPct >= 100) return null;
+  const span = w.minutes * 60_000;
+  const elapsed = at - (w.resetsAt - span);
+  if (elapsed < span * 0.1) return null;
+  const toFull = ((100 - w.usedPct) * elapsed) / w.usedPct;
+  return toFull < w.resetsAt - at ? `이 속도면 ${fmtUntil(toFull)} 소진` : null;
+}
+
+/**
  * Names that tell sessions apart when their folders share a name: "web-app · wt-2" (the parent
  * folder), or the session's short id when they run in the same folder. Others keep the folder name.
  */

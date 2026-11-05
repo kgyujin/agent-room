@@ -12,7 +12,7 @@ import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
-import { UsageStrip, userTodo } from './ui/Overview';
+import { UsageStrip, useCodexLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
 import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
@@ -37,6 +37,7 @@ function themeFor(t: Settings['theme']): Theme {
 }
 
 export default function App() {
+  useCodexLimits();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const soundRef = useRef(new Sound());

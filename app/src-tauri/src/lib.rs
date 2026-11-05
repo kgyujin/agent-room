@@ -641,6 +641,7 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
         // asks once for permission to control Terminal / iTerm2; without it the app still comes up below
         Reach::Tab { app, tty } => focus::tab_script(app, &tty).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
         Reach::Folder => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default())),
+        Reach::Ghostty => focus::ghostty_script(cwd.unwrap_or_default()).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
         // the link goes to the editor's front window, so the session's folder comes to the front first
         Reach::EditorTab(url) => {
             let raised = ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default()));
@@ -651,6 +652,13 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
         Reach::App => false,
     };
     if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+}
+
+/// Codex's remaining usage from its newest log, so it shows even with no session open in Agent Room
+/// (limits are per account; the desktop app and VS Code write the same logs).
+#[tauri::command]
+async fn codex_limits() -> Option<agent_room_core::model::RateLimits> {
+    agent_room_core::logs::newest_codex_limits(&agent_room_core::logs::LogDirs::from_env())
 }
 
 /// Tokens per local day for the last `days` days, recent rate and streaks, from local logs only.
@@ -1474,7 +1482,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only
+            tray_action, island_layout, notch_size, set_room_only, codex_limits
         ])
         .setup(|app| {
             let handle = app.handle().clone();

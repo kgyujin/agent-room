@@ -14,8 +14,10 @@ pub enum Reach {
     /// the Claude Code extension in an editor: raise the folder's window, then this link focuses
     /// the session's tab (it resumes the session there when no tab has it)
     EditorTab(String),
-    /// the Codex app: its link to one chat
+    /// the Codex app or Claude's desktop app: their link to one chat
     Link(String),
+    /// Ghostty: focus the terminal whose working folder is the session's (it has no tty property)
+    Ghostty,
     /// only the app itself (no way to point at the session)
     App,
 }
@@ -33,6 +35,9 @@ pub fn reach(host: &Path, codex: bool, session_id: &str, tty: Option<String>, ha
         "iTerm" | "iTerm2" if tty.is_some() => Reach::Tab { app: "iTerm2", tty: tty.unwrap() },
         // thread ids are uuids; anything else is not put in a link
         "Codex" if codex && is_uuid(session_id) => Reach::Link(format!("codex://threads/{session_id}")),
+        // the desktop app opens one Claude Code session by its id (as other notch apps do)
+        "Claude" if !codex && is_uuid(session_id) => Reach::Link(format!("claude://resume?session={session_id}")),
+        "Ghostty" if has_cwd => Reach::Ghostty,
         // no terminal device: the extension's own panel, not a `claude` typed in the editor's terminal
         _ if has_cwd && !codex && tty.is_none() && is_uuid(session_id) && editor_scheme(name).is_some() => {
             Reach::EditorTab(format!("{}://anthropic.claude-code/open?session={session_id}", editor_scheme(name).unwrap()))
@@ -97,6 +102,24 @@ end tell"#
     })
 }
 
+/// AppleScript that focuses the Ghostty terminal working in this folder, then raises Ghostty.
+/// A folder with quotes or backslashes is not put in a script.
+pub fn ghostty_script(cwd: &str) -> Option<String> {
+    let cwd = cwd.trim_end_matches('/');
+    if cwd.is_empty() || cwd.contains(['"', '\\', '\n']) {
+        return None;
+    }
+    Some(format!(
+        r#"tell application "Ghostty"
+  try
+    set m to (every terminal whose working directory is "{cwd}")
+    if (count of m) > 0 then focus (item 1 of m)
+  end try
+  activate
+end tell"#
+    ))
+}
+
 /// `/dev/ttys003` for a process on a terminal, None for one without (an app, a daemon).
 #[cfg(target_os = "macos")]
 pub fn tty_of(pid: u32) -> Option<String> {
@@ -119,8 +142,10 @@ mod tests {
         assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, "x", None, false), Reach::App);
         assert_eq!(reach(Path::new("/Applications/Codex.app"), true, id, None, true), Reach::Link(format!("codex://threads/{id}")));
         assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, true), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, true), Reach::App);
-        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, None, true), Reach::Link(format!("claude://resume?session={id}")));
+        assert_eq!(reach(Path::new("/Applications/Claude.app"), false, "x", None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), true), Reach::Ghostty);
+        assert_eq!(reach(Path::new("/Applications/Ghostty.app"), false, "x", tty(), false), Reach::App);
         // the extension's panel has no terminal; `claude` in the editor's own terminal does
         assert_eq!(reach(Path::new("/Applications/Visual Studio Code.app"), false, id, None, true), Reach::EditorTab(format!("vscode://anthropic.claude-code/open?session={id}")));
         assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, id, None, true), Reach::EditorTab(format!("cursor://anthropic.claude-code/open?session={id}")));
@@ -134,5 +159,7 @@ mod tests {
         assert!(tab_script("iTerm2", "/dev/ttys003").unwrap().contains("sessions of t"));
         assert_eq!(tab_script("Terminal", "/dev/ttys0\" & do shell script \"x"), None);
         assert_eq!(tab_script("Terminal", "/tmp/x"), None);
+        assert!(ghostty_script("/Users/kim/web-app/").unwrap().contains(r#"working directory is "/Users/kim/web-app""#));
+        assert_eq!(ghostty_script("/x\" & do shell script \"y"), None);
     }
 }
