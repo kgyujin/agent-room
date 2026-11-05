@@ -16,6 +16,8 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 const DAY: i64 = 86_400_000;
+/// how far back logs are read, whatever range the chart shows, so streaks do not depend on the view
+const SCAN_DAYS: i64 = 365;
 
 /// One counted model call: when, which agent, how many tokens.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -31,6 +33,8 @@ struct FileState {
     hits: Vec<Hit>,
     /// Codex: the cumulative total seen last, so each event adds only what is new
     codex_total: u64,
+    /// Claude message ids this file added to the scanner's `seen` set
+    ids: Vec<u64>,
 }
 
 #[derive(Default)]
@@ -64,10 +68,11 @@ pub struct UsageHistory {
 }
 
 impl UsageScanner {
-    /// Reads what is new in every log written in the last `days` days and sums tokens per local day.
+    /// Reads what is new in every log written in the last year and sums tokens per local day for
+    /// the last `days` days. Streaks use the whole year.
     /// `tz_offset_min` is the local offset from UTC (e.g. +540 for KST).
     pub fn history(&mut self, dirs: &LogDirs, now: i64, tz_offset_min: i64, days: i64) -> UsageHistory {
-        let since = now - days * DAY - DAY;
+        let since = now - SCAN_DAYS.max(days) * DAY - DAY;
         for (agent, path) in log_files(dirs, since) {
             self.read_new(agent, &path);
         }
@@ -79,7 +84,10 @@ impl UsageScanner {
         let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
         let st = self.files.entry(path.to_path_buf()).or_default();
         if len < st.offset {
-            // the log was rewritten: start over
+            // the log was rewritten: start over, and let its messages be counted again
+            for id in &st.ids {
+                self.seen.remove(id);
+            }
             *st = FileState::default();
         }
         if len == st.offset {
@@ -101,6 +109,7 @@ impl UsageScanner {
                 AgentKind::Claude => {
                     if let Some((id, hit)) = claude_line(line) {
                         if self.seen.insert(id) {
+                            st.ids.push(id);
                             st.hits.push(hit);
                         }
                     }
@@ -337,6 +346,20 @@ mod tests {
         std::fs::OpenOptions::new().append(true).open(&rollout).unwrap().write_all(cx("2026-11-05T02:07:00Z", 900).as_bytes()).unwrap();
         let h = sc.history(&dirs, now, 0, 7);
         assert_eq!(h.days.last().unwrap().codex, 900);
+
+        // a rewritten (shorter) log is read again from the start and keeps its messages
+        std::fs::write(dirs.claude.join("proj/s1.jsonl"), format!("{a}{}", cl("b", "2026-11-04T01:00:00Z", 50))).unwrap();
+        let h = sc.history(&dirs, now, 0, 7);
+        assert_eq!((h.days[5].claude, h.days[6].claude), (50, 100));
+
+        // streaks come from older logs too, not only the days the chart shows (11-02 to 11-05)
+        let old = dirs.claude.join("proj/s3.jsonl");
+        std::fs::write(&old, cl("d", "2026-11-03T01:00:00Z", 1)).unwrap();
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(iso_ms("2026-11-03T01:00:00Z").unwrap() as u64);
+        std::fs::File::options().write(true).open(&old).unwrap().set_modified(t).unwrap();
+        let h = UsageScanner::default().history(&dirs, now, 0, 1);
+        assert_eq!(h.days.len(), 1);
+        assert_eq!((h.streak_longest, h.streak_current), (4, 4));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
