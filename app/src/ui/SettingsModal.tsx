@@ -109,6 +109,7 @@ export function SettingsModal(props: {
                 </Group>
                 <Group title="사용량">
                   <Toggle label="남은 사용량 보이기" hint="5시간·주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요" v={s.showLimits} on={(v) => set('showLimits', v)} />
+                  {s.showLimits && <Toggle label="Claude 계정에서 받아오기" hint="데스크톱 앱·VS Code 세션의 한도도 보여요. 키체인의 Claude Code 로그인으로 Anthropic에만 묻고, 저장하지 않아요" sub v={s.claudeAccountLimits ?? true} on={(v) => set('claudeAccountLimits', v)} />}
                 </Group>
                 <Group title="업데이트">
                   <div className="field">

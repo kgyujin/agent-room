@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true,
 };
 
 export interface Backend {
@@ -39,6 +39,7 @@ export interface Backend {
   /** camera notch of the menu bar screen [width, height] in points; null without one */
   notchSize(): Promise<[number, number] | null>;
   codexLimits(): Promise<RateLimits | null>;
+  claudeLimits(): Promise<RateLimits | null>;
   hooksStatus(): Promise<HookStatus[]>;
   hooksInstall(agent: string): Promise<HookStatus>;
   hooksUninstall(agent: string): Promise<HookStatus>;
@@ -78,6 +79,7 @@ const tauriBackend: Backend = {
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
   notchSize: () => tauriInvoke('notch_size'),
   codexLimits: () => tauriInvoke('codex_limits'),
+  claudeLimits: () => tauriInvoke('claude_limits'),
   setRoomOnly: (on) => tauriInvoke('set_room_only', { on }),
   hooksStatus: () => tauriInvoke('hooks_status'),
   hooksInstall: (agent) => tauriInvoke('hooks_install', { agent }),
@@ -183,6 +185,7 @@ function previewBackend(): Backend {
     islandLayout: async () => undefined,
     notchSize: async () => null,
     codexLimits: async () => null,
+    claudeLimits: async () => null,
     setRoomOnly: async () => undefined,
     hooksStatus: async () => [
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },

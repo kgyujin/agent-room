@@ -115,6 +115,7 @@ export interface Settings {
   autoUpdateCheck: boolean;
   /** size of the main window's contents, 1 = 100% (⌘+ / ⌘− / ⌘0) */
   uiZoom: number;
+  claudeAccountLimits?: boolean;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

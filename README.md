@@ -5,7 +5,7 @@ AI 코딩 에이전트(Claude Code, OpenAI Codex CLI)가 지금 무엇을 하는
 
 ![낮 화면](docs/screenshot-day.png)
 
-> 모니터링에 쓰는 **추가 LLM 토큰은 0**입니다. 에이전트의 공식 Hook과 로컬 로그만 읽고, 네트워크 요청은 하지 않습니다.
+> 모니터링에 쓰는 **추가 LLM 토큰은 0**입니다. 에이전트의 공식 Hook과 로컬 로그만 읽고, 네트워크 요청은 Claude 계정 사용량 확인과 업데이트 확인뿐입니다(둘 다 설정에서 끌 수 있음).
 
 ## 주요 기능
 
@@ -74,11 +74,12 @@ xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 
 - Hook은 **stdout에 아무것도 쓰지 않고** 항상 exit 0으로 끝납니다. 그래서 에이전트의 컨텍스트, 동작, 권한 흐름에 끼어들지 않습니다.
 - 프롬프트, 응답, 파일 내용, 명령 출력은 Hook 안에서 버립니다. 명령어도 `*_TOKEN=`, `Bearer …`, `sk-…` 같은 값을 가린 뒤 잘라서 보냅니다.
-- 앱에는 HTTP 클라이언트가 없고, WebView CSP가 외부 연결을 막습니다. 업데이트 확인만 GitHub Releases에 접속합니다.
+- 앱에는 HTTP 클라이언트가 없고, WebView CSP가 외부 연결을 막습니다. 업데이트 확인은 GitHub Releases에, Claude 계정 사용량은 `api.anthropic.com`에만 접속합니다.
 - 이벤트는 메모리에만 둡니다(세션당 최근 300개). 디스크에는 설정, 에이전트 설정 백업, 보관한 상태줄 명령만 저장합니다.
 - `~/.agent-room`은 본인만 열 수 있고(0700), 백업과 상태줄 사본은 본인만 읽을 수 있습니다(0600). 에이전트 설정의 `env`에 API 키가 있을 수 있어서입니다. 소켓도 본인 전용입니다.
 - Hook이 없는 세션은 `~/.claude/projects`, `~/.codex/sessions`의 로그 파일 이름과 수정 시각, 파일 앞부분의 `cwd` 값만 봅니다. 대화 내용은 해석하거나 저장하지 않습니다.
 - 남은 사용량은 에이전트가 이미 내놓는 숫자만 읽습니다. Claude는 상태줄 입력의 `rate_limits`, Codex는 rollout 로그의 `rate_limits`입니다.
+- 상태줄이 없는 Claude 세션(데스크톱 앱, VS Code)을 위해 "Claude 계정에서 받아오기"가 켜져 있으면 Claude Code가 키체인에 둔 로그인을 `/usr/bin/security`로 읽어 Anthropic 사용량 API(`/api/oauth/usage`)에 5분에 한 번 묻습니다. 토큰은 메모리에서 한 번 쓰고 버리며 저장·갱신하지 않고, `curl`에 인자가 아닌 표준 입력으로 넘깁니다. LLM 호출이 아니라 토큰을 쓰지 않습니다.
 
 ## 동작 방식
 
