@@ -407,6 +407,32 @@ fn remove_session(app: AppHandle, key: String) {
     }
 }
 
+/// Brings the app an agent session runs in (its terminal, editor or desktop app) to the front.
+/// Sessions found only from their logs have no process; those open the agent's own desktop app if installed.
+#[tauri::command]
+fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
+    let shared = app.state::<Shared>();
+    let pid = shared.store.lock().unwrap().pid_of(&key);
+    let host = pid.and_then(|p| shared.procs.lock().unwrap().host_app(p)).or_else(|| {
+        let name = if key.starts_with("codex:") { "Codex.app" } else { "Claude.app" };
+        let p = std::path::Path::new("/Applications").join(name);
+        p.exists().then_some(p)
+    });
+    let host = host.ok_or("이 세션이 실행 중인 앱 창을 찾지 못했어요")?;
+    open_app(&host)
+}
+
+#[cfg(target_os = "macos")]
+fn open_app(path: &std::path::Path) -> Result<(), String> {
+    let ok = std::process::Command::new("/usr/bin/open").arg(path).status().map_err(|e| e.to_string())?.success();
+    if ok { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_app(_: &std::path::Path) -> Result<(), String> {
+    Err("앱 창 열기는 아직 macOS에서만 돼요".into())
+}
+
 #[tauri::command]
 fn hooks_status() -> Vec<HookStatus> {
     vec![install::status(Target::Claude), install::status(Target::Codex)]
@@ -920,7 +946,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
+            hooks_remove_all, focus_agent, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
             tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {

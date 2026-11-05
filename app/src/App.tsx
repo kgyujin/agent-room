@@ -13,7 +13,7 @@ import { Welcome } from './ui/Welcome';
 import { latestLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
-import { AGENT_NAME, stateTone } from './labels';
+import { AGENT_NAME, doingLabel, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
@@ -386,6 +386,19 @@ export default function App() {
     else void document.exitFullscreen?.();
   };
 
+  // a short note at the top (e.g. when an agent's app window can't be found)
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const t = window.setTimeout(() => setFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
+  /** selects the session and brings the app it runs in (terminal, editor, desktop app) to the front */
+  const openApp = (key: string) => {
+    setPinned(key);
+    if (!IN_TAURI || sessions[key]?.isDemo) return;
+    backend.focusAgent(key).catch((e) => setFlash(String(e)));
+  };
   const openDetails = (key: string) => {
     setPinned(key);
     setDetailTab('session');
@@ -434,10 +447,11 @@ export default function App() {
             {updating === null && <button onClick={() => { setUpdating(0); update.install(setUpdating).catch(() => setUpdating(null)); }}>업데이트</button>}
           </div>
         )}
+        {flash && <div className="banner error">{flash}</div>}
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={(k) => setPinned(k)} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
+      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
 
       {!mini && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
@@ -447,7 +461,7 @@ export default function App() {
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
           {selected ? (
-            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} />
+            <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
             <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
           )}
@@ -471,7 +485,11 @@ export default function App() {
       )}
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
-        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={settings.panelOpen} onClick={() => saveSettings({ ...settings, panelOpen: !settings.panelOpen })} />}
+        {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
+          // the office-only view hides the panel, so asking for the panel leaves that view
+          if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
+          else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
+        }} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
@@ -525,7 +543,7 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
       const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => (fullRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]) ? 120 : 40);
+      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
@@ -550,10 +568,12 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
         const prog = progressOf(s);
         const tone = stateTone(s);
         const urgent = needsYou(s);
+        const doing = doingLabel(s);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {(full || selected === a.key || urgent) && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
+            {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
+            {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
             <i className={`dot tone-${tone}`} />
             {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
           </button>
@@ -561,6 +581,16 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
       })}
     </div>
   );
+}
+
+/** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
+function tagWidth(s: Snapshot | undefined, withProject: boolean): number {
+  if (!s) return 40;
+  const doing = doingLabel(s) ?? (needsYou(s) ? s.project ?? '' : '');
+  const text = (withProject ? (s.project ?? AGENT_NAME[s.agent]).slice(0, 12) + ' ' : '') + doing;
+  let w = 40;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
+  return Math.min(w, 260);
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);

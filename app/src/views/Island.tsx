@@ -18,7 +18,7 @@ const STATE_ICON: Record<Snapshot['state'], IconName> = {
   running: 'play', testing: 'flask', completed: 'check', idle: 'moon', disconnected: 'moon',
 };
 /** room beside the notch for the agent icons (left) and the status (right) */
-const SIDE = 75;
+const SIDE = 88;
 /** used when the screen has no notch: [empty middle, bar height] */
 const NO_NOTCH: [number, number] = [24, 28];
 
@@ -42,11 +42,11 @@ export function Island() {
   // remaining plan usage per agent, one line under the list
   const showLimits = settings?.showLimits ?? true;
   const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];
-  // lowest remaining share across agents, shown on the collapsed pill once it is 10% or less
+  // lowest remaining share across agents, always shown on the collapsed pill (red at 10% or less)
   const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
   const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
-  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + Math.max(1, Math.min(list.length, 8)) * ROW + 12 + (limits.length ? 30 : 0)];
+  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + Math.max(1, Math.min(list.length, 8)) * ROW + 12 + (limits.length ? 30 + limits.length * 22 : 0)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
@@ -98,9 +98,9 @@ export function Island() {
         </div>
         <div className="is-notch" />
         <div className="is-right">
-          {low && low.left <= 10 && (
-            <span className="is-low" title={`${low.name} 남은 사용량이 얼마 없어요`}>
-              <AgentMark agent={low.a} size={11} /> {low.left}%
+          {low && (
+            <span className={`is-low ${low.left <= 10 ? 'low' : low.left <= 30 ? 'mid' : ''}`} title={`가장 적게 남은 사용량: ${low.name} ${low.left}%`}>
+              <Icon name="bolt" />{low.left}%
             </span>
           )}
           {todos.length ? (
@@ -123,7 +123,12 @@ export function Island() {
             const t = s.turnStartedAt ? (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt : null;
             return (
               <li key={s.key}>
-                <button onClick={(e) => { e.stopPropagation(); void backend.trayAction('select', s.key); }}>
+                <button title={s.isDemo ? undefined : '눌러서 이 에이전트가 일하는 앱 열기'} onClick={(e) => {
+                  e.stopPropagation();
+                  // jump to the agent's own app; the room shows the session when that app can't be found
+                  if (s.isDemo) void backend.trayAction('select', s.key);
+                  else backend.focusAgent(s.key).catch(() => backend.trayAction('select', s.key));
+                }}>
                   <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
                   <span className="is-proj">{s.project ?? '프로젝트'}</span>
                   <span className={`is-state t-${stateTone(s)}`}><Icon name={todo ? 'bell' : STATE_ICON[s.state]} />{todo ? todo.text : stateLabel(s)}</span>
@@ -148,7 +153,11 @@ export function Island() {
               <AgentMark agent={a} size={13} />
               {l!.windows.map((w) => {
                 const left = Math.max(0, Math.round(100 - w.usedPct));
-                return <em key={w.minutes} className={left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}>{windowLabel(w.minutes)} {left}%</em>;
+                return (
+                  <em key={w.minutes} className={left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}>
+                    {windowLabel(w.minutes)} <i className="is-lim-bar"><i style={{ width: `${left}%` }} /></i> {left}%
+                  </em>
+                );
               })}
             </span>
           ))}

@@ -24,6 +24,34 @@ export function stateLabel(s: Snapshot): string {
   }
 }
 
+/** Short "what it is doing right now" for the tag over a pet, with the file or command when known
+ *  ("코드 수정 · Room.tsx", "테스트 중 · npm test"); null while it rests. */
+export function doingLabel(s: Snapshot): string | null {
+  if (s.connection === 'stale') return '응답 없음';
+  if (s.connection !== 'live') return null;
+  const what = ((): string | null => {
+    switch (s.state) {
+      case 'idle': return null;
+      case 'starting': return '시작하는 중';
+      case 'planning': return s.activity === 'plan' ? '계획 세우는 중' : '생각하는 중';
+      case 'reading': return s.activity === 'search' ? '찾아보는 중' : s.activity === 'web' ? '웹 확인 중' : '파일 읽는 중';
+      case 'editing': return '코드 수정 중';
+      case 'running': return s.activity === 'delegate' ? '하위 작업 중' : '명령 실행 중';
+      case 'testing': return s.tool === null && s.lastTest ? (s.lastTest.ok === false ? '테스트 실패' : '테스트 끝') : '테스트 중';
+      case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '답변 기다림';
+      case 'completed': return '완료';
+      case 'error': return '오류';
+      case 'disconnected': return null;
+    }
+  })();
+  if (!what) return null;
+  const busy = ['reading', 'editing', 'running', 'testing'].includes(s.state) && s.tool !== null;
+  // files show just their name; commands show as they are
+  const file = s.state === 'reading' || s.state === 'editing';
+  const d = !busy || !s.detail ? '' : file ? s.detail.split(/[\\/]/).pop()!.trim() : s.detail.trim();
+  return d ? `${what} · ${d.length > 18 ? d.slice(0, 17) + '…' : d}` : what;
+}
+
 export function stateTone(s: Snapshot): 'work' | 'wait' | 'ok' | 'bad' | 'calm' | 'muted' {
   if (s.connection !== 'live') return 'muted';
   switch (s.state) {
