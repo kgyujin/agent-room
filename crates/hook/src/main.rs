@@ -33,7 +33,7 @@ fn main() {
         if let Ok(mut raw) = serde_json::from_slice::<serde_json::Value>(&buf) {
             if let Some(o) = raw.as_object_mut() {
                 o.insert("hook_event_name".into(), "StatusLine".into());
-                send(&Envelope { v: 1, agent: "claude".into(), ts: now_ms(), ppid: parent_pid(), event: sanitize(&raw) });
+                send(&Envelope { v: 1, agent: "claude".into(), ts: now_ms(), ppid: parent_pid(), event: sanitize(&raw), host_session: None });
             }
         }
         return;
@@ -42,7 +42,9 @@ fn main() {
         return;
     }
     let Ok(raw) = serde_json::from_slice::<serde_json::Value>(&buf) else { return };
-    let env = Envelope { v: 1, agent: arg, ts: now_ms(), ppid: parent_pid(), event: sanitize(&raw) };
+    // set by the Claude desktop app on its Code-tab sessions; lets a click open that session there
+    let host_session = std::env::var("CLAUDE_CODE_HOST_SESSION_ID").ok().filter(|s| arg == "claude" && s.starts_with("local_") && s.len() <= 70);
+    let env = Envelope { v: 1, agent: arg, ts: now_ms(), ppid: parent_pid(), event: sanitize(&raw), host_session };
     send(&env);
 }
 
