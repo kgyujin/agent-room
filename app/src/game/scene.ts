@@ -53,6 +53,8 @@ export class Scene {
   roomOnly = false;
   /** how much idle pets roam (setting) */
   energy: Energy = 'normal';
+  /** draw the little icons over the pets' heads (setting) */
+  bubbles = true;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
   /** preferred skin order per agent ('claude', 'codex', 'generic'); first unused one wins */
@@ -193,7 +195,11 @@ export class Scene {
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
     const margin = this.roomOnly ? 2 : 8;
-    const fit = Math.max(1, Math.floor(Math.min(availW / (room.w + margin), availH / (room.h + margin))));
+    const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / (room.w + margin), availH / (room.h + margin))));
+    // opening the side panel keeps the room's size when it still fits beside the panel at the window's
+    // centre (it stays put, see draw); otherwise it shrinks to the free area
+    const full = fitIn(w);
+    const fit = full * (room.w + margin) <= w - 2 * this.insetRight * dpr ? full : fitIn(availW);
     // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size;
     // the floating room always fits its window (the window-mode zoom is kept for later)
     this.zoom = Math.max(1 - fit, Math.min(4, this.zoom));
@@ -336,7 +342,7 @@ export class Scene {
       const sk = this.skins[m.skin];
       const h = sk ? sk.h - (sk.top ?? 0) : 24;
       // leave room for a thought bubble above the head when there is one
-      const gap = m.actor.current?.bubble && !m.actor.walking ? 13 : 3;
+      const gap = this.bubbles && m.actor.current?.bubble && !m.actor.walking ? 13 : 3;
       return { key: m.key, agent: m.session!.agent, x: (this.off.x + f.x) * k, y: (this.off.y + f.y - h - gap) * k };
     });
   }
@@ -374,7 +380,10 @@ export class Scene {
     this.pan.x = Math.max(-freeW / 2 - room.w / 2 + 24, Math.min(freeW / 2 + room.w / 2 - 24, this.pan.x));
     this.pan.y = Math.max(-freeH / 2 - room.h / 2 + 24, Math.min(freeH / 2 + room.h / 2 - 24, this.pan.y));
     const pan = this.roomOnly ? { x: 0, y: 0 } : this.pan;
-    const ox = Math.floor((freeW - room.w) / 2 + pan.x) - room.dx;
+    // the room stays in the middle of the whole window while the side panel leaves room for it;
+    // only when the panel would cover it does it move left, just far enough
+    const cx = Math.max(freeW / 2, Math.min(W / 2, freeW - room.w / 2 - 6));
+    const ox = Math.floor(cx - room.w / 2 + pan.x) - room.dx;
     const oy = Math.floor(top + (freeH - room.h) / 2 + pan.y) - room.dy;
     this.off = { x: ox, y: oy };
 
@@ -417,7 +426,7 @@ export class Scene {
         s.y -= 0.4;
         A.draw(g, s.t % 4 < 2 ? 'sparkle0' : 'sparkle1', hx + s.x - 2, hy + s.y + 10);
       }
-      if (b?.bubble && !m.actor.walking) {
+      if (this.bubbles && b?.bubble && !m.actor.walking) {
         const bub = Math.round(Math.sin((this.tickN + m.slot * 5) / 3) * 1);
         A.draw(g, `bubble_${b.bubble}`, hx + 5, hy - 10 + bub);
       }

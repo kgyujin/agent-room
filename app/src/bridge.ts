@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, characters: {}, critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: true,
   petEnergy: 'normal', islandOpen: 'hover',
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1,
 };
 
 export interface Backend {
@@ -28,7 +29,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
@@ -47,6 +48,8 @@ export interface Backend {
   removeSession(key: string): Promise<void>;
   /** brings the terminal, editor or app the session runs in to the front */
   focusAgent(key: string): Promise<void>;
+  /** the system's double-click interval (ms) */
+  doubleClickMs(): Promise<number>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
@@ -79,6 +82,7 @@ const tauriBackend: Backend = {
   demoStop: () => tauriInvoke('demo_stop'),
   removeSession: (key) => tauriInvoke('remove_session', { key }),
   focusAgent: (key) => tauriInvoke('focus_agent', { key }),
+  doubleClickMs: () => tauriInvoke('double_click_ms'),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
@@ -183,6 +187,7 @@ function previewBackend(): Backend {
     demoStop: async () => undefined,
     removeSession: async () => undefined,
     focusAgent: async () => undefined,
+    doubleClickMs: async () => 500,
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
@@ -237,17 +242,22 @@ export async function autostartEnabled(): Promise<boolean> {
   return m.isEnabled();
 }
 
-// ---------------------------------------------------------------- in-app updates (GitHub Releases, signed)
-export interface AppUpdate { version: string; install: (onProgress: (pct: number) => void) => Promise<void> }
+/** window content sizes offered by ⌘+ / ⌘− and Settings */
+export const ZOOMS = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
 
-/** null when up to date, in the browser preview, or when the check fails (offline etc.) */
+// ---------------------------------------------------------------- in-app updates (GitHub Releases, signed)
+export interface AppUpdate { version: string; current: string; notes?: string; install: (onProgress: (pct: number) => void) => Promise<void> }
+
+/** null when up to date (or in the browser preview); throws when the check itself fails (offline etc.) */
 export async function checkUpdate(): Promise<AppUpdate | null> {
   if (!IN_TAURI) return null;
   const { check } = await import('@tauri-apps/plugin-updater');
-  const u = await check().catch(() => null);
+  const u = await check();
   if (!u) return null;
   return {
     version: u.version,
+    current: u.currentVersion,
+    notes: u.body ?? undefined,
     install: async (onProgress) => {
       let total = 0;
       let got = 0;

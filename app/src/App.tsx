@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, type AppUpdate } from './bridge';
+import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, ZOOMS, type AppUpdate } from './bridge';
+import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
@@ -10,10 +11,10 @@ import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { SessionTabs } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
-import { latestLimits, userTodo } from './ui/Overview';
+import { latestLimits, UsageStrip, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
-import { AGENT_NAME, doingLabel, stateTone } from './labels';
+import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
@@ -47,15 +48,56 @@ export default function App() {
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
   const [hovered, setHovered] = useState(false);
-  // update available on GitHub Releases (checked at launch and every 6 hours)
+  // update available on GitHub Releases: checked at launch and every 6 hours when the setting is on,
+  // or on demand from the app menu, the menu bar menu and Settings. A found update asks first (dialog);
+  // "나중에" leaves a small banner instead of asking again for the same version.
   const [update, setUpdate] = useState<AppUpdate | null>(null);
-  const [updating, setUpdating] = useState<number | null>(null);
+  const [updDialog, setUpdDialog] = useState<UpdateState | null>(null);
+  const asked = useRef<string | null>(null);
+  const checkNow = () => {
+    // an install already running keeps its dialog; a second check would offer another install
+    if (updDialog?.k === 'installing' || updDialog?.k === 'checking') return;
+    setUpdDialog({ k: 'checking' });
+    void runCheck().then((r) => { setUpdDialog(r); if (r.k === 'available') setUpdate(r.u); });
+  };
+  const checkRef = useRef(checkNow);
+  checkRef.current = checkNow;
+  // ⌘+ / ⌘− / ⌘0 (보기 menu on macOS, keys elsewhere): the whole window's contents in steps
+  const zoom = settings.uiZoom ?? 1;
   useEffect(() => {
-    const run = () => void checkUpdate().then(setUpdate);
-    run();
-    const id = window.setInterval(run, 6 * 3600_000);
-    return () => clearInterval(id);
+    if (!IN_TAURI) return;
+    void import('@tauri-apps/api/webview').then(({ getCurrentWebview }) => getCurrentWebview().setZoom(zoom)).catch(() => undefined);
+  }, [zoom]);
+  const zoomRef = useRef((_: string) => {});
+  zoomRef.current = (how: string) => {
+    const i = ZOOMS.findIndex((z) => z >= zoom - 0.001);
+    const next = how === 'reset' ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? ZOOMS.length - 1 : i) + (how === 'in' ? 1 : -1)))];
+    if (next !== zoom) void saveSettings({ ...settings, uiZoom: next });
+  };
+  useEffect(() => {
+    if (IS_MAC) return; // the 보기 menu's shortcuts handle these on macOS
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const how = e.key === '=' || e.key === '+' ? 'in' : e.key === '-' ? 'out' : e.key === '0' ? 'reset' : null;
+      if (how) { e.preventDefault(); zoomRef.current(how); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
+  const autoUpdate = settings.autoUpdateCheck ?? true;
+  useEffect(() => {
+    if (!autoUpdate) return;
+    const run = () => void checkUpdate().then((u) => {
+      setUpdate(u);
+      if (u && asked.current !== u.version) {
+        asked.current = u.version;
+        setUpdDialog((d) => d ?? { k: 'available', u });
+      }
+    }, () => undefined);
+    const first = window.setTimeout(run, 4000);
+    const id = window.setInterval(run, 6 * 3600_000);
+    return () => { clearTimeout(first); clearInterval(id); };
+  }, [autoUpdate]);
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
@@ -79,6 +121,9 @@ export default function App() {
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
+  // with room to spare the room, the info card and banners stay centred on the whole window when the
+  // panel opens (the room does the same in scene.ts), instead of jumping left
+  const centred = vw - 2 * PANEL_W >= 740;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -108,7 +153,9 @@ export default function App() {
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
-        await backend.onTrayEvent('open-settings', () => setSettingsOpen('look')),
+        await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'look')),
+        await backend.onTrayEvent('check-update', () => checkRef.current()),
+        await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
     })();
@@ -183,14 +230,22 @@ export default function App() {
     sc.setSessions(list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost'));
   }, [list, ready]);
 
+  // The status card and the banners change height as the agent's work changes (a tool line, a
+  // notice, a 4-second error banner). Re-centring the room on every change made the middle of the
+  // screen jump, so the room keeps the tallest space they needed until the layout itself changes.
+  const tall = useRef({ key: '', dock: 0, banners: 0 });
+  const layoutKey = `${vw}x${window.innerHeight}|${panelOpen}|${mini}|${tabsBelow}`;
+  if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, dock: 0, banners: 0 };
+  const dockRoom = dockH ? (tall.current.dock = Math.max(tall.current.dock, dockH)) : 0;
+  const bannersRoom = bannersH ? (tall.current.banners = Math.max(tall.current.banners, bannersH)) : 0;
   useEffect(() => {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? PANEL_W : 0;
-    sc.insetBottom = dockH ? dockH + 24 : tabsBelow ? 36 : 0;
-    sc.insetTop = mini ? 0 : bannersH ? bannersH + 66 : 56;
+    sc.insetBottom = dockRoom ? dockRoom + 24 : tabsBelow ? 36 : 0;
+    sc.insetTop = mini ? 0 : bannersRoom ? bannersRoom + 66 : 56;
     sc.resize();
-  }, [panelOpen, ready, mini, dockH, bannersH, tabsBelow]);
+  }, [panelOpen, ready, mini, dockRoom, bannersRoom, tabsBelow]);
 
   // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
@@ -226,6 +281,7 @@ export default function App() {
     document.documentElement.classList.add(`font-${settings.font ?? 'mixed'}`);
     sceneRef.current?.setTheme(settings.theme);
     if (sceneRef.current) sceneRef.current.energy = settings.petEnergy ?? 'normal';
+    if (sceneRef.current) sceneRef.current.bubbles = settings.petBubbles ?? true;
     const snd = soundRef.current;
     snd.sfxOn = settings.sfx;
     snd.setBgm(settings.bgm);
@@ -330,9 +386,12 @@ export default function App() {
 
   // in room-only mode the whole room, pets included, is the drag handle (double-click a pet for its
   // details); in window mode dragging pans the room while it is zoomed in
+  /** where the last press started, so the end of a pan is not taken for a click on the floor */
+  const downAt = useRef<[number, number]>([0, 0]);
   const onCanvasDown = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
     if (mini) return void (await win())?.startDragging();
+    downAt.current = [e.clientX, e.clientY];
     const r = e.currentTarget.getBoundingClientRect();
     if (sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top)) return;
     let last = [e.clientX, e.clientY];
@@ -367,14 +426,23 @@ export default function App() {
     if (f.w <= 1600) await resizeOnScreen(f.w, f.h);
   };
 
+  const petClick = useRef(0);
+  // the OS double-click interval: a single click on a pet waits this long so a slow double-click still counts
+  const dblMs = useRef(500);
+  useEffect(() => { backend.doubleClickMs().then((ms) => { dblMs.current = ms; }).catch(() => {}); }, []);
   const onCanvasDouble = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
     if (mini) {
-      if (hit && sessions[hit]) openDetails(hit);
+      // room-only: a single click starts dragging the window, so a double-click on a pet opens its app
+      if (hit && sessions[hit]) openApp(hit);
       return;
     }
-    if (hit) return;
+    if (hit) {
+      window.clearTimeout(petClick.current);
+      if (sessions[hit]) openDetails(hit);
+      return;
+    }
     sceneRef.current?.resetZoom();
     try { localStorage.setItem('roomZoom', '0'); } catch { /* storage unavailable */ }
   };
@@ -412,7 +480,17 @@ export default function App() {
     if (mini) return;
     const r = e.currentTarget.getBoundingClientRect();
     const hit = sceneRef.current?.hitActor(e.clientX - r.left, e.clientY - r.top);
-    if (hit && sessions[hit]) openDetails(hit);
+    // a pet brings up the app its agent works in; a double-click shows the details instead, so the
+    // single click waits a moment (otherwise the other app would already be in front)
+    if (hit && sessions[hit]) {
+      window.clearTimeout(petClick.current);
+      if (e.detail > 1) return; // the second click of a double-click: onCanvasDouble handles it
+      setPinned(hit);
+      petClick.current = window.setTimeout(() => openApp(hit), dblMs.current);
+    } else if (!hit && Math.hypot(e.clientX - downAt.current[0], e.clientY - downAt.current[1]) < 5) {
+      // a click on the empty room lets go of the picked pet (back to "자동")
+      setPinned(null);
+    }
   };
 
   const toggleDemo = async () => {
@@ -434,14 +512,16 @@ export default function App() {
         title={furnTip ?? undefined} onMouseMove={(e) => {
           // what each piece of furniture is for, as a tooltip
           const r = e.currentTarget.getBoundingClientRect();
-          const n = sceneRef.current?.furnitureAt(e.clientX - r.left, e.clientY - r.top) ?? null;
-          const tip = n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
+          const [x, y] = [e.clientX - r.left, e.clientY - r.top];
+          const pet = sceneRef.current?.hitActor(x, y);
+          const n = pet ? null : sceneRef.current?.furnitureAt(x, y) ?? null;
+          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 세션 열기' : '눌러서 이 세션 열기 · 두 번 누르면 자세히') : n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
           if (tip !== furnTip) setFurnTip(tip);
         }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -449,25 +529,29 @@ export default function App() {
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
           </div>
         )}
-        {update && (
+        {update && !updDialog && (
           <div className="banner update">
-            {updating === null ? (compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>) : <>업데이트 받는 중… {updating}%</>}
-            {updating === null && <button onClick={() => { setUpdating(0); update.install(setUpdating).catch(() => setUpdating(null)); }}>업데이트</button>}
+            {compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>}
+            <button onClick={() => setUpdDialog({ k: 'available', u: update })}>업데이트</button>
           </div>
         )}
         {flash && <div className="banner error">{flash}</div>}
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && settings.showTabs && (
         <div className="topleft" style={{ right: (panelOpen && selected ? PANEL_W : 0) + toolbarW + 24 }}>
           <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />
         </div>
       )}
+      {/* a small window has no room for the welcome card, so a first-time user still gets one clear next step */}
+      {compact && !mini && !selected && (
+        <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
+      )}
       {!compact && !office && settings.showDock && (
-        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected && !centred ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
@@ -493,6 +577,8 @@ export default function App() {
       )}
 
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+        {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
+        {!compact && !office && !mini && settings.showLimits && <UsageStrip sessions={list} now={now} />}
         {!mini && selected && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
@@ -519,8 +605,10 @@ export default function App() {
           onCharactersChanged={reloadSkins}
           sound={soundRef.current}
           onSoundsChanged={reloadSounds}
+          onCheckUpdate={checkNow}
         />
       )}
+      {updDialog && <UpdateDialog state={updDialog} setState={setUpdDialog} onClose={() => setUpdDialog(null)} />}
     </div>
   );
 }
@@ -534,7 +622,7 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean }) {
+function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const fullRef = useRef(full);
   fullRef.current = full;
@@ -545,17 +633,28 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
   // narrow windows: only the tags that matter (selected, or waiting on the user), so the small room is not buried
   const fewRef = useRef(few);
   fewRef.current = few;
+  // small windows: just what the pet is doing ("코드 수정 중"), without the file or command
+  const shortRef = useRef(short);
+  shortRef.current = short;
   useEffect(() => {
     let last = '';
     const loop = () => {
       const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current);
+      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current, shortRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
         placed.push(p);
+      }
+      // keep every tag inside the window: one pushed past the top edge comes back down (it may then overlap
+      // a neighbour, which is better than being cut off), and one near a side edge slides inward
+      const vw = window.innerWidth;
+      for (const p of a) {
+        p.y = Math.max(p.y, TAG_H + 2);
+        const half = w(p) / 2;
+        p.x = Math.min(Math.max(p.x, half + 2), vw - half - 2);
       }
       const sig = selRef.current + '|' + a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
       if (sig !== last) {
@@ -574,11 +673,16 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
         const s = sessions[a.key];
         if (!s) return null;
         const prog = progressOf(s);
-        const tone = stateTone(s);
+        // a turn finished a while ago reads as idle: no "완료" any more, and the tag steps back
+        const settled = s.state === 'completed' && !justDone(s, now, doneSec);
+        const resting = settled || (s.state === 'idle' && s.connection === 'live');
+        // the setting can hide resting pets' tags (the selected one stays)
+        if (resting && idleTags === 'hide' && selected !== a.key) return null;
+        const tone = settled ? 'calm' : stateTone(s);
         const urgent = needsYou(s);
-        const doing = doingLabel(s);
+        const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
             {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
@@ -591,10 +695,14 @@ function NameTags({ scene, sessions, selected, onSelect, hidden, full, few }: { 
   );
 }
 
+/** height of a name tag in CSS px (it is drawn above its anchor point) */
+const TAG_H = 22;
+const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
+
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
-function tagWidth(s: Snapshot | undefined, withProject: boolean): number {
+function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean): number {
   if (!s) return 40;
-  const doing = doingLabel(s) ?? (needsYou(s) ? s.project ?? '' : '');
+  const doing = tagLabel(s, short) ?? (needsYou(s) ? s.project ?? '' : '');
   const text = (withProject ? (s.project ?? AGENT_NAME[s.agent]).slice(0, 12) + ' ' : '') + doing;
   let w = 40;
   for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;

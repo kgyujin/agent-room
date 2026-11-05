@@ -26,11 +26,11 @@ export function Hud({ s, now, limits, onOpenApp }: { s: Snapshot; now: number; l
         <div className={`hud-state tone-${tone}`}>
           <span className="pulse" />
           {stateLabel(s)}
-          {onOpenApp && <button className="btn open-app" onClick={onOpenApp} title="이 에이전트가 일하는 터미널·편집기·앱을 앞으로 가져와요">앱 열기 ↗</button>}
+          {onOpenApp && <button className="btn open-app" onClick={onOpenApp} title="이 세션이 열린 터미널 탭·편집기 창·Codex 대화로 이동해요">세션 열기 ↗</button>}
         </div>
         {s.tool && s.connection === 'live' && (
           <div className="hud-tool">
-            <span className="chip">{activityLabel(s.activity)}</span> {s.tool}
+            {activityLabel(s.activity) && <><span className="chip">{activityLabel(s.activity)}</span> </>}{s.tool}
             {s.detail && <b className="detail"> · {s.detail}</b>}
           </div>
         )}
@@ -80,8 +80,8 @@ function Callouts({ s, now }: { s: Snapshot; now: number }) {
     return (
       <div className="callout wait">
         {s.waiting.kind === 'approval'
-          ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 터미널에서 확인해 주세요.`
-          : '답변을 기다리고 있어요. 터미널에서 확인해 주세요.'}
+          ? `${s.waiting.tool ?? '도구'} 실행 승인을 기다리고 있어요. 에이전트가 일하는 앱에서 확인해 주세요.`
+          : '답변을 기다리고 있어요. 에이전트가 일하는 앱에서 확인해 주세요.'}
         <span className="since">{fmtAgo(now - s.waiting.since)}</span>
       </div>
     );

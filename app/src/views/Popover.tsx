@@ -1,12 +1,18 @@
 // Menu bar popover: the overview plus the app's main switches.
+import { useEffect, useState } from 'react';
 import { backend } from '../bridge';
-import { Overview } from '../ui/Overview';
+import { Limits, Overview } from '../ui/Overview';
 import { Icon } from '../ui/icons';
 import { useLive } from './useLive';
 
 export function Popover() {
   const { list, now, settings, running } = useLive();
   const act = (a: string, key?: string) => void backend.trayAction(a, key);
+  // with nothing connected yet, an empty list would wait forever: point straight at the fix
+  const [unhooked, setUnhooked] = useState(false);
+  useEffect(() => {
+    if (!list.length) void backend.hooksStatus().then((h) => setUnhooked(h.every((x) => x.installed === 'none'))).catch(() => {});
+  }, [list.length]);
   return (
     <div className="pop">
       <header className="pop-head">
@@ -15,9 +21,13 @@ export function Popover() {
       </header>
       <div className="pop-body">
         {list.length ? (
-          <Overview sessions={list} now={now} selected={null} onSelect={(k) => act('select', k)} showLimits={settings?.showLimits ?? true} />
+          <Overview sessions={list} now={now} selected={null} onSelect={(k) => act('select', k)} showLimits={settings?.showLimits ?? true} limitsFirst />
         ) : (
-          <p className="muted pad">Claude Code나 Codex가 작업을 시작하면 여기에 바로 나타나요.</p>
+          <div className="pad">
+            <p className="muted">{unhooked ? '아직 연결된 에이전트가 없어요. 연결하면 Claude Code나 Codex가 일할 때 여기에 바로 나타나요.' : 'Claude Code나 Codex가 작업을 시작하면 여기에 바로 나타나요.'}</p>
+            {unhooked && <button className="btn primary" onClick={() => act('settings', 'agents')}>에이전트 연결하기</button>}
+            {(settings?.showLimits ?? true) && <div className="ov pop-lim"><Limits sessions={list} now={now} /></div>}
+          </div>
         )}
       </div>
       <footer className="pop-foot">

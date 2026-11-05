@@ -1,10 +1,10 @@
 // Dynamic-island style pill at the top centre of the screen. Collapsed it shows who is
 // working (left of the notch) and what needs the user (right of the notch); hovering (or a
-// click, by setting) opens the list. The window is resized from Rust so it stays centred.
+// click, by setting) opens the list. Its window stays one fixed size and lets clicks through outside the pill.
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
+import { fmtDuration, justDone, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon, type IconName } from '../ui/icons';
 import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
@@ -34,11 +34,19 @@ export function Island() {
   // so the shape change is animated instead of jumping with the window.
   const [open, setOpen] = useState(false);
   const [big, setBig] = useState(false);
+  // why the agent's app could not be brought up (shown for a few seconds in the open card)
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = window.setTimeout(() => setNote(null), 5000);
+    return () => clearTimeout(t);
+  }, [note]);
   const leave = useRef(0);
   const shrink = useRef(0);
   const todos = list.filter((s) => userTodo(s, now));
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
-  const done = list.filter((s) => s.state === 'completed');
+  // only a turn that just finished shows the check; after that the agent is simply idle
+  const done = list.filter((s) => justDone(s, now, settings?.doneShownSec ?? 60));
   // remaining plan usage per agent, one line under the list
   const showLimits = settings?.showLimits ?? true;
   const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];
@@ -46,7 +54,7 @@ export function Island() {
   const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
   const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
-  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + Math.max(1, Math.min(list.length, 8)) * ROW + 12 + (limits.length ? 30 + limits.length * 22 : 0)];
+  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (limits.length ? 30 + limits.length * 22 : 0)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
@@ -84,8 +92,10 @@ export function Island() {
   }, []);
 
   return (
+    // hover comes only from Rust: the page's own mouseenter/leave also fired while the window was
+    // being resized under a still pointer, and the two sources together opened and closed it in a loop
     <div className={`island ${open ? 'open' : ''} ${todos.length ? 'alert' : ''}`} style={{ width: w, height: h, ['--bar-h' as string]: `${barH}px`, ['--notch-w' as string]: `${notchW}px` }}
-      onMouseEnter={hoverOpens ? enter : stay} onMouseLeave={exit} onClick={enter}>
+      onClick={enter}>
       <div className="is-bar">
         <div className="is-left">
           {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
@@ -98,7 +108,7 @@ export function Island() {
         </div>
         <div className="is-notch" />
         <div className="is-right">
-          {low && (
+          {low && (settings?.islandUsage ?? true) && (
             <span className={`is-low ${low.left <= 10 ? 'low' : low.left <= 30 ? 'mid' : ''}`} title={`가장 적게 남은 사용량: ${low.name} ${low.left}%`}>
               <Icon name="bolt" />{low.left}%
             </span>
@@ -109,13 +119,14 @@ export function Island() {
             <span className="is-work"><Icon name="cog" />{open ? `작업 중 ${working.length}` : working.length}</span>
           ) : done.length ? (
             <span className="is-ok"><Icon name="check" />{open ? `완료 ${done.length}` : done.length}</span>
-          ) : (
+          ) : list.length ? (
             <span className="is-dim"><Icon name="moon" /></span>
-          )}
+          ) : null /* the left side already says 대기 */}
         </div>
       </div>
       {open && (
         <ul className="is-list">
+          {note && <li className="is-empty is-note">{note}</li>}
           {list.length === 0 && <li className="is-empty">{running ? '에이전트가 실행 중이에요 · 다음 작업부터 여기에 보여요' : '진행 중인 작업이 없어요'}</li>}
           {list.slice(0, 8).map((s) => {
             const p = progressOf(s);
@@ -123,11 +134,12 @@ export function Island() {
             const t = s.turnStartedAt ? (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt : null;
             return (
               <li key={s.key}>
-                <button title={s.isDemo ? undefined : '눌러서 이 에이전트가 일하는 앱 열기'} onClick={(e) => {
+                <button title={`${s.project ?? '프로젝트'}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`} onClick={(e) => {
                   e.stopPropagation();
-                  // jump to the agent's own app; the room shows the session when that app can't be found
+                  // jump to the agent's own app; when it can't be found, say why here instead of
+                  // bringing up the main window (which looked like a flash and no app)
                   if (s.isDemo) void backend.trayAction('select', s.key);
-                  else backend.focusAgent(s.key).catch(() => backend.trayAction('select', s.key));
+                  else backend.focusAgent(s.key).then(() => setNote(null), (err) => setNote(String(err)));
                 }}>
                   <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
                   <span className="is-proj">{s.project ?? '프로젝트'}</span>

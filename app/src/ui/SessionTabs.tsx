@@ -5,12 +5,13 @@ import { AgentMark } from './icons';
 export function SessionTabs({ sessions, selected, pinned, onSelect }: { sessions: Snapshot[]; selected: string | null; pinned: string | null; onSelect: (k: string | null) => void }) {
   if (!sessions.length) return null;
   return (
-    <div className="tabs" role="tablist">
+    // a plain mouse wheel only scrolls up and down; turn it sideways so tabs past the edge can be reached
+    <div className="tabs" role="tablist" onWheel={(e) => { if (!e.deltaX && e.deltaY) e.currentTarget.scrollLeft += e.deltaY; }}>
       <button className={`tab ${pinned === null ? 'on' : ''}`} onClick={() => onSelect(null)} title="가장 주의가 필요한 세션을 자동으로 보여줘요">
         자동
       </button>
       {sessions.map((s) => (
-        <button key={s.key} role="tab" className={`tab ${selected === s.key && pinned ? 'on' : ''}`} onClick={() => onSelect(s.key)} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+        <button key={s.key} role="tab" className={`tab ${selected === s.key && pinned ? 'on' : ''}`} onClick={(e) => { onSelect(s.key); e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }} title={`${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
           <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
           <span>{s.project ?? s.sessionId.slice(0, 6)}</span>
           <span className={`dot tone-${stateTone(s)}`} />

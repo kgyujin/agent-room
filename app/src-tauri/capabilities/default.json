@@ -24,6 +24,7 @@
     "core:window:allow-set-shadow",
     "core:window:allow-inner-size",
     "core:window:allow-scale-factor",
+    "core:webview:allow-set-webview-zoom",
     "notification:default",
     "updater:default",
     "process:allow-restart",
