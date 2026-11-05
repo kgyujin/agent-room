@@ -123,6 +123,8 @@ impl Default for Settings {
 #[derive(Default)]
 struct Shared {
     store: Mutex<SessionStore>,
+    /// token totals per day, read from the agents' own logs (usage counters only)
+    usage: Mutex<agent_room_core::usage::UsageScanner>,
     procs: Mutex<ProcWatch>,
     settings: Mutex<Settings>,
     detected: Mutex<(u32, u32)>,
@@ -518,6 +520,14 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
         Reach::App => false,
     };
     if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+}
+
+/// Tokens per local day for the last `days` days, recent rate and streaks, from local logs only.
+#[tauri::command]
+async fn usage_history(app: AppHandle, tz_offset_min: i64, days: i64) -> agent_room_core::usage::UsageHistory {
+    let shared = app.state::<Shared>();
+    let mut scan = shared.usage.lock().unwrap();
+    scan.history(&agent_room_core::logs::LogDirs::from_env(), now_ms() as i64, tz_offset_min.clamp(-840, 840), days.clamp(1, 90))
 }
 
 /// the system's double-click interval in ms, so a single click on a pet can wait exactly that long
@@ -1247,7 +1257,7 @@ pub fn run() {
         .manage(Shared::default())
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
-            hooks_remove_all, focus_agent, double_click_ms, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
+            hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
             tray_action, island_layout, notch_size, set_room_only
         ])
         .setup(|app| {

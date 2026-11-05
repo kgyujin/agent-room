@@ -113,11 +113,11 @@ export function limitsAge(l: RateLimits, now: number): string | null {
 }
 
 /** every agent's remaining usage in one small card (main window, top right) */
-export function UsageStrip({ sessions, now }: { sessions: Snapshot[]; now: number }) {
+export function UsageStrip({ sessions, now, onOpen }: { sessions: Snapshot[]; now: number; onOpen?: () => void }) {
   const rows = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
   if (!rows.length) return null;
   return (
-    <div className="usage-strip" title="남은 사용량 (에이전트가 알려준 요금제 한도)">
+    <button className="usage-strip" onClick={onOpen} disabled={!onOpen} title="남은 사용량 · 눌러서 사용량 자세히 보기">
       {rows.map(([a, l]) => (
         <div key={a} className="us-agent">
           <AgentMark agent={a} size={14} />
@@ -134,7 +134,7 @@ export function UsageStrip({ sessions, now }: { sessions: Snapshot[]; now: numbe
           {limitsAge(l!, now) && <small>{limitsAge(l!, now)}</small>}
         </div>
       ))}
-    </div>
+    </button>
   );
 }
 

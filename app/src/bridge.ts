@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { CharacterFile, SoundFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update } from './types';
+import type { CharacterFile, SoundFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -50,6 +50,8 @@ export interface Backend {
   focusAgent(key: string): Promise<void>;
   /** the system's double-click interval (ms) */
   doubleClickMs(): Promise<number>;
+  /** tokens per local day, recent rate and streaks, read from the agents' local logs */
+  usageHistory(days: number): Promise<UsageHistory>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
@@ -83,6 +85,7 @@ const tauriBackend: Backend = {
   removeSession: (key) => tauriInvoke('remove_session', { key }),
   focusAgent: (key) => tauriInvoke('focus_agent', { key }),
   doubleClickMs: () => tauriInvoke('double_click_ms'),
+  usageHistory: (days) => tauriInvoke('usage_history', { tzOffsetMin: -new Date().getTimezoneOffset(), days }),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
@@ -188,6 +191,15 @@ function previewBackend(): Backend {
     removeSession: async () => undefined,
     focusAgent: async () => undefined,
     doubleClickMs: async () => 500,
+    // a made-up month for the design preview (never real data)
+    usageHistory: async (days) => {
+      const today = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60_000) / 86_400_000);
+      const wave = (i: number, k: number) => Math.max(0, Math.round((Math.sin(i * k) + 0.6) * 4e7 * (i % 7 === 3 ? 0 : 1)));
+      return {
+        days: Array.from({ length: days }, (_, i) => ({ day: today - days + 1 + i, claude: wave(i, 0.45) * (i > days - 12 ? 3 : 1), codex: Math.round(wave(i + 3, 0.7) / 3) })),
+        recentClaude: 1_300_000, recentCodex: 240_000, streakLongest: 6, streakCurrent: 5,
+      };
+    },
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
