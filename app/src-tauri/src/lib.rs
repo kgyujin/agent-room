@@ -401,6 +401,8 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())?;
     show_island(&app, settings.island);
+    // the popover and island keep their pages alive, so they pick up the change from this event
+    let _ = app.emit("settings-changed", &settings);
     Ok(())
 }
 

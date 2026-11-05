@@ -13,7 +13,7 @@ const COLLAPSED: [number, number] = [340, 34];
 const ROW = 40;
 
 export function Island() {
-  const { list, now } = useLive();
+  const { list, now, settings } = useLive();
   // `open` is how the pill is drawn; `big` is how large its window is. Opening grows the window
   // first and then morphs the pill; closing morphs the pill back and then shrinks the window,
   // so the shape change is animated instead of jumping with the window.
@@ -25,7 +25,8 @@ export function Island() {
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
   const done = list.filter((s) => s.state === 'completed');
   // remaining plan usage per agent, one line under the list
-  const limits = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]);
+  const showLimits = settings?.showLimits ?? true;
+  const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];
   // lowest remaining share across agents, shown on the collapsed pill once it is 10% or less
   const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
   const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);

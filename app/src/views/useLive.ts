@@ -15,9 +15,15 @@ export function useLive() {
     (async () => {
       const [ov, st] = await Promise.all([backend.overview(), backend.getSettings()]);
       setSessions(Object.fromEntries(ov.sessions.map((s) => [s.key, s])));
-      setSettings(st);
-      applyUiTheme(uiTheme(st.uiTheme));
-      document.documentElement.classList.add(`font-${st.font ?? 'mixed'}`);
+      const apply = (s: Settings) => {
+        setSettings(s);
+        applyUiTheme(uiTheme(s.uiTheme));
+        const cl = document.documentElement.classList;
+        [...cl].filter((c) => c.startsWith('font-')).forEach((c) => cl.remove(c));
+        cl.add(`font-${s.font ?? 'mixed'}`);
+      };
+      apply(st);
+      unsub.push(await backend.onTrayEvent('settings-changed', (s) => apply(s as Settings)));
       unsub.push(
         await backend.onUpdate((u) =>
           setSessions((prev) => {

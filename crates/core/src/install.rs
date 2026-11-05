@@ -126,6 +126,12 @@ fn hook_command(t: Target, bin: &Path) -> String {
 
 /// Removes our handlers from a `{"hooks": {Event: [{matcher?, hooks: [...]}]}}` document.
 fn strip_ours(doc: &mut Value) {
+    strip_hooks(doc);
+    // the status line is ours to restore even when the user already removed the hooks object
+    strip_statusline(doc);
+}
+
+fn strip_hooks(doc: &mut Value) {
     let Some(hooks) = doc.get_mut("hooks").and_then(|h| h.as_object_mut()) else { return };
     let events: Vec<String> = hooks.keys().cloned().collect();
     for ev in events {
@@ -146,7 +152,6 @@ fn strip_ours(doc: &mut Value) {
             o.remove("hooks");
         }
     }
-    strip_statusline(doc);
 }
 
 /// Puts back the user's own status line (or none) if ours is set.
@@ -171,6 +176,10 @@ fn strip_statusline(doc: &mut Value) {
 fn set_statusline(doc: &mut Value, bin: &Path) -> Result<(), String> {
     let o = doc.as_object_mut().unwrap();
     let prev = o.get("statusLine").cloned().unwrap_or(Value::Null);
+    // already wrapped: keep the saved original, never save our own wrapper as the user's command
+    if is_ours(&prev) {
+        return Ok(());
+    }
     let txt = serde_json::to_string(&prev).map_err(|e| e.to_string())?;
     paths::ensure_private_dir(&paths::data_dir()).map_err(|e| e.to_string())?;
     fs::write(paths::claude_prev_statusline(), txt).map_err(|e| e.to_string())?;
@@ -385,6 +394,32 @@ mod tests {
         assert_eq!(prev["command"], "~/bin/my-line", "reinstall keeps the user's command, not ours");
         uninstall(Target::Claude).unwrap();
         let after: Value = serde_json::from_str(&fs::read_to_string(d.join("claude/settings.json")).unwrap()).unwrap();
+        assert_eq!(after, serde_json::from_str::<Value>(original).unwrap());
+    }
+
+    #[test]
+    fn status_line_is_restored_after_the_user_deleted_the_hooks() {
+        let _g = ENV.lock().unwrap();
+        let d = sandbox("h");
+        fs::create_dir_all(d.join("claude")).unwrap();
+        let original = r#"{"statusLine":{"type":"command","command":"~/bin/my-line"}}"#;
+        let cfg = d.join("claude/settings.json");
+        fs::write(&cfg, original).unwrap();
+        let fake_bin = d.join("agent-room-hook");
+        fs::write(&fake_bin, b"x").unwrap();
+        install(Target::Claude, Some(&fake_bin)).unwrap();
+        // the user removes the whole hooks object by hand, leaving our status line behind
+        let mut doc: Value = serde_json::from_str(&fs::read_to_string(&cfg).unwrap()).unwrap();
+        doc.as_object_mut().unwrap().remove("hooks");
+        fs::write(&cfg, doc.to_string()).unwrap();
+        install(Target::Claude, Some(&fake_bin)).unwrap();
+        let prev: Value = serde_json::from_str(&fs::read_to_string(paths::claude_prev_statusline()).unwrap()).unwrap();
+        assert_eq!(prev["command"], "~/bin/my-line", "our wrapper is never saved as the user's command");
+        let mut doc: Value = serde_json::from_str(&fs::read_to_string(&cfg).unwrap()).unwrap();
+        doc.as_object_mut().unwrap().remove("hooks");
+        fs::write(&cfg, doc.to_string()).unwrap();
+        uninstall(Target::Claude).unwrap();
+        let after: Value = serde_json::from_str(&fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(after, serde_json::from_str::<Value>(original).unwrap());
     }
 
