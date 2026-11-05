@@ -3,7 +3,7 @@
 // reports (Claude's status line, Codex's log). Nothing here calls a model.
 import { useEffect, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtUntil, windowLabel } from '../labels';
+import { fmtUntil, paceNote, windowLabel } from '../labels';
 import type { RateLimits, Snapshot, UsageHistory } from '../types';
 import { AgentMark } from './icons';
 import { latestLimits, limitsAge } from './Overview';
@@ -122,6 +122,7 @@ function LimitCard({ agent, l, now }: { agent: 'claude' | 'codex'; l: RateLimits
               <span className="lc-name">{w.minutes <= 300 ? `세션 · ${windowLabel(w.minutes)}` : windowLabel(w.minutes)}</span>
               <span className={`lc-bar a-${agent}`}><i style={{ width: `${left}%` }} /></span>
               <div className="lc-foot"><b>{left}% 남음</b><small>{reset}</small></div>
+              {paceNote(w, l.at) && <small className="lc-pace">{paceNote(w, l.at)}</small>}
             </div>
           );
         })

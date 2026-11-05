@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { CharacterFile, SoundFile, HookStatus, Overview, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
+import type { CharacterFile, SoundFile, HookStatus, Overview, RateLimits, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -38,6 +38,7 @@ export interface Backend {
   setRoomOnly(on: boolean): Promise<void>;
   /** camera notch of the menu bar screen [width, height] in points; null without one */
   notchSize(): Promise<[number, number] | null>;
+  codexLimits(): Promise<RateLimits | null>;
   hooksStatus(): Promise<HookStatus[]>;
   hooksInstall(agent: string): Promise<HookStatus>;
   hooksUninstall(agent: string): Promise<HookStatus>;
@@ -76,6 +77,7 @@ const tauriBackend: Backend = {
   trayAction: (action, key) => tauriInvoke('tray_action', { action, key: key ?? null }),
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
   notchSize: () => tauriInvoke('notch_size'),
+  codexLimits: () => tauriInvoke('codex_limits'),
   setRoomOnly: (on) => tauriInvoke('set_room_only', { on }),
   hooksStatus: () => tauriInvoke('hooks_status'),
   hooksInstall: (agent) => tauriInvoke('hooks_install', { agent }),
@@ -180,6 +182,7 @@ function previewBackend(): Backend {
     trayAction: async () => undefined,
     islandLayout: async () => undefined,
     notchSize: async () => null,
+    codexLimits: async () => null,
     setRoomOnly: async () => undefined,
     hooksStatus: async () => [
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },

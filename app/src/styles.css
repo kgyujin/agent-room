@@ -829,6 +829,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .lc-row.mid .lc-bar i { background: var(--wait); }
 .lc-row.low .lc-bar i { background: var(--bad); }
 .lc-row.low .lc-foot b { color: var(--bad); }
+.lc-pace { font-size: 10.5px; color: var(--wait-ink, var(--wait)); font-weight: 600; }
 .lc-none { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ink-soft); }
 .lc-grid.dark .lc { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08); }
 .lc-grid.dark .lc-head, .lc-grid.dark .lc-foot b { color: #ece8e4; }

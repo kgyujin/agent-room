@@ -3,7 +3,7 @@
 // the rest is one click away in the main window.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtAgo, fmtUntil, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
+import { fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import type { Snapshot } from '../types';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { fmtTokens, useUsageHistory } from '../ui/Usage';
@@ -90,7 +90,7 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
             l.windows.map((w) => {
               const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
               return (
-                <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : undefined}>
+                <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={[w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : '', paceNote(w, l.at) ?? ''].filter(Boolean).join(' · ') || undefined}>
                   {/* running low: when it comes back matters more than which window it is */}
                   <small>{left <= 30 && w.resetsAt && w.resetsAt > now ? fmtUntil(w.resetsAt - now) : windowLabel(w.minutes)}</small>
                   <i className={`lc-bar a-${a}`}><i style={{ width: `${left}%` }} /></i>

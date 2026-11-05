@@ -1,6 +1,8 @@
 // "현황" tab: every session at a glance, sorted by what needs the user first.
 // Everything shown comes from hook events; the only derived number is the remaining-time
 // estimate, which is labelled as one and only appears once a plan step has finished.
+import { useEffect } from 'react';
+import { backend } from '../bridge';
 import type { LimitWindow, RateLimits, Snapshot } from '../types';
 import { doingLabel, fmtAgo, fmtDuration, fmtUntil, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon } from './icons';
@@ -78,6 +80,23 @@ export function Overview({ sessions, now, selected, onSelect, showLimits = true,
 const LIMITS_KEY = 'lastLimits';
 function remembered(): Partial<Record<Snapshot['agent'], RateLimits>> {
   try { return JSON.parse(localStorage.getItem(LIMITS_KEY) ?? '{}'); } catch { return {}; }
+}
+
+/** Codex's usage straight from its newest log, once a minute: it shows even when no Codex session is
+ *  open here (the desktop app, VS Code, or before Agent Room started). Kept like any other report. */
+export function useCodexLimits() {
+  useEffect(() => {
+    const read = () => void backend.codexLimits().then((l) => {
+      if (!l) return;
+      const mem = remembered();
+      if (!mem.codex || l.at > mem.codex.at) {
+        try { localStorage.setItem(LIMITS_KEY, JSON.stringify({ ...mem, codex: l })); } catch { /* storage unavailable */ }
+      }
+    }).catch(() => {});
+    read();
+    const t = setInterval(read, 60_000);
+    return () => clearInterval(t);
+  }, []);
 }
 
 /** newest remaining-usage report for this agent (limits are per account, not per session). The last
