@@ -101,7 +101,7 @@ pub fn newest_codex_limits(dirs: &LogDirs) -> Option<crate::model::RateLimits> {
         .filter(|f| f.extension().is_some_and(|e| e == "jsonl"))
         .filter_map(|f| modified_ms(&f).map(|m| (m, f)))
         .collect();
-    logs.sort_by(|a, b| b.0.cmp(&a.0));
+    logs.sort_by_key(|l| std::cmp::Reverse(l.0));
     logs.iter().take(CODEX_LIMIT_FILES).find_map(|(m, f)| last_codex_limits(f, *m))
 }
 
