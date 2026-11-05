@@ -39,7 +39,7 @@ export function Island() {
   const todos = list.filter((s) => userTodo(s, now));
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
   // only a turn that just finished shows the check; after that the agent is simply idle
-  const done = list.filter((s) => justDone(s, now));
+  const done = list.filter((s) => justDone(s, now, settings?.doneShownSec ?? 60));
   // remaining plan usage per agent, one line under the list
   const showLimits = settings?.showLimits ?? true;
   const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];
@@ -101,7 +101,7 @@ export function Island() {
         </div>
         <div className="is-notch" />
         <div className="is-right">
-          {low && (
+          {low && (settings?.islandUsage ?? true) && (
             <span className={`is-low ${low.left <= 10 ? 'low' : low.left <= 30 ? 'mid' : ''}`} title={`가장 적게 남은 사용량: ${low.name} ${low.left}%`}>
               <Icon name="bolt" />{low.left}%
             </span>

@@ -96,6 +96,18 @@ export interface Settings {
   petEnergy: 'calm' | 'normal' | 'lively';
   /** the island opens when the pointer is over it, or only on click */
   islandOpen: 'hover' | 'click';
+  /** seconds a finished turn still shows as "완료" (0 = until the next turn) */
+  doneShownSec: number;
+  /** name tags of idle pets */
+  idleTags: 'dim' | 'hide' | 'show';
+  /** little icons over the pets' heads */
+  petBubbles: boolean;
+  /** hide the island while nothing is going on */
+  islandHideIdle: boolean;
+  /** lowest remaining usage on the closed island */
+  islandUsage: boolean;
+  /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
+  notifyMinTurnSec: number;
 }
 
 export interface CharacterFile { name: string; bytes: number[] }

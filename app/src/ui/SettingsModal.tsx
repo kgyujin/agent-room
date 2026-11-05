@@ -81,6 +81,7 @@ export function SettingsModal(props: {
                   <option value="pixel">전부 도트</option>
                 </select>
               </Field>
+              <h4>펫과 이름표</h4>
               <Field label="펫 이름표">
                 <select value={s.tagStyle} onChange={(e) => set('tagStyle', e.target.value as Settings['tagStyle'])}>
                   <option value="compact">간단히</option>
@@ -88,6 +89,24 @@ export function SettingsModal(props: {
                   <option value="off">숨기기</option>
                 </select>
               </Field>
+              {s.tagStyle !== 'off' && (
+                <Field label="쉬는 펫의 이름표">
+                  <select value={s.idleTags ?? 'dim'} onChange={(e) => set('idleTags', e.target.value as Settings['idleTags'])}>
+                    <option value="dim">흐리게</option>
+                    <option value="hide">숨기기</option>
+                    <option value="show">그대로</option>
+                  </select>
+                </Field>
+              )}
+              <Field label="'완료' 표시 유지">
+                <select value={s.doneShownSec ?? 60} onChange={(e) => set('doneShownSec', Number(e.target.value))}>
+                  <option value={30}>30초</option>
+                  <option value={60}>1분</option>
+                  <option value={300}>5분</option>
+                  <option value={0}>다음 작업까지</option>
+                </select>
+              </Field>
+              <Toggle label="펫 머리 위 아이콘 (! ? ✓ 등)" v={s.petBubbles ?? true} on={(v) => set('petBubbles', v)} />
               <Field label="펫 활동량 (일이 없을 때)">
                 <select value={s.petEnergy ?? 'normal'} onChange={(e) => set('petEnergy', e.target.value as Settings['petEnergy'])}>
                   <option value="calm">차분하게 (주로 쉬고 가끔 낮잠)</option>
@@ -99,14 +118,19 @@ export function SettingsModal(props: {
               <Toggle label="위쪽 세션 탭" v={s.showTabs} on={(v) => set('showTabs', v)} />
               <Toggle label="남은 사용량 표시 (5시간·주간)" v={s.showLimits} on={(v) => set('showLimits', v)} />
               <Toggle label="아래쪽 상태 카드" v={s.showDock} on={(v) => set('showDock', v)} />
-              <Toggle label="다이나믹 아일랜드 (화면 맨 위 상태 표시)" v={s.island} on={(v) => set('island', v)} />
+              <h4>다이나믹 아일랜드</h4>
+              <Toggle label="화면 맨 위에 상태 표시" v={s.island} on={(v) => set('island', v)} />
               {s.island && (
-                <Field label="아일랜드 펼치기">
-                  <select value={s.islandOpen ?? 'hover'} onChange={(e) => set('islandOpen', e.target.value as Settings['islandOpen'])}>
-                    <option value="hover">마우스를 올리면</option>
-                    <option value="click">클릭할 때만</option>
-                  </select>
-                </Field>
+                <>
+                  <Field label="펼치기">
+                    <select value={s.islandOpen ?? 'hover'} onChange={(e) => set('islandOpen', e.target.value as Settings['islandOpen'])}>
+                      <option value="hover">마우스를 올리면</option>
+                      <option value="click">클릭할 때만</option>
+                    </select>
+                  </Field>
+                  <Toggle label="일이 없을 땐 숨기기" v={s.islandHideIdle ?? false} on={(v) => set('islandHideIdle', v)} />
+                  {s.showLimits && <Toggle label="접힌 상태에서 남은 사용량 표시" v={s.islandUsage ?? true} on={(v) => set('islandUsage', v)} />}
+                </>
               )}
             </>
           )}
@@ -115,6 +139,16 @@ export function SettingsModal(props: {
               <Toggle label="효과음" v={s.sfx} on={(v) => set('sfx', v)} />
               <Toggle label="배경 음악 (Lo-fi)" v={s.bgm} on={(v) => set('bgm', v)} />
               <Toggle label="작업 완료·오류 알림" v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
+              {s.notifyComplete && (
+                <Field label="완료 알림은">
+                  <select value={s.notifyMinTurnSec ?? 0} onChange={(e) => set('notifyMinTurnSec', Number(e.target.value))}>
+                    <option value={0}>모든 작업</option>
+                    <option value={60}>1분 이상 걸린 작업만</option>
+                    <option value={300}>5분 이상 걸린 작업만</option>
+                    <option value={900}>15분 이상 걸린 작업만</option>
+                  </select>
+                </Field>
+              )}
               <Toggle label="승인·입력 요청 알림" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
               <Toggle label="남은 사용량 10% 이하 알림" v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
               <Toggle label="앱을 보고 있을 땐 알림 생략" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />

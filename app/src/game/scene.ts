@@ -53,6 +53,8 @@ export class Scene {
   roomOnly = false;
   /** how much idle pets roam (setting) */
   energy: Energy = 'normal';
+  /** draw the little icons over the pets' heads (setting) */
+  bubbles = true;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
   /** preferred skin order per agent ('claude', 'codex', 'generic'); first unused one wins */
@@ -336,7 +338,7 @@ export class Scene {
       const sk = this.skins[m.skin];
       const h = sk ? sk.h - (sk.top ?? 0) : 24;
       // leave room for a thought bubble above the head when there is one
-      const gap = m.actor.current?.bubble && !m.actor.walking ? 13 : 3;
+      const gap = this.bubbles && m.actor.current?.bubble && !m.actor.walking ? 13 : 3;
       return { key: m.key, agent: m.session!.agent, x: (this.off.x + f.x) * k, y: (this.off.y + f.y - h - gap) * k };
     });
   }
@@ -417,7 +419,7 @@ export class Scene {
         s.y -= 0.4;
         A.draw(g, s.t % 4 < 2 ? 'sparkle0' : 'sparkle1', hx + s.x - 2, hy + s.y + 10);
       }
-      if (b?.bubble && !m.actor.walking) {
+      if (this.bubbles && b?.bubble && !m.actor.walking) {
         const bub = Math.round(Math.sin((this.tickN + m.slot * 5) / 3) * 1);
         A.draw(g, `bubble_${b.bubble}`, hx + 5, hy - 10 + bub);
       }
