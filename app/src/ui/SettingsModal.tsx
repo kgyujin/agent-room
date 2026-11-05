@@ -175,6 +175,12 @@ export function SettingsModal(props: {
                   <Toggle label="룸만 띄울 때 항상 위에 표시" v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
                 </Group>
                 <Group title="방">
+                  <Field label="시점">
+                    <select value={s.roomView ?? 'iso'} onChange={(e) => set('roomView', e.target.value as Settings['roomView'])}>
+                      <option value="iso">대각선</option>
+                      <option value="top">탑다운</option>
+                    </select>
+                  </Field>
                   <Field label="조명">
                     <select value={s.theme} onChange={(e) => set('theme', e.target.value as Settings['theme'])}>
                       <option value="auto">실제 시간에 맞춰</option>

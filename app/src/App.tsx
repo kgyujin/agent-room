@@ -303,6 +303,15 @@ export default function App() {
     snd.setBgm(settings.bgm);
   }, [settings, ready]);
 
+  // room camera: both atlases share one furniture layout, so pets keep their spots on a switch
+  useEffect(() => {
+    const view = settings.roomView ?? 'iso';
+    if (!ready || sceneRef.current?.view === view) return;
+    let cancelled = false;
+    loadAtlas(view).then((atlas) => { if (!cancelled) sceneRef.current?.setAtlas(atlas); });
+    return () => { cancelled = true; };
+  }, [settings.roomView, ready]);
+
   // 1 s clock for elapsed time (only while visible)
   useEffect(() => {
     const id = window.setInterval(() => !document.hidden && setNow(Date.now()), 1000);
@@ -608,6 +617,7 @@ export default function App() {
         }} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
+        <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? '대각선으로 보기' : '탑다운으로 보기'} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
         <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />

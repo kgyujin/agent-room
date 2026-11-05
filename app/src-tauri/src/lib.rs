@@ -30,6 +30,8 @@ static POPOVER_HIDDEN_AT: AtomicU64 = AtomicU64::new(0);
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub theme: String,
+    /// room camera: "iso" (diagonal) or "top" (top-down); the furniture layout is shared
+    pub room_view: String,
     pub sfx: bool,
     pub bgm: bool,
     pub notify_complete: bool,
@@ -94,6 +96,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "auto".into(),
+            room_view: "iso".into(),
             sfx: true,
             bgm: false,
             notify_complete: true,

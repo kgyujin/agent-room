@@ -85,13 +85,38 @@ export class Scene {
     this.ctx = canvas.getContext('2d')!;
     this.bctx = this.buf.getContext('2d')!;
     this.desks = atlas.layout.desks;
-    const wb = atlas.layout.windows ?? [];
+    this.span = this.fitSky();
+    this.resize();
+  }
+
+  /** the window span of the current atlas, and a sky canvas that size */
+  private fitSky(): Box {
+    const wb = this.atlas.layout.windows ?? [];
     const x0 = Math.min(...wb.map((b) => b[0]), 0);
     const y0 = Math.min(...wb.map((b) => b[1]), 0);
-    this.span = wb.length ? [x0, y0, Math.max(...wb.map((b) => b[0] + b[2])) - x0, Math.max(...wb.map((b) => b[1] + b[3])) - y0] : [0, 0, 1, 1];
-    this.sky.width = this.span[2];
-    this.sky.height = this.span[3];
+    const span: Box = wb.length ? [x0, y0, Math.max(...wb.map((b) => b[0] + b[2])) - x0, Math.max(...wb.map((b) => b[1] + b[3])) - y0] : [0, 0, 1, 1];
+    this.sky.width = span[2];
+    this.sky.height = span[3];
+    this.skyKey = '';
+    return span;
+  }
+
+  /** switch to the same room seen by another camera: every pet keeps its spot */
+  setAtlas(atlas: Atlas) {
+    this.atlas = atlas;
+    this.desks = atlas.layout.desks;
+    this.alpha = null;
+    this.span = this.fitSky();
+    for (const m of this.mates) {
+      const spot = m.actor.spot in atlas.layout.nodes ? m.actor.spot : `sofa${m.slot}`;
+      m.actor = new Actor(m.agent, atlas.layout, spot);
+      this.applyBehavior(m);
+    }
     this.resize();
+  }
+
+  get view() {
+    return this.atlas.layout.camera ?? 'iso';
   }
 
   setTheme(t: Theme) {
@@ -233,10 +258,18 @@ export class Scene {
     if (seat !== a.y + 0.5) return seat;
     const o = this.atlas.layout.wallOrigin;
     if (!o) return seat;
-    const u = (a.x + 0.5 - o[0]) / 2;        // x - y
-    const v = a.y + 0.5 - o[1];              // x + y
-    const wx = (u + v) / 2;
-    const wy = (v - u) / 2;
+    // the feet back in world units (see tools/art/cottage.py for both cameras)
+    let wx: number;
+    let wy: number;
+    if (this.atlas.layout.camera === 'top') {
+      wx = (a.x + 0.5 - o[0]) / 2;
+      wy = (a.y + 0.5 - o[1]) / 2;
+    } else {
+      const u = (a.x + 0.5 - o[0]) / 2;        // x - y
+      const v = a.y + 0.5 - o[1];              // x + y
+      wx = (u + v) / 2;
+      wy = (v - u) / 2;
+    }
     let lo = -Infinity;
     let hi = Infinity;
     for (const f of this.atlas.layout.furniture) {
@@ -525,7 +558,7 @@ export class Scene {
     const key = `${Math.floor(d.getTime() / 1000)}`;
     if (key === this.skyKey) return;
     this.skyKey = key;
-    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN, this.atlas.layout.windowWalls, this.atlas.layout.wallOrigin), 0, 0);
+    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN, this.atlas.layout.windowWalls, this.atlas.layout.wallOrigin, this.atlas.layout.camera), 0, 0);
   }
 
   private screenFrame(desk: number, b: Behavior | null): string {

@@ -1,14 +1,15 @@
 """Generates every pixel-art asset for Agent Room (deterministic; run `python3 gen_art.py`).
 
 Outputs to app/public/assets/:
-  atlas.png / atlas.json   - all sprites + scene layout (furniture boxes, spots, overlay positions)
+  atlas.png / atlas.json         - the room seen diagonally (iso): sprites + scene layout
+  atlas-top.png / atlas-top.json - the same room, same layout, seen top-down
 """
 import json
 import os
 
 from PIL import Image
 
-from pix import Spr, hexc, shade
+from pix import Spr, hexc
 
 OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'app', 'public', 'assets')
 
@@ -113,116 +114,68 @@ def from_rows(rows, pal):
 
 
 # ---------------------------------------------------------------- build
-import office
+import cottage
 
 
-def face_frames(poly, to_uv, fn):
-    """fills a screen-space polygon with fn(u, v) using face-local coordinates"""
-    sp = Spr(office.SW, office.SH)
-    sp.poly(poly, lambda px, py: fn(*to_uv(px, py)))
-    return sp
+def cropped(cv):
+    """Cv -> (Spr, x, y) cropped to its pixels"""
+    bb = cv.im.getbbox()
+    s = Spr(bb[2] - bb[0], bb[3] - bb[1])
+    s.im = cv.im.crop(bb)
+    s.px = s.im.load()
+    return s, bb[0], bb[1]
 
 
-def desk_screens(i, scr):
-    """states of the sheet lying on desk i: u runs along the sheet's long side (world y), v across it"""
-    x0, y0, z0, lx, ly = scr
-    P = office.P
-
-    def to_uv(px, py):
-        wx, wy = office.to_world(px, py, z0)
-        return int((wy - y0) * 2), int((wx - x0) * 2)
-
-    poly = [P(x0 + 0.5, y0 + 0.5, z0), P(x0 + lx - 0.5, y0 + 0.5, z0), P(x0 + lx - 0.5, y0 + ly - 0.5, z0), P(x0 + 0.5, y0 + ly - 0.5, z0)]
-    W, H = int(ly * 2), int(lx * 2)
-
-    def glyph(rows, col, bg):
-        gh, gw = len(rows), len(rows[0])
-        ou, ov = (W - gw) // 2, (H - gh) // 2
-        return lambda u, v: col if 0 <= v - ov < gh and 0 <= u - ou < gw and rows[v - ov][u - ou] == 'x' else bg
-
-    C2 = office.C
-    paper, ink = C2['paper'], C2['nv_d']
-    big = lambda rows: [''.join(ch * 2 for ch in r) for r in rows for _ in (0, 1)]   # each mark 2 x 2
-    out = {'off': lambda u, v: paper,
-           'idle': glyph(big(['x.x', 'xxx', '.x.']), C2['fl_r'], paper),
-           'err': glyph(big(['x.x', '.x.', 'x.x']), C2['fl_rd'], paper),
-           'ok': glyph(big(['..x', 'x.x', '.x.']), C2['g_d'], paper),
-           'wait': glyph(big(['x', 'x', '.', 'x']), C2['gold_d'], paper)}
-    # writing: lines of pencil and ink appear one by one, a little more each frame
-    for f in range(4):
-        def write(u, v, f=f):
-            line = (v - 2) // 3
-            if v < 2 or (v - 2) % 3 != 0 or line > f:
-                return paper
-            ind = 2 + (line * 5) % 4
-            ln = 6 + (line * 7) % 7
-            return (ink, C2['w_dd'], C2['fl_rd'])[line % 3] if ind <= u < ind + ln else paper
-        out[f'code{f}'] = write
-    for f in range(2):
-        out[f'read{f}'] = lambda u, v, f=f: C2['w_d'] if 2 < u < W - 2 and v % 3 == 1 + f else paper
-    return {f'scr{i}_{k}': face_frames(poly, to_uv, fn) for k, fn in out.items()}
-
-
-def rig_overlays(panel):
-    xf, y0, z0 = panel
-    C2 = office.C
-    states = {
-        'rig_idle': [C2['led_a'], C2['led_off'], C2['led_off']],
-        'rig_run0': [C2['led_a'], C2['led_off'], C2['led_off']],
-        'rig_run1': [C2['led_off'], C2['led_a'], C2['led_off']],
-        'rig_run2': [C2['led_off'], C2['led_off'], C2['led_a']],
-        'rig_pass': [C2['led_g'], C2['led_g'], C2['led_g']],
-        'rig_fail': [C2['led_r'], C2['led_r'], C2['led_r']],
-    }
-    poly = [office.P(xf, y0, z0 + 7), office.P(xf, y0 + 6, z0 + 7), office.P(xf, y0 + 6, z0), office.P(xf, y0, z0)]
-
-    def to_uv(px, py):
-        yw = xf - (px + 0.5 - office.OX) / 2
-        z = office.OY + xf + yw - (py + 0.5)
-        return int((yw - y0) * 2), int(z0 + 7 - z)
-
-    out = {}
-    for name, cols in states.items():
-        fill = {'rig_idle': 0, 'rig_run0': 1, 'rig_run1': 2, 'rig_run2': 3, 'rig_pass': 3, 'rig_fail': 3}[name]
-        bar = C2['led_r'] if name == 'rig_fail' else C2['led_g']
-        slate, dark = C2['w_dd'], C2['w_d']
-
-        def fn(u, v, cols=cols, fill=fill, bar=bar):
-            k = (u - 1) // 4
-            if 1 <= v <= 2 and 0 <= k < 3 and (u - 1) % 4 < 2:
-                return dark if cols[k] == C2['led_off'] else cols[k]
-            if v == 4 and 0 <= k < 3 and (u - 1) % 4 < 3:
-                return bar if k < fill else dark
-            return slate
-        out[name] = face_frames(poly, to_uv, fn)
-    return out
-
-
-def main():
-    os.makedirs(OUT, exist_ok=True)
+def build(camera):
+    """sprites + layout of the room seen by one camera ('iso' or 'top'); both read cottage's one layout"""
+    cottage.set_camera(camera)
     sprites = {}   # name -> (Spr, dx, dy)   dx,dy = placement in scene coordinates (or 0,0)
-
-    room, screens, rig_panel, tea = office.build()
-    sprites['room'] = (room, 0, 0)
+    room, glass = cottage.shell()
+    r = Spr(room.w, room.h)
+    r.im = room.im
+    r.px = r.im.load()
+    sprites['room'] = (r, 0, 0)
     furniture = []
-    for (name, s, base_y, box) in sorted(office.FURN, key=lambda f: f[2]):
-        c, x, y = s.crop()
-        sprites[name] = (c, x, y)
-        furniture.append({'name': name, 'base': base_y, 'box': box})
-    overlays = {}
-    for i, scr in enumerate(screens):
-        overlays.update(desk_screens(i, scr))
-    overlays.update(rig_overlays(rig_panel))
-    for name, s in overlays.items():
-        c, x, y = s.crop()
-        sprites[name] = (c, x, y)
-
+    for name, cv, base, box in sorted(cottage.pieces(), key=lambda p: p[2]):
+        sprites[name] = cropped(cv)
+        furniture.append({'name': name, 'base': base, 'box': box})
+    for i, (x, y) in enumerate(cottage.DESKS):
+        for st in cottage.SCREEN_STATES:
+            sprites[f'scr{i}_{st}'] = cropped(cottage.screen_overlay(x, y, st))
+    for st in cottage.RIG_STATES:
+        sprites[st] = cropped(cottage.rig_overlay(st))
     for name, s in small_fx().items():
         sprites[name] = (s, 0, 0)
     for icon in ('bang', 'ask', 'check', 'cross', 'dots', 'note', 'heart', 'gear', 'book', 'zzz'):
         sprites['bubble_' + icon] = (bubble(icon), 0, 0)
 
-    # pack (simple shelf packer)
+    nodes, edges, spots = cottage.walk_graph()
+    windows, walls = [], []
+    for wall in ('L', 'R'):
+        b = cottage.boxes_of(glass[wall])
+        if b:
+            windows.append(b)
+            walls.append(wall)
+    layout = {
+        'camera': camera,
+        'scene': {'w': cottage.SW, 'h': cottage.SH},
+        'furniture': furniture,
+        'desks': len(cottage.DESKS),
+        'deskOrder': cottage.DESK_ORDER,
+        'spots': spots,
+        'nodes': nodes,
+        'edges': edges,
+        'steam': cottage.steam_point(),
+        'windows': windows,
+        # wall of each window ('L' = plane x = 0, 'R' = plane y = 0) and the screen point of the back floor corner,
+        # so the app can place the view outside at a fixed height along each wall
+        'windowWalls': walls,
+        'wallOrigin': [cottage.OX, cottage.OY],
+    }
+    return sprites, layout
+
+
+def pack(sprites, layout, stem):
     items = sorted(sprites.items(), key=lambda kv: -kv[1][0].h)
     AW = 1024
     x = y = rowh = 0
@@ -242,28 +195,17 @@ def main():
         ax, ay = pos[name]
         atlas.alpha_composite(s.im, (ax, ay))
         frames[name] = {'x': ax, 'y': ay, 'w': s.w, 'h': s.h, 'dx': dx, 'dy': dy}
-    atlas.save(os.path.join(OUT, 'atlas.png'))
-
-    nodes, edges, spots = office.walk_graph(screens)
-    layout = {
-        'scene': {'w': office.SW, 'h': office.SH},
-        'furniture': furniture,
-        'desks': len(screens),
-        'deskOrder': office.DESK_ORDER,
-        'spots': spots,
-        'nodes': nodes,
-        'edges': edges,
-        'steam': list(tea),
-        'windows': office.window_boxes(),
-        # wall of each window ('L' = plane x = 0, 'R' = plane y = 0) and the screen point of the back floor corner,
-        # so the app can place the view outside at a fixed height along each wall
-        'windowWalls': [k[0] for k in sorted(office.WINDOW_PX)],
-        'wallOrigin': [office.OX, office.OY],
-        'clock': office.clock_origin(),
-    }
-    with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
+    atlas.save(os.path.join(OUT, f'{stem}.png'))
+    with open(os.path.join(OUT, f'{stem}.json'), 'w') as f:
         json.dump({'frames': frames, 'layout': layout}, f, separators=(',', ':'))
-    print('atlas', AW, AH, len(frames), 'sprites')
+    print(stem, AW, AH, len(frames), 'sprites')
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    # the diagonal view keeps the old file name; the top-down view sits next to it
+    pack(*build('iso'), 'atlas')
+    pack(*build('top'), 'atlas-top')
 
 
 if __name__ == '__main__':

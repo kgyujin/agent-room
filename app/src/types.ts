@@ -65,6 +65,8 @@ export interface HookStatus {
 
 export interface Settings {
   theme: 'day' | 'sunset' | 'night' | 'auto';
+  /** room camera: diagonal (isometric) or top-down; same furniture layout either way */
+  roomView: 'iso' | 'top';
   sfx: boolean;
   bgm: boolean;
   notifyComplete: boolean;
