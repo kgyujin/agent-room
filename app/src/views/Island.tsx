@@ -4,7 +4,7 @@
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtDuration, stateLabel, stateTone, windowLabel } from '../labels';
+import { fmtDuration, justDone, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon, type IconName } from '../ui/icons';
 import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
@@ -38,7 +38,8 @@ export function Island() {
   const shrink = useRef(0);
   const todos = list.filter((s) => userTodo(s, now));
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
-  const done = list.filter((s) => s.state === 'completed');
+  // only a turn that just finished shows the check; after that the agent is simply idle
+  const done = list.filter((s) => justDone(s, now));
   // remaining plan usage per agent, one line under the list
   const showLimits = settings?.showLimits ?? true;
   const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];

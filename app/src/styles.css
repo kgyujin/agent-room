@@ -568,6 +568,8 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .wl-agent .btn, .wl-ok { white-space: nowrap; }
 .wl-agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 /* tags waiting on the user stand out: name shown, warm fill (waiting tags already bob) */
+.nametag.settled { opacity: 0.6; }
+.nametag.settled:hover, .nametag.settled.on { opacity: 1; }
 .nametag.urgent { background: #fff1d6; border-color: var(--wait); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wait) 35%, transparent); z-index: 1; }
 .nametag.urgent span { color: var(--ink); font-weight: 700; }
 .is-lim { display: flex; gap: 14px; padding: 6px 14px 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11.5px; color: #b9b3ad; }

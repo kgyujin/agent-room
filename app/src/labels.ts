@@ -26,6 +26,10 @@ export function stateLabel(s: Snapshot): string {
 
 /** Short "what it is doing right now" for the tag over a pet, with the file or command when known
  *  ("코드 수정 · Room.tsx", "테스트 중 · npm test"); null while it rests. */
+/** how long a finished turn still shows as "완료" on the pet and the island before it reads as idle */
+export const DONE_SHOWN_MS = 60_000;
+export const justDone = (s: Snapshot, now: number) => s.state === 'completed' && now - (s.turnEndedAt ?? s.lastEventAt) < DONE_SHOWN_MS;
+
 export function doingLabel(s: Snapshot): string | null {
   if (s.connection === 'stale') return '응답 없음';
   if (s.connection !== 'live') return null;
