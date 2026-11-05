@@ -187,6 +187,8 @@ h4 { margin: 16px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04
 .app.mini .toolbar { top: 8px; bottom: auto; right: 8px !important; opacity: 0; transition: opacity 0.15s; }
 .app.mini:not(.room-only):hover .toolbar, .app.mini.hovered .toolbar { opacity: 1; }
 .app.mini .banner.demo { top: 8px; font-size: 10.5px; padding: 3px 8px; }
+/* narrow window: the session tabs sit along the bottom, under the room */
+.app.mini:not(.room-only) .topleft { top: auto; bottom: 8px; left: 8px; right: 8px !important; }
 
 /* room-only: transparent window around the room; status and controls appear on hover */
 html.room-only, html.room-only body, html.room-only #root { background: transparent; }
