@@ -78,7 +78,8 @@ export interface Settings {
   alwaysOnTopRoom: boolean;
   showLimits: boolean;
   /** agent ('claude' | 'codex' | 'generic') -> custom character name; missing = built-in */
-  characters: Record<string, string>;
+  /** pets that may appear (skin ids: builtin/<id> or a PNG name); empty means all built-ins */
+  petPool: string[];
   /** built-in critter id -> fur colour (hex) */
   critterColors: Record<string, string>;
   /** UI colour theme id (see themes.ts) */

@@ -44,8 +44,8 @@ pub struct Settings {
     pub always_on_top_room: bool,
     /// remaining plan usage (5-hour / weekly) in the overview and HUD
     pub show_limits: bool,
-    /// agent ('claude' | 'codex' | 'generic') -> custom character file stem; missing = built-in
-    pub characters: std::collections::BTreeMap<String, String>,
+    /// pets that may appear (built-in ids as `builtin/<id>` or PNG names); empty means all built-ins
+    pub pet_pool: Vec<String>,
     /// built-in critter id -> fur colour ("#rrggbb")
     pub critter_colors: std::collections::BTreeMap<String, String>,
     /// UI colour theme id ("peach", "mint", ...)
@@ -97,7 +97,7 @@ impl Default for Settings {
             always_on_top: false,
             always_on_top_room: true,
             show_limits: true,
-            characters: Default::default(),
+            pet_pool: Vec::new(),
             critter_colors: Default::default(),
             ui_theme: "peach".into(),
             island: true,
@@ -105,7 +105,7 @@ impl Default for Settings {
             backdrop: String::new(),
             tag_style: "compact".into(),
             show_dock: true,
-            show_tabs: true,
+            show_tabs: false,
             pet_energy: "normal".into(),
             island_open: "hover".into(),
             done_shown_sec: 60,
@@ -198,6 +198,10 @@ fn sync_island(app: &AppHandle) {
         })
     };
     let show = !st.island_hide_idle || busy();
+    if show {
+        // also after a display was plugged in or out, or its resolution changed
+        place_island(app, &w, ISLAND_WIN.0, ISLAND_WIN.1);
+    }
     if show != w.is_visible().unwrap_or(true) {
         let _ = if show { w.show() } else { w.hide() };
     }
@@ -702,22 +706,25 @@ fn show_island(app: &AppHandle, on: bool) {
 }
 
 fn place_island(app: &AppHandle, w: &WebviewWindow, width: f64, height: f64) {
+    #[cfg(target_os = "macos")]
+    if mac_set_frame(w, width, height) {
+        return;
+    }
     let Ok(Some(mon)) = app.primary_monitor() else { return };
     let k = mon.scale_factor();
     let x = mon.position().x as f64 / k + (mon.size().width as f64 / k - width) / 2.0;
     let y = mon.position().y as f64 / k;
-    #[cfg(target_os = "macos")]
-    if mac_set_frame(w, x.round(), width, height) {
-        return;
-    }
     let _ = w.set_size(tauri::LogicalSize::new(width, height));
     let _ = w.set_position(tauri::LogicalPosition::new(x.round(), y));
 }
 
-/// Moves and resizes the island in one step at the top of the first screen. Two separate calls
-/// (size, then position) showed a frame of the pill off-centre, which looked like flicker on hover.
+/// Moves and resizes the island in one step to the top centre of the screen with the menu bar (and
+/// the notch). Two separate calls (size, then position) showed a frame of the pill off-centre.
+/// Both x and y come from that screen's Cocoa frame, the same coordinates `setFrame` uses, so a
+/// second display, a changed resolution or a different scale can't put the island mid-screen.
+/// Does nothing when the island is already there.
 #[cfg(target_os = "macos")]
-fn mac_set_frame(w: &WebviewWindow, x: f64, width: f64, height: f64) -> bool {
+fn mac_set_frame(w: &WebviewWindow, width: f64, height: f64) -> bool {
     use objc2::runtime::AnyObject;
     use objc2::{class, msg_send};
     let Ok(ptr) = w.ns_window() else { return false };
@@ -732,7 +739,11 @@ fn mac_set_frame(w: &WebviewWindow, x: f64, width: f64, height: f64) -> bool {
         // Cocoa puts the origin at the bottom-left of the first screen
         let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
         let frame: MacRect = msg_send![screen, frame];
-        let r = MacRect(x, frame.1 + frame.3 - height, width, height);
+        let r = MacRect((frame.0 + (frame.2 - width) / 2.0).round(), frame.1 + frame.3 - height, width, height);
+        let now: MacRect = msg_send![ns, frame];
+        if (now.0 - r.0).abs() < 0.5 && (now.1 - r.1).abs() < 0.5 && (now.2 - r.2).abs() < 0.5 && (now.3 - r.3).abs() < 0.5 {
+            return;
+        }
         let _: () = msg_send![ns, setFrame: r, display: true];
     })
     .is_ok()

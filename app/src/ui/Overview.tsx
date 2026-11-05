@@ -36,51 +36,39 @@ export function etaMs(s: Snapshot, now: number): number | null {
   return (t / p.done) * (p.total - p.done);
 }
 
+/** sessions grouped by what they need: the user's turn first, then work, then the quiet ones */
 export function Overview({ sessions, now, selected, onSelect, showLimits = true, limitsFirst = false }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; showLimits?: boolean; limitsFirst?: boolean }) {
   const live = sessions.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
-  const todos = live.map((s) => [s, userTodo(s, now)] as const).filter((x): x is [Snapshot, { text: string; since: number }] => x[1] !== null);
-  const working = live.filter((s) => isActive(s) && s.state !== 'waiting' && s.state !== 'error').length;
-  const done = live.filter((s) => s.state === 'completed').length;
-  const quiet = live.filter((s) => s.connection === 'stale' || s.state === 'idle').length;
+  const todo = live.filter((s) => userTodo(s, now));
+  const work = live.filter((s) => isActive(s) && !userTodo(s, now));
+  const done = live.filter((s) => !isActive(s) && s.state === 'completed' && s.connection === 'live');
+  const quiet = live.filter((s) => !todo.includes(s) && !work.includes(s) && !done.includes(s));
+  const groups = [
+    { id: 'todo', label: '내 차례', list: todo, empty: '기다리는 에이전트가 없어요' },
+    { id: 'work', label: '작업 중', list: work },
+    { id: 'done', label: '완료', list: done },
+    { id: 'quiet', label: '쉬는 중', list: quiet },
+  ];
   return (
     <div className="ov">
-      <div className="ov-stats">
-        <Stat n={todos.length} label="내 차례" tone="wait" />
-        <Stat n={working} label="작업 중" tone="work" />
-        <Stat n={done} label="완료" tone="ok" />
-        <Stat n={quiet} label="쉬는 중" tone="calm" />
-      </div>
-
       {showLimits && limitsFirst && <Limits sessions={sessions} now={now} />}
-
-      <h4>내가 할 일</h4>
-      {todos.length ? (
-        <ul className="ov-todo">
-          {todos.map(([s, t]) => (
-            <li key={s.key}>
-              <button onClick={() => onSelect(s.key)} className={selected === s.key ? 'on' : ''}>
-                <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-                <span className="ov-proj">{s.project ?? '프로젝트'}</span>
-                <span className={`ov-what tone-${stateTone(s)}`}>{t.text}</span>
-                <span className="ov-since">{fmtAgo(now - t.since)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted small ov-none">지금은 기다리는 에이전트가 없어요.</p>
-      )}
-
-      {showLimits && !limitsFirst && <Limits sessions={sessions} now={now} />}
-
-      <h4>에이전트 {live.length}</h4>
-      <ul className="ov-list">
-        {live.map((s) => (
-          <li key={s.key}>
-            <AgentRow s={s} now={now} on={selected === s.key} onClick={() => onSelect(s.key)} />
-          </li>
-        ))}
-      </ul>
+      {!live.length && <p className="muted small ov-none">지금 일하는 에이전트가 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.</p>}
+      {live.length > 0 && groups.map((g) => (g.list.length || g.empty) && (
+        <section key={g.id} className={`ov-group g-${g.id} ${g.list.length ? '' : 'empty'}`}>
+          <h4><i className="ov-dot" />{g.label}<span className="pn-count">{g.list.length || ''}</span></h4>
+          {g.list.length ? (
+            <ul className="ov-list">
+              {g.list.map((s) => (
+                <li key={s.key}>
+                  <AgentRow s={s} now={now} on={selected === s.key} onClick={() => onSelect(s.key)} todo={userTodo(s, now)} slim={g.id === 'done' || g.id === 'quiet'} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted small ov-none">{g.empty}</p>
+          )}
+        </section>
+      ))}
     </div>
   );
 }
@@ -177,16 +165,7 @@ export function LimitBar({ w, now }: { w: LimitWindow; now: number }) {
   );
 }
 
-function Stat({ n, label, tone }: { n: number; label: string; tone: string }) {
-  return (
-    <div className={`ov-stat tone-${tone} ${n ? '' : 'zero'}`}>
-      <b>{n}</b>
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function AgentRow({ s, now, on, onClick }: { s: Snapshot; now: number; on: boolean; onClick: () => void }) {
+function AgentRow({ s, now, on, onClick, todo, slim }: { s: Snapshot; now: number; on: boolean; onClick: () => void; todo: { text: string; since: number } | null; slim: boolean }) {
   const prog = progressOf(s);
   const step = s.plan.find((p) => p.status === 'in_progress');
   const t = turnMs(s, now);
@@ -195,8 +174,24 @@ function AgentRow({ s, now, on, onClick }: { s: Snapshot; now: number; on: boole
   const busy = isActive(s);
   const doing = busy ? doingLabel(s) : null;
   const name = s.project ?? '프로젝트 미확인';
+  if (slim)
+    return (
+      <button className={`ov-row slim ${on ? 'on' : ''} t-${tone}`} onClick={onClick} title={`${name}${s.cwd ? `\n${s.cwd}` : ''}`}>
+        <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} />
+        <span className="ov-proj">{name}</span>
+        <span className={`ov-state tone-${tone}`}>{stateLabel(s)}</span>
+        <span className="ov-since">{fmtAgo(now - s.lastEventAt)}</span>
+      </button>
+    );
   return (
     <button className={`ov-row ${busy ? '' : 'quiet'} ${on ? 'on' : ''} t-${tone}`} onClick={onClick} title={`${name}${s.cwd ? `\n${s.cwd}` : ''}`}>
+      {todo && (
+        <div className="ov-ask">
+          <Icon name="bell" />
+          <b>{todo.text}</b>
+          <span>{fmtAgo(now - todo.since)}</span>
+        </div>
+      )}
       <div className="ov-top">
         <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
         <span className="ov-proj">{name}</span>
