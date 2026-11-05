@@ -61,6 +61,8 @@ export class Scene {
   prefs: Record<string, string[]> = {};
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
+  /** pixel ratio the canvas was last fitted at */
+  private fitDpr = 0;
   /** user zoom: integer steps added to the fitted scale (mouse wheel) */
   zoom = 0;
   /** user pan in art pixels while zoomed in */
@@ -181,6 +183,7 @@ export class Scene {
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
+    this.fitDpr = dpr;
     // measure the container: the canvas itself carries a pinned CSS size from the last resize
     const rect = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width * dpr));
@@ -255,21 +258,10 @@ export class Scene {
     return { w: Math.ceil(((room.w + 2) * scale) / dpr), h: Math.ceil(((room.h + 2) * scale) / dpr) };
   }
 
-  /** zoom one step in (dir 1) or out (-1), keeping the art pixel under the cursor in place */
-  zoomAt(dir: number, cssX: number, cssY: number) {
-    const dpr = window.devicePixelRatio || 1;
-    const ax = (cssX * dpr) / this.scale - this.off.x;
-    const ay = (cssY * dpr) / this.scale - this.off.y;
-    const before = this.scale;
+  /** zoom one step in (dir 1) or out (-1) around the window centre, so the room stays in the middle */
+  zoomBy(dir: number) {
     this.zoom += dir;
     this.resize();
-    if (this.scale === before || this.zoom <= 0) return this.draw();
-    // where the same art point lands now, and pan so it is back under the cursor
-    const nx = (cssX * dpr) / this.scale - ax;
-    const ny = (cssY * dpr) / this.scale - ay;
-    this.pan.x += nx - this.off.x;
-    this.pan.y += ny - this.off.y;
-    this.draw();
   }
 
   /** drag the zoomed room by a CSS-pixel delta */
@@ -352,6 +344,9 @@ export class Scene {
   }
 
   private frame() {
+    // ⌘+/⌘− or a move to a display with another pixel density changes the pixel ratio without
+    // always sending a resize event: re-fit then, so the room stays centred and crisp
+    if ((window.devicePixelRatio || 1) !== this.fitDpr) return this.resize();
     this.tickN++;
     if (this.tickN % 6 === 0) this.mates.forEach((m) => this.applyBehavior(m));
     const now = Date.now();

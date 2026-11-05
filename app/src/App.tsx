@@ -21,6 +21,8 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
+/** how long a new session must last before its critter comes in */
+const NEW_SESSION_MS = 3000;
 
 function priority(s: Snapshot): number {
   if (s.connection === 'ended' || s.connection === 'lost') return 9;
@@ -223,12 +225,14 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // ended sessions leave the office; live ones each get a desk and a critter. A session gets its
+  // critter only after a few seconds: a session that ends right away (a one-shot run an editor
+  // button starts, for example) would otherwise pop in and vanish.
+  const inRoom = list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost' && (s.isDemo || now - s.startedAt >= NEW_SESSION_MS));
+  const inRoomKey = inRoom.map((s) => s.key).join('|');
   useEffect(() => {
-    const sc = sceneRef.current;
-    if (!sc) return;
-    // ended sessions leave the office; live ones each get a desk and a critter
-    sc.setSessions(list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost'));
-  }, [list, ready]);
+    sceneRef.current?.setSessions(inRoom);
+  }, [list, ready, inRoomKey]);
 
   // The status card and the banners change height as the agent's work changes (a tool line, a
   // notice, a 4-second error banner). Re-centring the room on every change made the middle of the
@@ -412,9 +416,8 @@ export default function App() {
     const dir = wheelAcc.current < 0 ? 1 : -1;
     wheelAcc.current = 0;
     if (!mini) {
-      const r = e.currentTarget.getBoundingClientRect();
       const sc = sceneRef.current;
-      sc?.zoomAt(dir, e.clientX - r.left, e.clientY - r.top);
+      sc?.zoomBy(dir);
       try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
       return;
     }

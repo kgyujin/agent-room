@@ -353,10 +353,14 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
             shared.log_only.lock().unwrap().remove(&key);
         }
         let update = {
+            // same lock order as the tick thread (procs, then store)
+            let mut procs = shared.procs.lock().unwrap();
             let mut store = shared.store.lock().unwrap();
             let u = store.apply(ev);
             if let Some(pid) = pid {
-                if store.pid_of(&key) != Some(pid) {
+                // keep a pid that is still running: a hook can come through a helper process that exits
+                let known = store.pid_of(&key);
+                if known != Some(pid) && !known.is_some_and(|k| procs.alive(k)) {
                     store.set_pid(&key, pid);
                 }
             }
