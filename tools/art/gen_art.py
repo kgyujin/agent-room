@@ -258,6 +258,7 @@ def main():
         # so the app can place the view outside at a fixed height along each wall
         'windowWalls': [k[0] for k in sorted(office.WINDOW_PX)],
         'wallOrigin': [office.OX, office.OY],
+        'clock': office.clock_origin(),
     }
     with open(os.path.join(OUT, 'atlas.json'), 'w') as f:
         json.dump({'frames': frames, 'layout': layout}, f, separators=(',', ':'))
