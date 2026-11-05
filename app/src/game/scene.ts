@@ -209,10 +209,8 @@ export class Scene {
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
     const margin = this.roomOnly ? 2 : 4;
     const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / (room.w + margin), availH / (room.h + margin))));
-    // opening the side panel keeps the room's size when it still fits beside the panel at the window's
-    // centre (it stays put, see draw); otherwise it shrinks to the free area
-    const full = fitIn(w);
-    const fit = full * (room.w + margin) <= w - 2 * this.insetRight * dpr ? full : fitIn(availW);
+    // the room fits the area the side panel leaves free (it keeps its size when that still fits)
+    const fit = fitIn(availW);
     // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size;
     // the floating room always fits its window (the window-mode zoom is kept for later)
     this.zoom = Math.max(1 - fit, Math.min(4, this.zoom));
@@ -431,10 +429,7 @@ export class Scene {
     this.pan.x = Math.max(-freeW / 2 - room.w / 2 + 24, Math.min(freeW / 2 + room.w / 2 - 24, this.pan.x));
     this.pan.y = Math.max(-freeH / 2 - room.h / 2 + 24, Math.min(freeH / 2 + room.h / 2 - 24, this.pan.y));
     const pan = this.roomOnly ? { x: 0, y: 0 } : this.pan;
-    // the room stays in the middle of the whole window while the side panel leaves room for it;
-    // only when the panel would cover it does it move left, just far enough
-    const cx = Math.max(freeW / 2, Math.min(W / 2, freeW - room.w / 2 - 6));
-    const ox = Math.floor(cx - room.w / 2 + pan.x) - room.dx;
+    const ox = Math.floor((freeW - room.w) / 2 + pan.x) - room.dx;
     const oy = Math.floor(top + (freeH - room.h) / 2 + pan.y) - room.dy;
     this.off = { x: ox, y: oy };
 

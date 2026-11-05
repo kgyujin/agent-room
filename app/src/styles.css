@@ -539,7 +539,9 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .ov-lim-reset { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 
 /* ------------------------------------------------ first run */
-.dock .welcome { width: min(100%, 620px); padding: 16px 18px; display: block; }
+.dock .welcome { width: min(100%, 620px); padding: 16px 18px; display: block; position: relative; }
+.welcome .wl-close { position: absolute; top: 8px; right: 8px; }
+.wl-head { padding-right: 32px; }
 .wl-head { display: flex; flex-direction: column; gap: 4px; }
 .wl-head b { font-size: 16px; font-family: var(--font-display); }
 .wl-head .muted { font-size: 12.5px; line-height: 1.5; }

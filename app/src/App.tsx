@@ -103,6 +103,9 @@ export default function App() {
   }, [autoUpdate]);
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
+  // the welcome card stays closed once the user closes it (settings > 에이전트 has the same steps)
+  const [welcomeClosed, setWelcomeClosed] = useState(() => { try { return localStorage.getItem('welcomeClosed') === '1'; } catch { return false; } });
+  const closeWelcome = () => { setWelcomeClosed(true); try { localStorage.setItem('welcomeClosed', '1'); } catch { /* storage unavailable */ } };
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
   // open: the pane to show ('last' = the one used last time)
   const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
@@ -125,9 +128,6 @@ export default function App() {
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW;
-  // with room to spare the room, the info card and banners stay centred on the whole window when the
-  // panel opens (the room does the same in scene.ts), instead of jumping left
-  const centred = vw - 2 * PANEL_W >= 740;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -525,7 +525,7 @@ export default function App() {
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -556,11 +556,11 @@ export default function App() {
         <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
       )}
       {!compact && !office && settings.showDock && (
-        <div className="dock" ref={dockRef} style={{ right: panelOpen && !centred ? PANEL_W + 12 : 12 }}>
+        <div className="dock" ref={dockRef} style={{ right: panelOpen ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
-            <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} />
+            !welcomeClosed && <Welcome detected={detected} onSettings={() => setSettingsOpen('agents')} onDemo={toggleDemo} onClose={closeWelcome} />
           )}
         </div>
       )}
