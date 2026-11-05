@@ -3,7 +3,7 @@
 // estimate, which is labelled as one and only appears once a plan step has finished.
 import type { LimitWindow, RateLimits, Snapshot } from '../types';
 import { doingLabel, fmtAgo, fmtDuration, fmtUntil, stateLabel, stateTone, windowLabel } from '../labels';
-import { AgentMark } from './icons';
+import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 
 const ACTIVE = ['starting', 'planning', 'reading', 'editing', 'running', 'testing', 'waiting', 'error'];
@@ -145,43 +145,41 @@ function AgentRow({ s, now, on, onClick }: { s: Snapshot; now: number; on: boole
   const tone = stateTone(s);
   const busy = isActive(s);
   const doing = busy ? doingLabel(s) : null;
-  const top = (
-    <div className="ov-top">
-      <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-      <span className="ov-proj">{s.project ?? '프로젝트 미확인'}</span>
-      <span className={`ov-state tone-${tone}`}>
-        <i className="pulse" />
-        {stateLabel(s)}
-      </span>
-    </div>
-  );
-  // resting sessions take one line, so the busy ones stand out
-  if (!busy)
-    return (
-      <button className={`ov-row quiet ${on ? 'on' : ''} t-${tone}`} onClick={onClick}>
-        {top}
-        <div className="ov-meta">
-          {t !== null && <span className="muted">소요 {fmtDuration(t)}</span>}
-          <span className="muted">마지막 활동 {fmtAgo(now - s.lastEventAt)}</span>
-        </div>
-      </button>
-    );
+  const name = s.project ?? '프로젝트 미확인';
   return (
-    <button className={`ov-row ${on ? 'on' : ''} t-${tone}`} onClick={onClick}>
-      {top}
-      {doing && doing !== stateLabel(s) && <div className="ov-doing">{doing}</div>}
-      <div className="ov-meta">
-        {prog && (
-          <span className="prog">
-            <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
-            {prog.done}/{prog.total}
-          </span>
-        )}
-        {t !== null && <span className="muted">{isActive(s) ? '진행' : '소요'} {fmtDuration(t)}</span>}
-        {eta !== null && <span className="ov-eta" title="끝난 단계의 평균 시간으로 계산한 추정치예요">약 {Math.max(1, Math.round(eta / 60000))}분 남음</span>}
-        {s.subagents > 0 && <span className="muted">하위 에이전트 {s.subagents}</span>}
+    <button className={`ov-row ${busy ? '' : 'quiet'} ${on ? 'on' : ''} t-${tone}`} onClick={onClick} title={`${name}${s.cwd ? `\n${s.cwd}` : ''}`}>
+      <div className="ov-top">
+        <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
+        <span className="ov-proj">{name}</span>
+        <span className={`ov-state tone-${tone}`}>
+          <i className="pulse" />
+          {stateLabel(s)}
+        </span>
       </div>
-      {step && <div className="ov-step">지금: {step.text}</div>}
+      {doing && doing !== stateLabel(s) && <div className="ov-doing">{doing}</div>}
+      {busy ? (
+        <div className="ov-meta">
+          {prog ? (
+            <>
+              <span className="ov-bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
+              <span className="ov-n">{prog.done}/{prog.total}</span>
+            </>
+          ) : <span className="ov-fill" />}
+          {t !== null && <span className="ov-time"><Icon name="clock" />{fmtDuration(t)}</span>}
+          {eta !== null && <span className="ov-eta" title="끝난 단계의 평균 시간으로 계산한 추정치예요">약 {Math.max(1, Math.round(eta / 60000))}분 남음</span>}
+        </div>
+      ) : (
+        <div className="ov-meta quiet">
+          {t !== null && <span>소요 {fmtDuration(t)}</span>}
+          <span>마지막 활동 {fmtAgo(now - s.lastEventAt)}</span>
+        </div>
+      )}
+      {busy && (step || s.subagents > 0) && (
+        <div className="ov-step">
+          {step && <><Icon name="play" /><span>{step.text}</span></>}
+          {s.subagents > 0 && <em>하위 에이전트 {s.subagents}</em>}
+        </div>
+      )}
     </button>
   );
 }

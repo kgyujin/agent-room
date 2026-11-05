@@ -2,6 +2,7 @@
 //! The UI (React + Canvas) only renders snapshots pushed from here.
 
 mod demo;
+mod focus;
 
 use agent_room_core::adapters::{normalize, Envelope};
 use agent_room_core::install::{self, HookStatus, Target};
@@ -480,14 +481,18 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
     });
     drop(procs);
     let host = host.ok_or(if pid.is_some() { "이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)" } else { "이 세션의 에이전트 프로세스를 찾지 못했어요" })?;
-    open_app(&host)
+    open_session(&host, &key, pid, cwd.as_deref())
 }
 
+/// Opens the session itself where possible (its terminal tab, its editor window, its Codex chat),
+/// otherwise just the app it runs in.
 #[cfg(target_os = "macos")]
-fn open_app(path: &std::path::Path) -> Result<(), String> {
+fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option<&str>) -> Result<(), String> {
+    use focus::Reach;
+    use std::process::Command;
     // Since macOS 14 an app that is not frontmost can't hand the focus to another app, and a click
     // on the island or the room-only window leaves Agent Room in the background. Taking the focus
-    // first (the user just clicked us) lets `open` bring the agent's app to the front.
+    // first (the user just clicked us) lets the agent's app come to the front.
     unsafe {
         use objc2::runtime::AnyObject;
         use objc2::{class, msg_send};
@@ -496,8 +501,16 @@ fn open_app(path: &std::path::Path) -> Result<(), String> {
             let _: () = msg_send![ns_app, activateIgnoringOtherApps: true];
         }
     }
-    let ok = std::process::Command::new("/usr/bin/open").arg(path).status().map_err(|e| e.to_string())?.success();
-    if ok { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+    let ok = |c: &mut Command| c.status().is_ok_and(|s| s.success());
+    let (agent, id) = key.split_once(':').unwrap_or(("", key));
+    let done = match focus::reach(host, agent == "codex", id, pid.and_then(focus::tty_of), cwd.is_some()) {
+        // asks once for permission to control Terminal / iTerm2; without it the app still comes up below
+        Reach::Tab { app, tty } => focus::tab_script(app, &tty).is_some_and(|sc| ok(Command::new("/usr/bin/osascript").args(["-e", &sc]))),
+        Reach::Folder => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(cwd.unwrap_or_default())),
+        Reach::Link(url) => ok(Command::new("/usr/bin/open").arg(url)),
+        Reach::App => false,
+    };
+    if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
 }
 
 /// the system's double-click interval in ms, so a single click on a pet can wait exactly that long
@@ -513,7 +526,7 @@ fn double_click_ms() -> u32 {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn open_app(_: &std::path::Path) -> Result<(), String> {
+fn open_session(_: &std::path::Path, _: &str, _: Option<u32>, _: Option<&str>) -> Result<(), String> {
     Err("앱 창 열기는 아직 macOS에서만 돼요".into())
 }
 
@@ -710,6 +723,81 @@ fn mac_set_frame(w: &WebviewWindow, x: f64, width: f64, height: f64) -> bool {
 struct MacRect(f64, f64, f64, f64);
 
 #[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MacPoint(f64, f64);
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::encode::Encode for MacPoint {
+    const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGPoint", &[objc2::encode::Encoding::Double, objc2::encode::Encoding::Double]);
+}
+
+/// Runs `f` on the main thread (AppKit) and waits briefly for its answer.
+#[cfg(target_os = "macos")]
+fn mac_on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(f());
+    })
+    .ok()?;
+    rx.recv_timeout(Duration::from_millis(250)).ok()
+}
+
+/// The pointer inside the window, in points from its top-left (= CSS px), or None outside.
+#[cfg(target_os = "macos")]
+fn mac_pointer_in(app: &AppHandle, w: &WebviewWindow) -> Option<(i32, i32)> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let ns = w.ns_window().ok()? as usize;
+    mac_on_main(app, move || unsafe {
+        let ns = ns as *mut AnyObject;
+        if ns.is_null() {
+            return None;
+        }
+        let p: MacPoint = msg_send![class!(NSEvent), mouseLocation];
+        let f: MacRect = msg_send![ns, frame];
+        // Cocoa's y grows upwards
+        let (x, y) = (p.0 - f.0, f.1 + f.3 - p.1);
+        (x >= 0.0 && y >= 0.0 && x < f.2 && y < f.3).then(|| (x as i32, y as i32))
+    })
+    .flatten()
+}
+
+/// Puts the popover under the menu bar of the display that was clicked, centred on the pointer
+/// (which is on the menu bar icon) and kept inside that display. All in global points.
+#[cfg(target_os = "macos")]
+fn mac_place_popover(app: &AppHandle, w: &WebviewWindow) -> bool {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let Ok(ptr) = w.ns_window() else { return false };
+    let ns = ptr as usize;
+    mac_on_main(app, move || unsafe {
+        let ns = ns as *mut AnyObject;
+        let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+        if ns.is_null() || screens.is_null() {
+            return false;
+        }
+        let p: MacPoint = msg_send![class!(NSEvent), mouseLocation];
+        let count: usize = msg_send![screens, count];
+        for i in 0..count {
+            let screen: *mut AnyObject = msg_send![screens, objectAtIndex: i];
+            let f: MacRect = msg_send![screen, frame];
+            if p.0 < f.0 || p.0 >= f.0 + f.2 || p.1 < f.1 || p.1 > f.1 + f.3 {
+                continue;
+            }
+            let vis: MacRect = msg_send![screen, visibleFrame];
+            let me: MacRect = msg_send![ns, frame];
+            let x = (p.0 - me.2 / 2.0).max(f.0 + 8.0).min(f.0 + f.2 - me.2 - 8.0);
+            let top = vis.1 + vis.3 - 4.0;
+            let _: () = msg_send![ns, setFrameTopLeftPoint: MacPoint(x, top)];
+            return true;
+        }
+        false
+    })
+    .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
 unsafe impl objc2::encode::Encode for MacRect {
     const ENCODING: objc2::encode::Encoding = {
         use objc2::encode::Encoding;
@@ -778,15 +866,23 @@ fn watch_hover(app: AppHandle) {
         let mut last_main: Option<Option<(i32, i32)>> = None;
         loop {
             std::thread::sleep(Duration::from_millis(120));
+            #[cfg(not(target_os = "macos"))]
             let Ok(c) = app.cursor_position() else { continue };
             let at = |label: &str| -> Option<(i32, i32)> {
                 let w = app.get_webview_window(label)?;
                 if !w.is_visible().unwrap_or(false) {
                     return None;
                 }
-                let (p, s, k) = (w.inner_position().ok()?, w.inner_size().ok()?, w.scale_factor().ok()?);
-                let (x, y) = (c.x - p.x as f64, c.y - p.y as f64);
-                (x >= 0.0 && y >= 0.0 && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
+                // macOS: the pointer and the window frame both in global points, so displays with
+                // different scaling (a Retina laptop next to a plain monitor) can't mix up
+                #[cfg(target_os = "macos")]
+                return mac_pointer_in(&app, &w);
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let (p, s, k) = (w.inner_position().ok()?, w.inner_size().ok()?, w.scale_factor().ok()?);
+                    let (x, y) = (c.x - p.x as f64, c.y - p.y as f64);
+                    (x >= 0.0 && y >= 0.0 && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
+                }
             };
             // only the pill counts: it sits at the top centre of its (larger, see-through) window
             let island = at("island").is_some_and(|(x, y)| {
@@ -842,6 +938,13 @@ fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
         return;
     }
     if now_ms().saturating_sub(POPOVER_HIDDEN_AT.load(Ordering::SeqCst)) < 400 {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    if mac_place_popover(app, &w) {
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = w.emit("popover-shown", ());
         return;
     }
     let k = w.scale_factor().unwrap_or(1.0);

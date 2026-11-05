@@ -134,7 +134,7 @@ export function Island() {
             const t = s.turnStartedAt ? (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt : null;
             return (
               <li key={s.key}>
-                <button title={s.isDemo ? undefined : '눌러서 이 에이전트가 일하는 앱 열기'} onClick={(e) => {
+                <button title={`${s.project ?? '프로젝트'}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`} onClick={(e) => {
                   e.stopPropagation();
                   // jump to the agent's own app; when it can't be found, say why here instead of
                   // bringing up the main window (which looked like a flash and no app)

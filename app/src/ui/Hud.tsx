@@ -26,11 +26,11 @@ export function Hud({ s, now, limits, onOpenApp }: { s: Snapshot; now: number; l
         <div className={`hud-state tone-${tone}`}>
           <span className="pulse" />
           {stateLabel(s)}
-          {onOpenApp && <button className="btn open-app" onClick={onOpenApp} title="이 에이전트가 일하는 터미널·편집기·앱을 앞으로 가져와요">앱 열기 ↗</button>}
+          {onOpenApp && <button className="btn open-app" onClick={onOpenApp} title="이 세션이 열린 터미널 탭·편집기 창·Codex 대화로 이동해요">세션 열기 ↗</button>}
         </div>
         {s.tool && s.connection === 'live' && (
           <div className="hud-tool">
-            <span className="chip">{activityLabel(s.activity)}</span> {s.tool}
+            {activityLabel(s.activity) && <><span className="chip">{activityLabel(s.activity)}</span> </>}{s.tool}
             {s.detail && <b className="detail"> · {s.detail}</b>}
           </div>
         )}

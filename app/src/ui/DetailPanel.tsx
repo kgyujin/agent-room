@@ -51,8 +51,9 @@ function Timeline({ entries }: { entries: TimelineEntry[] }) {
     <ol className="timeline">
       {[...entries].reverse().map((e) => (
         <li key={e.id} className={`k-${e.kind} ${e.ok === false ? 'bad' : e.ok === true ? 'ok' : ''}`}>
+          <i className="tl-dot" />
+          <span className="tl-text" title={timelineText(e)}>{timelineText(e)}</span>
           <time>{fmtClock(e.at)}</time>
-          <span>{timelineText(e)}</span>
         </li>
       ))}
     </ol>
@@ -63,65 +64,83 @@ function Tasks({ s }: { s: Snapshot }) {
   const prog = progressOf(s);
   return (
     <div className="pad">
-      {prog ? (
-        <>
-          <div className="prog big">
-            <span className="bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
-            {prog.done}/{prog.total} 완료
-          </div>
-          <ul className="tasks">
-            {s.plan.map((p, i) => (
-              <li key={i} className={`st-${p.status}`}>
-                <span className="box" />
-                {p.text || '(제목 없음)'}
-              </li>
-            ))}
-          </ul>
-          <p className="muted small">에이전트가 직접 작성한 작업 목록 기준이에요.</p>
-        </>
-      ) : (
-        <p className="muted">
-          에이전트가 작업 목록(TodoWrite / update_plan 등)을 만들지 않아서 전체 단계를 알 수 없어요. 임의의 진행률 대신 경과 시간만 표시합니다.
-        </p>
-      )}
+      <section className="pn-sec">
+        <h4>작업 목록 {prog && <span className="pn-count">{prog.done}/{prog.total} 완료</span>}</h4>
+        {prog ? (
+          <>
+            <span className="pn-bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
+            <ul className="tasks">
+              {s.plan.map((p, i) => (
+                <li key={i} className={`st-${p.status}`}>
+                  <span className="box">{p.status === 'completed' && <Icon name="check" />}</span>
+                  <span>{p.text || '(제목 없음)'}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="pn-note">에이전트가 직접 만든 작업 목록 기준이에요.</p>
+          </>
+        ) : (
+          <p className="pn-note">
+            에이전트가 작업 목록(TodoWrite, update_plan 등)을 만들지 않아 전체 단계를 알 수 없어요. 진행률 대신 경과 시간만 보여요.
+          </p>
+        )}
+      </section>
       {s.filesEdited.length > 0 && (
-        <>
-          <h4>수정한 파일</h4>
+        <section className="pn-sec">
+          <h4>수정한 파일 <span className="pn-count">{s.filesEdited.length}</span></h4>
           <ul className="files">
-            {[...s.filesEdited].reverse().map((f) => (
-              <li key={f}>{f}</li>
-            ))}
+            {[...s.filesEdited].reverse().map((f) => {
+              const i = f.lastIndexOf('/');
+              return (
+                <li key={f} title={f}>
+                  <Icon name="note" />
+                  <b>{f.slice(i + 1)}</b>
+                  {i > 0 && <span>{f.slice(0, i)}</span>}
+                </li>
+              );
+            })}
           </ul>
-        </>
+        </section>
       )}
     </div>
   );
 }
 
 function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?: () => void }) {
-  const rows: [string, string][] = [
-    ['에이전트', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],
-    ['프로젝트', s.project ?? '—'],
-    ['경로', s.cwd ?? '—'],
-    ['모델', s.model ?? '—'],
-    ['세션 시작', `${fmtClock(s.startedAt)}${s.startExact ? '' : ' (앱이 처음 관찰한 시각)'}`],
-    ['세션 경과', fmtDuration(now - s.startedAt)],
-    ['마지막 활동', fmtAgo(now - s.lastEventAt)],
-    ['연결 상태', { live: '연결됨', stale: '이벤트 없음(불확실)', ended: '종료됨', lost: '프로세스 없음' }[s.connection]],
-    ['완료한 요청', `${s.completedTurns}회`],
+  const groups: [string, [string, string][]][] = [
+    ['세션', [
+      ['에이전트', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],
+      ['프로젝트', s.project ?? '—'],
+      ['경로', s.cwd ?? '—'],
+      ['모델', s.model ?? '—'],
+    ]],
+    ['시간', [
+      ['시작', `${fmtClock(s.startedAt)}${s.startExact ? '' : ' (처음 본 시각)'}`],
+      ['경과', fmtDuration(now - s.startedAt)],
+      ['마지막 활동', fmtAgo(now - s.lastEventAt)],
+    ]],
+    ['상태', [
+      ['연결', { live: '연결됨', stale: '이벤트 없음 (불확실)', ended: '종료됨', lost: '프로세스 없음' }[s.connection]],
+      ['완료한 요청', `${s.completedTurns}회`],
+    ]],
   ];
   return (
     <div className="pad">
-      <dl className="info">
-        {rows.map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
+      {groups.map(([title, rows]) => (
+        <section key={title} className="pn-sec">
+          <h4>{title}</h4>
+          <dl className="info">
+            {rows.map(([k, v]) => (
+              <div key={k}>
+                <dt>{k}</dt>
+                <dd title={v}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
       {onForget && (
-        <button className="btn" onClick={onForget}>
+        <button className="btn pn-forget" onClick={onForget}>
           목록에서 지우기
         </button>
       )}

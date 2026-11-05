@@ -79,6 +79,9 @@ export default function App() {
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW && selected !== null;
+  // with room to spare the room, the info card and banners stay centred on the whole window when the
+  // panel opens (the room does the same in scene.ts), instead of jumping left
+  const centred = vw - 2 * PANEL_W >= 740;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -460,13 +463,13 @@ export default function App() {
           const [x, y] = [e.clientX - r.left, e.clientY - r.top];
           const pet = sceneRef.current?.hitActor(x, y);
           const n = pet ? null : sceneRef.current?.furnitureAt(x, y) ?? null;
-          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 에이전트가 일하는 앱 열기' : '눌러서 이 에이전트가 일하는 앱 열기 · 두 번 누르면 자세히') : n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
+          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 세션 열기' : '눌러서 이 세션 열기 · 두 번 누르면 자세히') : n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
           if (tip !== furnTip) setFurnTip(tip);
         }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected ? PANEL_W : 0) + 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen && selected && !centred ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -496,7 +499,7 @@ export default function App() {
         <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
       )}
       {!compact && !office && settings.showDock && (
-        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected ? PANEL_W + 12 : 12 }}>
+        <div className="dock" ref={dockRef} style={{ right: panelOpen && selected && !centred ? PANEL_W + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} limits={settings.showLimits ? latestLimits(list, selected.agent) : null} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
@@ -623,7 +626,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${s.isDemo ? '' : '\n눌러서 이 에이전트가 일하는 앱 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {(full || selected === a.key) && <b className="tag-project">{s.project ?? AGENT_NAME[s.agent]}</b>}
             {doing ? <span>{doing}</span> : urgent && <span>{s.project ?? AGENT_NAME[s.agent]}</span>}
