@@ -10,13 +10,18 @@ use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 const MAX_LINE: u64 = 512 * 1024;
 
+/// How long a held connection (a permission request answered in the app) stays open at most.
+pub const HOLD_MAX: Duration = Duration::from_secs(120);
+
 /// Listens on `~/.agent-room/run/agent-room.sock` (user-only permissions).
 /// Each connection carries one JSON line from `agent-room-hook`; connections are
-/// handled one at a time so events keep their order.
+/// handled one at a time so events keep their order. When `on_event` returns a receiver, the
+/// connection is answered later, off this thread, with what arrives on it (or a plain ack when
+/// nothing does within [`HOLD_MAX`]), so other events are not held up.
 #[cfg(unix)]
 pub fn spawn_server<F>(on_event: F) -> io::Result<JoinHandle<()>>
 where
-    F: Fn(Envelope) + Send + 'static,
+    F: Fn(Envelope) -> Option<std::sync::mpsc::Receiver<Vec<u8>>> + Send + 'static,
 {
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::{UnixListener, UnixStream};
@@ -42,14 +47,26 @@ where
             let _ = stream.set_write_timeout(Some(Duration::from_millis(200)));
             let mut line = String::new();
             let ok = BufReader::new((&stream).take(MAX_LINE)).read_line(&mut line).is_ok();
+            let mut held = None;
             if ok {
                 if let Ok(env) = serde_json::from_str::<Envelope>(&line) {
                     // handle before acking, so the hook (and its parent agent process) is still
                     // alive while we resolve which process the session belongs to
-                    on_event(env);
+                    held = on_event(env);
                 }
             }
-            let _ = stream.write_all(b"k");
+            match held {
+                Some(rx) => {
+                    let _ = std::thread::Builder::new().name("agent-room-hold".into()).spawn(move || {
+                        let reply = rx.recv_timeout(HOLD_MAX).unwrap_or_else(|_| b"k".to_vec());
+                        let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+                        let _ = stream.write_all(&reply);
+                    });
+                }
+                None => {
+                    let _ = stream.write_all(b"k");
+                }
+            }
         }
     })?)
 }
@@ -57,7 +74,7 @@ where
 #[cfg(not(unix))]
 pub fn spawn_server<F>(_on_event: F) -> io::Result<JoinHandle<()>>
 where
-    F: Fn(Envelope) + Send + 'static,
+    F: Fn(Envelope) -> Option<std::sync::mpsc::Receiver<Vec<u8>>> + Send + 'static,
 {
     // Windows: planned transport is a named pipe (\\.\pipe\agent-room-<user>); not implemented yet.
     Err(io::Error::new(io::ErrorKind::Unsupported, "Windows transport not implemented yet"))

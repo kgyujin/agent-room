@@ -1257,3 +1257,16 @@ button.link:hover { text-decoration: underline; }
 .dtoday .dash-h { padding: 0; gap: 8px; display: flex; align-items: baseline; flex-wrap: wrap; }
 .dpast ol { max-height: none; }
 .dpast input[type="date"] { border: 1px solid var(--hair); border-radius: 8px; padding: 3px 8px; font: inherit; font-size: 12px; background: #fff; }
+
+/* allow / deny a permission request in the app (opt-in) */
+.appr { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.appr .btn { padding: 2px 10px; font-size: 12px; }
+.appr.compact .btn { padding: 1px 8px; font-size: 11px; }
+.appr small { font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.appr-err { font-size: 11px; color: var(--bad); }
+.is-list li:has(.appr) { display: flex; align-items: center; gap: 6px; }
+.is-list li:has(.appr) > button:first-child { flex: 1; min-width: 0; }
+.is-list .appr button { width: auto; height: 26px; border-radius: 8px; }
+.is-list .appr .appr-ok { background: #f2b544; color: #241a05; }
+.is-list .appr .appr-no { background: #33333d; color: #eee; }
+.dp-turn-item { display: inline-flex; align-items: center; gap: 4px; flex: none; }

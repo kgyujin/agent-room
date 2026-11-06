@@ -105,6 +105,10 @@ pub struct Settings {
     pub cost_codex_per_m: f64,
     /// days of timeline kept on disk (`~/.agent-room/history`), 0 = none kept
     pub history_days: u32,
+    /// answer Claude Code permission requests in Agent Room (the hook waits up to `approve_wait_sec`
+    /// for the answer; without one Claude Code asks in its own dialog)
+    pub approve_in_app: bool,
+    pub approve_wait_sec: u32,
 }
 
 impl Default for Settings {
@@ -154,6 +158,8 @@ impl Default for Settings {
             cost_claude_per_m: 0.0,
             cost_codex_per_m: 0.0,
             history_days: 0,
+            approve_in_app: false,
+            approve_wait_sec: 30,
         }
     }
 }
@@ -179,6 +185,8 @@ struct Shared {
     tray_frames: Mutex<Option<(u64, Arc<Vec<Vec<u8>>>)>>,
     /// session key -> the Claude desktop app's own id for it (Code-tab sessions only)
     desktop_ids: Mutex<std::collections::HashMap<String, String>>,
+    /// permission requests waiting for an answer in the app (opt-in): session key -> (deadline, reply)
+    approvals: Mutex<std::collections::HashMap<String, (u64, std::sync::mpsc::Sender<Vec<u8>>)>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -509,8 +517,14 @@ fn show_main(app: &AppHandle) {
     }
 }
 
-fn handle_envelope(app: &AppHandle, env: Envelope) {
+fn handle_envelope(app: &AppHandle, env: Envelope) -> Option<std::sync::mpsc::Receiver<Vec<u8>>> {
     let shared = app.state::<Shared>();
+    let asks = env.agent == "claude" && env.event.get("hook_event_name").and_then(|v| v.as_str()) == Some("PermissionRequest");
+    let session = env.event.get("session_id").and_then(|v| v.as_str()).map(|id| format!("claude:{id}"));
+    // anything else from a session with an open request means it moved on: the request is over
+    if let Some(key) = session.as_ref().filter(|_| env.agent == "claude" && !asks) {
+        close_approval(app, key, None);
+    }
     let pid = env.ppid.and_then(|p| shared.procs.lock().unwrap().resolve_agent_pid(p));
     for ev in normalize(&env) {
         let key = format!("{}:{}", ev.agent.as_str(), ev.session_id);
@@ -538,12 +552,45 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
             publish(app, u);
         }
     }
+    let (on, wait) = { let st = shared.settings.lock().unwrap(); (st.approve_in_app, st.approve_wait_sec.clamp(5, 110) as u64) };
+    let key = session.filter(|k| asks && on && shared.store.lock().unwrap().snapshots().iter().any(|s| &s.key == k))?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    let until = now_ms() + wait * 1000;
+    // a newer request of the same session replaces the old one (whose hook then gets a plain ack)
+    shared.approvals.lock().unwrap().insert(key.clone(), (until, tx));
+    let u = shared.store.lock().unwrap().set_approve_until(&key, Some(until));
+    if let Some(u) = u {
+        publish(app, u);
+    }
+    Some(rx)
 }
 
-/// Sessions that only show up in the agents' own logs: started before Agent Room, run by the
-/// desktop apps, or by a schedule (Codex automations, `codex exec`). A log being written means the
-/// agent is working; a quiet log means its turn is over; long quiet ends the session. Only the log
-/// files' times and their `cwd` are read (see agent_room_core::logs).
+/// Ends an open in-app permission request: `answer` Some(true/false) allows or denies it, None
+/// leaves it to Claude Code's own dialog.
+fn close_approval(app: &AppHandle, key: &str, answer: Option<bool>) -> bool {
+    let shared = app.state::<Shared>();
+    let Some((_, tx)) = shared.approvals.lock().unwrap().remove(key) else { return false };
+    let sent = match answer {
+        Some(allow) => tx.send(if allow { b"allow".to_vec() } else { b"deny".to_vec() }).is_ok(),
+        None => false,
+    };
+    let u = shared.store.lock().unwrap().set_approve_until(key, None);
+    if let Some(u) = u {
+        publish(app, u);
+    }
+    sent
+}
+
+/// The user's answer to a permission request from the app (only while it is still open).
+#[tauri::command]
+fn answer_approval(app: AppHandle, key: String, allow: bool) -> Result<(), String> {
+    if close_approval(&app, &key, Some(allow)) {
+        Ok(())
+    } else {
+        Err("이 요청은 이미 끝났어요. 에이전트 창에서 답해 주세요".into())
+    }
+}
+
 /// Marks Claude sessions run by the desktop app, Remote Control or a claude.ai project thread,
 /// from the app's own session records (see `agent_room_core::desktop`).
 fn follow_desktop(app: &AppHandle) {
@@ -571,6 +618,10 @@ fn follow_desktop(app: &AppHandle) {
     }
 }
 
+/// Sessions that only show up in the agents' own logs: started before Agent Room, run by the
+/// desktop apps, or by a schedule (Codex automations, `codex exec`). A log being written means the
+/// agent is working; a quiet log means its turn is over; long quiet ends the session. Only the log
+/// files' times and their `cwd` are read (see agent_room_core::logs).
 fn follow_logs(app: &AppHandle) {
     use agent_room_core::logs;
     use agent_room_core::model::{AgentKind, EvKind};
@@ -1802,7 +1853,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear
+            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear, answer_approval
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -1841,6 +1892,10 @@ pub fn run() {
                         sync_island(&h);
                         follow_logs(&h);
                         follow_desktop(&h);
+                        let expired: Vec<String> = shared.approvals.lock().unwrap().iter().filter(|(_, (until, _))| *until <= now_ms()).map(|(k, _)| k.clone()).collect();
+                        for k in expired {
+                            close_approval(&h, &k, None);
+                        }
                         if n % 1800 == 0 {
                             let keep = shared.settings.lock().unwrap().history_days as u64;
                             agent_room_core::history::prune(&agent_room_core::history::dir(), now_ms(), keep);

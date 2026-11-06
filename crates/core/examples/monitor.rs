@@ -44,6 +44,7 @@ fn main() {
                 );
             }
         }
+        None
     })
     .expect("start server");
     eprintln!("listening on {}", agent_room_core::paths::socket_path().display());

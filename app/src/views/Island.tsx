@@ -2,6 +2,7 @@
 // working (left of the notch) and what needs the user (right of the notch); hovering (or a
 // click, by setting) opens the list. Its window stays one fixed size and lets clicks through outside the pill.
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
+import { ApproveButtons, canApprove } from '../ui/Approve';
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
 import { fmtAgo, fmtDuration, justDone, sessionNames, stateLabel, stateTone } from '../labels';
@@ -161,7 +162,7 @@ export function Island() {
                   <span className="is-proj">{names[s.key]}</span>
                   <span className={`is-state t-${stateTone(s)}`}><Icon name={todo ? 'bell' : STATE_ICON[s.state]} />{todo ? todo.text : stateLabel(s)}</span>
                   {/* a request shows how long it has waited; work shows its progress and turn time */}
-                  {todo && <span className="is-time"><Icon name="clock" />{fmtAgo(now - todo.since)}</span>}
+                  {todo && !canApprove(s, now) && <span className="is-time"><Icon name="clock" />{fmtAgo(now - todo.since)}</span>}
                   {!todo && p && (
                     <span className="is-prog">
                       <span className="bar"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span>
@@ -170,6 +171,7 @@ export function Island() {
                   )}
                   {!todo && t !== null && <span className="is-time"><Icon name="clock" />{fmtDuration(t)}</span>}
                 </button>
+                <ApproveButtons s={s} now={now} compact />
               </li>
             );
           })}

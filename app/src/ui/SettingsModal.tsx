@@ -205,6 +205,18 @@ export function SettingsModal(props: {
                     </select>
                   </Field>
                 )}
+                <Toggle label="앱에서 승인하기 (Claude Code)" hint="권한 요청을 메인 창·아일랜드·대시보드에서 허용하거나 거부해요. 기다리는 동안 Claude Code의 승인 창은 뜨지 않고, 시간 안에 답하지 않으면 원래대로 Claude Code가 물어봐요" v={s.approveInApp ?? false} on={(v) => {
+                  set('approveInApp', v);
+                  // the permission hook needs its longer timeout, which reinstalling writes (only where it is already installed)
+                  if (v && IN_TAURI) void backend.hooksStatus().then(async (all) => { if (all.some((h) => h.agent === 'claude' && h.installed !== 'none')) await backend.hooksInstall('claude'); }).catch(() => undefined);
+                }} />
+                {s.approveInApp && (
+                  <Field label="앱에서 기다릴 시간" sub>
+                    <select value={s.approveWaitSec ?? 30} onChange={(e) => set('approveWaitSec', Number(e.target.value))}>
+                      {[15, 30, 60, 90].map((sec) => <option key={sec} value={sec}>{sec}초{sec === 30 ? ' (기본)' : ''}</option>)}
+                    </select>
+                  </Field>
+                )}
                 <Toggle label="앱을 보고 있을 땐 알리지 않기" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               </Group>
             )}

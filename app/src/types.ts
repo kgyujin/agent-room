@@ -43,6 +43,8 @@ export interface Snapshot {
   origin?: 'desktop' | 'remote' | 'project' | null;
   /** the desktop app's title for the session */
   title?: string | null;
+  /** a permission request can be answered in Agent Room until this time */
+  approveUntil?: number | null;
 }
 
 export interface TimelineEntry {
@@ -138,6 +140,9 @@ export interface Settings {
   costCodexPerM?: number;
   /** days of timeline kept on this computer, 0 = only in memory */
   historyDays?: number;
+  /** answer Claude Code permission requests in Agent Room; Claude Code waits this long for the answer */
+  approveInApp?: boolean;
+  approveWaitSec?: number;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

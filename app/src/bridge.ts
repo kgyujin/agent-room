@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30,
 };
 
 export interface Backend {
@@ -64,6 +64,7 @@ export interface Backend {
   notifyText(title: string, body: string): Promise<void>;
   historyRead(from: number, to: number): Promise<HistLine[]>;
   historyClear(): Promise<void>;
+  answerApproval(key: string, allow: boolean): Promise<void>;
   listCharacters(): Promise<CharacterFile[]>;
   /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
   setTrayFrames(frames: number[][]): Promise<void>;
@@ -107,6 +108,7 @@ const tauriBackend: Backend = {
   notifyText: (title, body) => tauriInvoke('notify_text', { title, body }),
   historyRead: (from, to) => tauriInvoke('history_read', { from, to }),
   historyClear: () => tauriInvoke('history_clear'),
+  answerApproval: (key, allow) => tauriInvoke('answer_approval', { key, allow }),
   listCharacters: () => tauriInvoke('list_characters'),
   setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
@@ -241,6 +243,7 @@ function previewBackend(): Backend {
     notifyText: async () => undefined,
     historyRead: async (from, to) => tl.map((entry) => ({ key: 'demo:preview', agent: 'demo', project: 'cozy-project', entry: { ...entry, at: from + (entry.at % 86_400_000) } })).filter((l) => l.entry.at < to),
     historyClear: async () => undefined,
+    answerApproval: async () => { throw new Error('브라우저 미리보기에서는 승인할 수 없어요'); },
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
     setTrayFrames: async () => {},

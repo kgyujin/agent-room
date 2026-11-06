@@ -12,6 +12,7 @@ import { ActivityLog, SessionTable, StatCards } from './Activity';
 import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
+import { ApproveButtons } from './Approve';
 import { dayMarkdown, daySummary, estCost, fmtUsd, reportName } from '../report';
 
 /** the cards below the counts, in grid order; settings can turn any of them off */
@@ -97,11 +98,14 @@ export function DashboardPage(props: {
         <div className="dp-turn" role="list" aria-label="내 차례">
           <b>내 차례</b>
           {waiting.map((x) => (
-            <button key={x.key} role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
+            <span key={x.key} className="dp-turn-item">
+            <button role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
               <AgentMark agent={x.isDemo ? 'demo' : x.agent} size={12} />
               <span>{x.project ?? AGENT_NAME[x.agent]}</span>
               <em>{userTodo(x, now)!.text}</em>
             </button>
+            <ApproveButtons s={x} now={now} compact />
+            </span>
           ))}
         </div>
       )}
