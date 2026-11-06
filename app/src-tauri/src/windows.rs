@@ -230,7 +230,8 @@ pub(crate) fn mac_on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -
 
 /// The pointer inside the window, in points from its top-left (= CSS px), or None outside.
 #[cfg(target_os = "macos")]
-pub(crate) fn mac_pointer_in(app: &AppHandle, w: &WebviewWindow) -> Option<(i32, i32)> {
+/// With `reach_up`, a pointer above the window on the same display counts too (negative y).
+pub(crate) fn mac_pointer_in(app: &AppHandle, w: &WebviewWindow, reach_up: bool) -> Option<(i32, i32)> {
     use objc2::runtime::AnyObject;
     use objc2::{class, msg_send};
     let ns = w.ns_window().ok()? as usize;
@@ -243,7 +244,15 @@ pub(crate) fn mac_pointer_in(app: &AppHandle, w: &WebviewWindow) -> Option<(i32,
         let f: MacRect = msg_send![ns, frame];
         // Cocoa's y grows upwards
         let (x, y) = (p.0 - f.0, f.1 + f.3 - p.1);
-        (x >= 0.0 && y >= 0.0 && x < f.2 && y < f.3).then(|| (x as i32, y as i32))
+        let mut top = 0.0;
+        if reach_up {
+            let screen: *mut AnyObject = msg_send![ns, screen];
+            if !screen.is_null() {
+                let d: MacRect = msg_send![screen, frame];
+                top = -(d.1 + d.3 - (f.1 + f.3));
+            }
+        }
+        (x >= 0.0 && y >= top && x < f.2 && y < f.3).then(|| (x as i32, y as i32))
     })
     .flatten()
 }
@@ -362,7 +371,7 @@ pub(crate) fn watch_hover(app: AppHandle) {
             }
             last_pointer = pointer;
             still = 0;
-            let at = |label: &str| -> Option<(i32, i32)> {
+            let at_reach = |label: &str, reach_up: bool| -> Option<(i32, i32)> {
                 let w = app.get_webview_window(label)?;
                 if !w.is_visible().unwrap_or(false) {
                     return None;
@@ -370,14 +379,19 @@ pub(crate) fn watch_hover(app: AppHandle) {
                 // macOS: the pointer and the window frame both in global points, so displays with
                 // different scaling (a Retina laptop next to a plain monitor) can't mix up
                 #[cfg(target_os = "macos")]
-                return mac_pointer_in(&app, &w);
+                return mac_pointer_in(&app, &w, reach_up);
                 #[cfg(not(target_os = "macos"))]
                 {
                     let (p, s, k) = (w.inner_position().ok()?, w.inner_size().ok()?, w.scale_factor().ok()?);
                     let (x, y) = (c.x - p.x as f64, c.y - p.y as f64);
-                    (x >= 0.0 && y >= 0.0 && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
+                    let top = match (reach_up, w.current_monitor().ok().flatten()) {
+                        (true, Some(m)) => (m.position().y - p.y) as f64,
+                        _ => 0.0,
+                    };
+                    (x >= 0.0 && y >= top && x < s.width as f64 && y < s.height as f64).then(|| ((x / k) as i32, (y / k) as i32))
                 }
             };
+            let at = |label: &str| at_reach(label, false);
             // only the pill counts: it sits at the top centre of its (larger, see-through) window
             let island = at("island").is_some_and(|(x, y)| {
                 let (pw, ph) = *ISLAND_PILL.lock().unwrap();
@@ -401,8 +415,9 @@ pub(crate) fn watch_hover(app: AppHandle) {
                 }
             }
             // the desktop pets' strip: the pointer on every tick while it is over the strip, so the
-            // page can let clicks through everywhere but on a pet
-            let desk = if desk_on { at("desk") } else { None };
+            // page can let clicks through everywhere but on a pet. Above the strip on the same display
+            // counts too (y < 0, never on a pet), so a pet that needs the user can come over to them
+            let desk = if desk_on { at_reach("desk", true) } else { None };
             if desk.is_some() || last_desk != Some(desk) {
                 last_desk = Some(desk);
                 let _ = app.emit_to("desk", "hover-desk", desk);
