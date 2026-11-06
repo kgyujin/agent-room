@@ -1002,3 +1002,72 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .is-more:hover { color: #fff; border-color: #6a6872; }
 .is-who-name { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #ffd28a; }
 .is-who small { margin-left: 4px; font-size: 11px; color: #c9a36a; }
+
+/* full-screen dashboard: the side panel shows every section at once */
+.panel.dash header { align-items: flex-start; }
+.panel.dash .dash-title { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink); padding-left: 4px; }
+.dash-sub { margin: 2px 0 0 4px; font-size: 11px; color: var(--ink-soft); }
+.dash-sub .tone-bad { color: var(--bad); }
+.dash-body { padding: 12px; }
+.dash-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 12px; }
+.dash-stat { background: #fff; border: 1px solid var(--hair); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dash-stat small { font-size: 11px; color: var(--ink-soft); font-weight: 600; }
+.dash-stat b { font-size: 22px; line-height: 1.1; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+.dash-stat b em { font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 6px; }
+.dash-stat b em.up { color: #b4552f; background: rgba(217, 119, 87, 0.14); }
+.dash-stat b em.down { color: var(--ok); background: rgba(80, 160, 100, 0.14); }
+.dash-stat span { font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-stat.st-todo b { color: var(--wait); }
+.dash-stat.st-work b { color: var(--work); }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; align-items: start; }
+.dash-card { background: rgba(255, 255, 255, 0.6); border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; min-width: 0; }
+.dash-wide { margin-bottom: 12px; }
+.dash-h { margin: 0; padding: 10px 12px 0; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.dash-who { margin: 4px 0 8px; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+.dash-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--ink-soft); padding: 6px 12px; border-bottom: 1px solid var(--hair); }
+.dash-table td { padding: 7px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+.dash-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dash-table tbody tr { cursor: pointer; }
+.dash-table tbody tr:hover, .dash-table tbody tr.on { background: rgba(122, 86, 70, 0.07); }
+.dash-table tr.tone-row-bad { background: rgba(208, 96, 94, 0.08); }
+.dash-table .who { display: flex; align-items: center; gap: 6px; max-width: 220px; }
+.dash-table .who b { overflow: hidden; text-overflow: ellipsis; }
+.dash-prog { display: inline-flex; align-items: center; gap: 6px; }
+.dash-prog .trk { width: 56px; height: 5px; border-radius: 3px; background: rgba(122, 86, 70, 0.12); overflow: hidden; }
+.dash-prog i { display: block; height: 100%; background: var(--work); }
+.dash-prog small { font-size: 11px; color: var(--ink-soft); }
+.dash-log { padding: 8px 0 4px; }
+.dash-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; align-items: center; }
+.dash-chips button { border: 1px solid var(--hair); background: #fff; border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); display: inline-flex; gap: 5px; }
+.dash-chips button span { color: var(--ink-soft); opacity: .7; font-variant-numeric: tabular-nums; }
+.dash-chips button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.dash-chips button.on span { color: #fff; }
+.dash-chips input { margin-left: auto; border: 1px solid var(--hair); border-radius: 8px; padding: 4px 8px; font-size: 12px; background: #fff; min-width: 140px; }
+.dash-log ol { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+.dash-log li { display: grid; grid-template-columns: 8px 62px auto 1fr; gap: 8px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--hair); font-size: 12px; cursor: pointer; }
+.dash-log li:hover { background: rgba(122, 86, 70, 0.06); }
+.dash-log li > i { width: 7px; height: 7px; border-radius: 50%; background: var(--calm); }
+.dash-log li.ok > i { background: var(--ok); }
+.dash-log li.bad { background: rgba(208, 96, 94, 0.08); }
+.dash-log li.bad > i { background: var(--bad); }
+.dash-log li.k-approval > i, .dash-log li.k-input > i { background: var(--wait); }
+.dash-log time { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 11px; }
+.dash-log .tag { font-size: 10.5px; font-weight: 700; color: var(--work); background: rgba(46, 154, 156, 0.1); border-radius: 5px; padding: 1px 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-log .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-log li.bad .txt { color: var(--bad); font-weight: 600; }
+
+/* name tags over walking pets: opaque, dark text, a little pointer to the pet, whole-pixel positions */
+.nametag { padding: 2px 8px 2px 4px; font-size: 12px; line-height: 16px; font-weight: 600; background: #fffdf8; color: var(--ink);
+  border: 1.5px solid var(--tag); box-shadow: 0 1px 0 color-mix(in srgb, var(--tag) 45%, transparent), 0 3px 8px rgba(58, 40, 50, 0.22);
+  margin-top: -5px; -webkit-font-smoothing: antialiased; }
+.nametag::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 7px; height: 7px; background: #fffdf8;
+  border-right: 1.5px solid var(--tag); border-bottom: 1.5px solid var(--tag); transform: translateX(-50%) rotate(45deg); }
+.nametag .tag-project { color: var(--ink); font-weight: 800; }
+.nametag span { color: var(--ink); font-weight: 600; }
+.nametag b + span { color: color-mix(in srgb, var(--tag) 75%, var(--ink)); font-weight: 700; }
+.nametag small { color: var(--ink-soft); font-weight: 700; }
+.nametag.on { background: #fff6e0; }
+.nametag.on::after { background: #fff6e0; }
+.nametag.urgent::after { background: #fff1d6; }
+.nametag.settled { opacity: 0.72; }

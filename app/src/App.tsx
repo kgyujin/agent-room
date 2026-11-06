@@ -22,6 +22,8 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
+/** from this window width (a full screen) the panel turns into a dashboard showing every section at once */
+const DASH_MIN_VW = 1280;
 /** room-only window width limits for resizing it with the scroll wheel (CSS px) */
 const ROOM_ONLY_MIN_W = 300;
 const ROOM_ONLY_MAX_W = 1200;
@@ -132,6 +134,8 @@ export default function App() {
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW;
+  const dashboard = panelOpen && vw >= DASH_MIN_VW;
+  const panelW = dashboard ? Math.min(900, Math.round(vw * 0.5)) : PANEL_W;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -180,10 +184,16 @@ export default function App() {
   };
 
   // load timeline for the selected session when the panel needs it
+  const asking = useRef(new Set<string>());
   useEffect(() => {
-    if (!selected || !panelOpen || timelines[selected.key]) return;
-    backend.timeline(selected.key).then((t) => setTimelines((p) => ({ ...p, [selected.key]: t })));
-  }, [selected?.key, panelOpen, timelines]);
+    if (!panelOpen) return;
+    // the dashboard's activity log needs every session's log; the tabbed panel only the selected one
+    const keys = dashboard ? list.map((x) => x.key) : selected ? [selected.key] : [];
+    for (const k of keys.filter((k) => !timelines[k] && !asking.current.has(k))) {
+      asking.current.add(k);
+      backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
+    }
+  }, [selected?.key, panelOpen, dashboard, list, timelines]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {
@@ -244,18 +254,18 @@ export default function App() {
   // every change made the middle of the screen jump, so the room keeps the tallest space they needed
   // until the layout itself changes. The status bar at the bottom is one line, so it keeps its height.
   const tall = useRef({ key: '', banners: 0 });
-  const layoutKey = `${vw}x${window.innerHeight}|${panelOpen}|${mini}|${tabsBelow}`;
+  const layoutKey = `${vw}x${window.innerHeight}|${panelOpen}|${panelW}|${mini}|${tabsBelow}`;
   if (tall.current.key !== layoutKey) tall.current = { key: layoutKey, banners: 0 };
   const dockRoom = dockH;
   const bannersRoom = bannersH ? (tall.current.banners = Math.max(tall.current.banners, bannersH)) : 0;
   useEffect(() => {
     const sc = sceneRef.current;
     if (!sc) return;
-    sc.insetRight = panelOpen ? PANEL_W : 0;
+    sc.insetRight = panelOpen ? panelW : 0;
     sc.insetBottom = dockRoom ? dockRoom + 24 : tabsBelow ? 36 : 0;
     sc.insetTop = mini ? 0 : bannersRoom ? bannersRoom + 66 : 56;
     sc.resize();
-  }, [panelOpen, ready, mini, dockRoom, bannersRoom, tabsBelow]);
+  }, [panelOpen, panelW, ready, mini, dockRoom, bannersRoom, tabsBelow]);
 
   // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
@@ -548,7 +558,7 @@ export default function App() {
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? PANEL_W : 0) + 12, left: compact ? 8 : 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? panelW : 0) + 12, left: compact ? 8 : 12 }}>
         {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
         {(demoRunning || demoShown) && (
           <div className="banner demo">
@@ -569,7 +579,7 @@ export default function App() {
       <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && (
-        <div className="topleft" style={{ right: (panelOpen ? PANEL_W : 0) + toolbarW + 24 }}>
+        <div className="topleft" style={{ right: (panelOpen ? panelW : 0) + toolbarW + 24 }}>
           {!compact && <StatusPills sessions={list} now={now} onSelect={setPinned} />}
           {settings.showTabs && <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />}
         </div>
@@ -579,7 +589,7 @@ export default function App() {
         <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
       )}
       {!compact && !office && settings.showDock && (
-        <div className="dock" ref={dockRef} style={{ right: panelOpen ? PANEL_W + 12 : 12 }}>
+        <div className="dock" ref={dockRef} style={{ right: panelOpen ? panelW + 12 : 12 }}>
           {selected ? (
             <Hud s={selected} now={now} onOpenApp={IN_TAURI && !selected.isDemo ? () => openApp(selected.key) : undefined} />
           ) : (
@@ -590,12 +600,14 @@ export default function App() {
 
       {panelOpen && (
         <DetailPanel
-          width={PANEL_W}
+          width={panelW}
+          dashboard={dashboard}
           s={selected}
           sessions={list}
           onSelect={setPinned}
           showLimits={settings.showLimits}
           timeline={selected ? timelines[selected.key] ?? [] : []}
+          timelines={timelines}
           tab={detailTab}
           setTab={setDetailTab}
           now={now}
@@ -604,10 +616,10 @@ export default function App() {
         />
       )}
 
-      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? PANEL_W + 12 : 12 }}>
+      <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? panelW + 12 : 12 }}>
         {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
         {/* with little width left the pills keep the top bar; the panel's 사용량 tab still has the numbers */}
-        {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? PANEL_W : 0) >= 1000 && (
+        {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
         {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
@@ -676,7 +688,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
       const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current, shortRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H)) p.y -= TAG_H;
         placed.push(p);
       }
       // keep every tag inside the window: one pushed past the top edge comes back down (it may then overlap
@@ -713,7 +725,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {/* which pet is which: the project by default; what it does joins it when picked or with full tags
                 (the ring under the pet and the dot already show the state) */}
@@ -735,7 +747,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 }
 
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
-const TAG_H = 22;
+const TAG_H = 26;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag, cut to keep tags small */
 const tagName = (s: Snapshot) => {
@@ -748,7 +760,7 @@ function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean)
   if (!s) return 40;
   const text = withProject ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s);
   let w = 40;
-  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 12 : 7.2;
   return Math.min(w, 260);
 }
 
