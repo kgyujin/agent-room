@@ -3,15 +3,25 @@
 // list, usage limits, sessions and the picked session each get one cell of a grid that fills the height.
 // Everything shown comes from hook events, the agents' local usage logs and their local
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { backend, IN_TAURI } from '../bridge';
 import type { MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
+import { AGENT_NAME, ORIGIN_LABEL, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards } from './Activity';
 import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
+
+/** the cards below the counts, in grid order; settings can turn any of them off */
+export const DASH_CARDS = [
+  ['map', '에이전트 지도'],
+  ['activity', '최근 활동'],
+  ['usage', '남은 사용량'],
+  ['board', '작업 보드'],
+  ['sessions', '세션'],
+  ['picked', '선택한 세션'],
+] as const;
 
 export function DashboardPage(props: {
   sessions: Snapshot[];
@@ -27,6 +37,12 @@ export function DashboardPage(props: {
   onToggleSplit: (() => void) | null;
   onRoom: () => void;
   onSettings: () => void;
+  /** settings: whether Claude account limits are read (explains an empty limits card) */
+  accountLimits: boolean;
+  /** settings: card ids turned off */
+  hidden: string[];
+  /** a short note that would otherwise float over the page as a banner (demo, preview) */
+  notice?: string | null;
   mac: boolean;
 }) {
   const { sessions, now, selected } = props;
@@ -36,32 +52,57 @@ export function DashboardPage(props: {
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
   const canOpen = (s: Snapshot) => IN_TAURI && !s.isDemo;
-  const card = (cls: string, title: React.ReactNode, body: React.ReactNode) => (
-    <section className={`dash-card ${cls}`}><h4 className="dash-h">{title}</h4><div className="dp-scroll">{body}</div></section>
+  const card = (cls: string, title: React.ReactNode, body: React.ReactNode, style?: React.CSSProperties) => (
+    <section className={`dash-card ${cls}`} style={style}><h4 className="dash-h">{title}</h4><div className="dp-scroll">{body}</div></section>
   );
   const split = props.split !== undefined;
+  const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
+    map: () => ['g-map', <>에이전트 지도 <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
+    activity: () => ['g-act', '최근 활동', <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
+    usage: () => ['g-use', '남은 사용량', <><LimitCards sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
+    board: () => ['g-board', '작업 보드', <TaskBoard sessions={live} now={now} onPick={pick} />],
+    sessions: () => ['g-sess', <>세션 <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
+    picked: () => ['g-pick', <>
+      {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {selected.project ?? '세션'}</> : '선택한 세션'}
+      {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>세션 열기</button>}
+    </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">세션을 누르면 작업과 타임라인이 여기에 나와요.</p>],
+  };
+  const shown = DASH_CARDS.filter(([id]) => !props.hidden.includes(id));
+  // rows grow to fill the height; a short last row lets its last card take the rest of the row
+  const cols = split ? 2 : 3;
+  const rows = Math.max(1, Math.ceil(shown.length / cols));
+  const rest = shown.length % cols;
+  const waiting = live.filter((x) => userTodo(x, now));
   return (
     <div className={`dpage ${split ? 'split' : ''} ${props.mac ? 'mac' : ''}`} style={split ? { width: props.split } : undefined}>
       {props.mac && <div className="dp-drag" data-tauri-drag-region />}
       <header className="dp-head">
         <h2>대시보드</h2>
-        <p>세션 {live.length}개 · 내 차례 {todo}건</p>
+        <p>세션 {live.length}개 · 내 차례 {todo}건{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
         <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />지침 파일</button>
         {props.onToggleSplit && <button className="btn" onClick={props.onToggleSplit}><Icon name={split ? 'monitor' : 'panel'} />{split ? '대시보드만' : '방과 같이'}</button>}
         <button className="btn" onClick={props.onRoom}><Icon name="iso" />{split ? '닫기' : '방으로'}</button>
         {!split && <button className="btn" onClick={props.onSettings} aria-label="설정" title="설정"><Icon name="gear" /></button>}
       </header>
-      <div className="dp-body dp-one">
+      {waiting.length > 0 && (
+        <div className="dp-turn" role="list" aria-label="내 차례">
+          <b>내 차례</b>
+          {waiting.map((x) => (
+            <button key={x.key} role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
+              <AgentMark agent={x.isDemo ? 'demo' : x.agent} size={12} />
+              <span>{x.project ?? AGENT_NAME[x.agent]}</span>
+              <em>{userTodo(x, now)!.text}</em>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
         <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} /></div>
-        {card('g-map', <>에이전트 지도 <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />)}
-        {card('g-act', '최근 활동', <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />)}
-        {card('g-use', '남은 사용량', <><LimitCards sessions={sessions} now={now} /><UsageShare h={h} /></>)}
-        {card('g-board', '작업 보드', <TaskBoard sessions={live} now={now} onPick={pick} />)}
-        {card('g-sess', <>세션 <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />)}
-        {card('g-pick', <>
-          {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {selected.project ?? '세션'}</> : '선택한 세션'}
-          {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>세션 열기</button>}
-        </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">세션을 누르면 작업과 타임라인이 여기에 나와요.</p>)}
+        {shown.map(([id], i) => {
+          const [cls, title, body] = cards[id]();
+          const last = i === shown.length - 1 && rest > 0;
+          return <Fragment key={id}>{card(last ? `${cls} dp-last` : cls, title, body, last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined)}</Fragment>;
+        })}
       </div>
       {memOpen && (
         <div className="dp-over">
@@ -83,7 +124,7 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
     .filter((g) => g.list.length);
   if (!agents.length) return <p className="muted pad">아직 세션이 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.</p>;
   return (
-    <div className="dmap">
+    <div className={`dmap ${sessions.length <= 3 ? 'few' : ''}`}>
       <div className="dmap-root"><span>나</span><small>세션 {sessions.length}개</small></div>
       <div className="dmap-agents">
         {agents.map(({ a, list }) => {
@@ -97,9 +138,10 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                   {list.filter((s) => (s.project ?? '프로젝트 미확인') === p).map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
-                      {doingLabel(s) && <div className="dmap-doing">{doingLabel(s)}</div>}
+                      {(doingLabel(s) ?? s.title) && <div className="dmap-doing">{doingLabel(s) ?? s.title}</div>}
                       <div className="dmap-meta">
                         {userTodo(s, now) && <em className="wait">{userTodo(s, now)!.text}</em>}
+                        {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}
                         {s.subagents > 0 && <em>하위 에이전트 {s.subagents}</em>}
                         {s.model && <em>{s.model}</em>}
                         {IN_TAURI && !s.isDemo && <button className="link" onClick={(e) => { e.stopPropagation(); onOpen(s.key); }}>세션 열기</button>}
@@ -135,7 +177,7 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
   return (
     <>
       {none && <p className="muted small pad">에이전트가 작업 목록(TodoWrite, update_plan 등)을 만들면 여기에 모여요.</p>}
-      <div className="dboard" title="작업 목록은 각 에이전트가 직접 만든 것이라 여기서 옮기거나 고칠 수 없어요. 카드를 누르면 그 세션으로 가요.">
+      {!none && <div className="dboard" title="작업 목록은 각 에이전트가 직접 만든 것이라 여기서 옮기거나 고칠 수 없어요. 카드를 누르면 그 세션으로 가요.">
         {cols.map((c) => (
           <section key={c.id} className={`dboard-col c-${c.id}`}>
             <h4>{c.label}<span>{c.cards.length}</span></h4>
@@ -147,7 +189,7 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
             ))}
           </section>
         ))}
-      </div>
+      </div>}
     </>
   );
 }

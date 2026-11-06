@@ -173,3 +173,36 @@ export function sessionNames(list: Snapshot[]): Record<string, string> {
   }
   return out;
 }
+
+/** cut a name to `max` characters, keeping its start and its last three ("agent-room-api" → "agen…api"),
+ *  so names that share a prefix stay apart */
+export function shortName(n: string, max: number): string {
+  const ch = [...n];
+  if (ch.length <= max) return n;
+  const head = Math.max(2, max - 4);
+  return ch.slice(0, head).join('') + '…' + ch.slice(-3).join('');
+}
+
+let tokenUnit: 'si' | 'ko' = 'si';
+/** set once per window from the settings; fmtTokens reads it */
+export function setTokenUnit(u: 'si' | 'ko' | undefined) { tokenUnit = u ?? 'si'; }
+
+/** 'si': 5.2B, 340M, 12.4K, 980 · 'ko': 52억, 3.4억, 1.24만, 9,800 */
+export function fmtTokens(n: number): string {
+  const f = (v: number, u: string) => `${v >= 100 ? Math.round(v) : v >= 10 ? v.toFixed(1).replace(/\.0$/, '') : v.toFixed(2).replace(/\.?0+$/, '')}${u}`;
+  if (tokenUnit === 'ko') {
+    if (n >= 1e8) return f(n / 1e8, '억');
+    if (n >= 1e4) return f(n / 1e4, '만');
+    return n.toLocaleString('en-US');
+  }
+  if (n >= 1e9) return f(n / 1e9, 'B');
+  if (n >= 1e6) return f(n / 1e6, 'M');
+  if (n >= 1e3) return f(n / 1e3, 'K');
+  return String(n);
+}
+
+export const ORIGIN_LABEL: Record<'desktop' | 'remote' | 'project', string> = {
+  desktop: '데스크톱 앱',
+  remote: '원격 제어',
+  project: '프로젝트 스레드',
+};

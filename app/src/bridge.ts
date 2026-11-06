@@ -19,9 +19,9 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', roomView: 'iso', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
-  font: 'mixed', backdrop: '', tagStyle: 'compact', showDock: true, showTabs: false,
+  font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [],
 };
 
 export interface Backend {
@@ -122,7 +122,7 @@ function previewSnapshot(state: string): Snapshot {
       { text: '테스트 작성', status: 'in_progress' }, { text: '빌드 확인', status: 'pending' },
     ],
     limits: { windows: [{ minutes: 300, usedPct: 38, resetsAt: now + 2.2 * 3_600_000 }, { minutes: 10080, usedPct: 22, resetsAt: now + 4.3 * 86_400_000 }], at: now },
-    completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0,
+    completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0, origin: 'project', title: '대시보드 다듬기',
   };
   const set = (p: Partial<Snapshot>) => Object.assign(s, p);
   switch (state) {
@@ -166,9 +166,12 @@ function previewBackend(): Backend {
     { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra' },
     { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', limits: cx, isDemo: false, project: 'mobile' },
     { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', limits: cx, isDemo: false, project: 'data-pipeline', plan: [] },
+    // ?more=N: sessions past the six desks
+    ...[...Array(Number(params.get('more') ?? 0)).keys()].map((i) => ({ ...previewSnapshot('idle'), key: `p:more${i}`, agent: 'claude' as const, isDemo: false, project: `extra-${i + 1}` })),
   ];
   const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
-  let settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day' };
+  // ?settings={"tagLook":"pixel"}: start the preview with some settings changed
+  let settings: Settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day', ...(JSON.parse(params.get('settings') ?? '{}') as Partial<Settings>) };
   const now = Date.now();
   const tl: TimelineEntry[] = [
     { id: 1, at: now - 312_000, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null },

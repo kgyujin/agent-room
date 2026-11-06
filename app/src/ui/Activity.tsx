@@ -52,7 +52,7 @@ export function SessionTable({ sessions, now, selected, onSelect }: { sessions: 
   return (
     <table className="dash-table">
       <thead>
-        <tr><th>세션</th><th>상태</th><th>진행</th><th className="num">경과</th><th className="num">요청</th><th className="num">파일</th><th className="num">마지막 활동</th></tr>
+        <tr><th>세션</th><th>상태</th><th>진행</th><th className="num">경과</th><th className="num opt">요청</th><th className="num opt">파일</th><th className="num">마지막 활동</th></tr>
       </thead>
       <tbody>
         {sessions.map((s) => {
@@ -63,8 +63,8 @@ export function SessionTable({ sessions, now, selected, onSelect }: { sessions: 
               <td><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
               <td className="num">{fmtDuration(now - s.startedAt)}</td>
-              <td className="num">{s.completedTurns}</td>
-              <td className="num">{s.filesEdited.length}</td>
+              <td className="num opt">{s.completedTurns}</td>
+              <td className="num opt">{s.filesEdited.length}</td>
               <td className="num">{fmtAgo(now - s.lastEventAt)}</td>
             </tr>
           );
@@ -122,7 +122,7 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
                 <div className="row" onClick={() => (compact ? onSelect(s.key) : setOpen(open === id ? null : id))}>
                   <i />
                   <time>{fmtClock(e.at)}</time>
-                  <span className="tag">{names[s.key]}</span>
+                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} />{names[s.key]}</span>
                   <span className="txt" title={timelineText(e)}>{timelineText(e)}</span>
                 </div>
                 {open === id && (

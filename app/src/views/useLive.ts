@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { backend } from '../bridge';
 import type { Settings, Snapshot } from '../types';
 import { applyUiTheme, uiTheme } from '../themes';
+import { setTokenUnit } from '../labels';
 import { useAccountLimits } from '../ui/Overview';
 
 const RANK: Record<Snapshot['state'], number> = { waiting: 0, error: 1, starting: 2, planning: 2, reading: 2, editing: 2, running: 2, testing: 2, completed: 3, idle: 4, disconnected: 5 };
@@ -29,6 +30,7 @@ export function useLive() {
       setRunning(ov.detected.claude + ov.detected.codex);
       unsub.push(await backend.onDetected((d) => setRunning(d.claude + d.codex)));
       const apply = (s: Settings) => {
+        setTokenUnit(s.tokenUnit);
         setSettings(s);
         applyUiTheme(uiTheme(s.uiTheme));
         const cl = document.documentElement.classList;

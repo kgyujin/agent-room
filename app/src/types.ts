@@ -39,6 +39,10 @@ export interface Snapshot {
   toolCount: number;
   filesEdited: string[];
   subagents: number;
+  /** where a Claude session was started from, from the desktop app's records */
+  origin?: 'desktop' | 'remote' | 'project' | null;
+  /** the desktop app's title for the session */
+  title?: string | null;
 }
 
 export interface TimelineEntry {
@@ -94,7 +98,10 @@ export interface Settings {
   font: 'mixed' | 'system' | 'pixel';
   /** '' = theme backdrop, a BACKDROPS id, or '#rrggbb' */
   backdrop: string;
-  tagStyle: 'compact' | 'full' | 'off';
+  /** 'hover': only the pointed, picked or waiting pet shows its tag (the head icons still show) */
+  tagStyle: 'compact' | 'full' | 'hover' | 'off';
+  /** name tag outline: rounded or a pixel frame with cut corners */
+  tagLook?: 'soft' | 'pixel';
   showDock: boolean;
   showTabs: boolean;
   /** how much idle pets move around */
@@ -118,6 +125,10 @@ export interface Settings {
   /** size of the main window's contents, 1 = 100% (⌘+ / ⌘− / ⌘0) */
   uiZoom: number;
   claudeAccountLimits?: boolean;
+  /** token counts as 12.4K / 340M ('si') or 1.2만 / 3.4억 ('ko') */
+  tokenUnit?: 'si' | 'ko';
+  /** dashboard cards turned off, by id (see DASH_CARDS) */
+  dashHidden?: string[];
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

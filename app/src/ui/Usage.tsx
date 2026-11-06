@@ -3,7 +3,7 @@
 // reports (Claude's status line, Codex's log). Nothing here calls a model.
 import { useEffect, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtUntil, paceNote, windowLabel } from '../labels';
+import { fmtTokens, fmtUntil, paceNote, windowLabel } from '../labels';
 import type { RateLimits, Snapshot, UsageHistory } from '../types';
 import { AgentMark } from './icons';
 import { latestLimits, limitsAge } from './Overview';
@@ -24,14 +24,7 @@ export function useUsageHistory(days: number): UsageHistory | null {
   return h;
 }
 
-/** 5.2B, 340M, 12.4K, 980 */
-export function fmtTokens(n: number): string {
-  const f = (v: number, u: string) => `${v >= 100 ? Math.round(v) : v >= 10 ? v.toFixed(1).replace(/\.0$/, '') : v.toFixed(2).replace(/\.?0+$/, '')}${u}`;
-  if (n >= 1e9) return f(n / 1e9, 'B');
-  if (n >= 1e6) return f(n / 1e6, 'M');
-  if (n >= 1e3) return f(n / 1e3, 'K');
-  return String(n);
-}
+export { fmtTokens };
 
 const dayLabel = (day: number) => {
   const d = new Date(day * 86_400_000);
@@ -97,15 +90,23 @@ function TokenChart({ h }: { h: UsageHistory | null }) {
 }
 
 /** one card per agent: each limit window with what is left and when it resets */
-export function LimitCards({ sessions, now, dark }: { sessions: Snapshot[]; now: number; dark?: boolean }) {
+export function LimitCards({ sessions, now, dark, accountLimits, onSettings }: { sessions: Snapshot[]; now: number; dark?: boolean; accountLimits?: boolean; onSettings?: () => void }) {
   return (
     <div className={`lc-grid ${dark ? 'dark' : ''}`}>
-      {AGENTS.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} />)}
+      {AGENTS.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} why={noLimitsWhy(a, sessions, accountLimits)} onSettings={onSettings} />)}
     </div>
   );
 }
 
-function LimitCard({ agent, l, now }: { agent: 'claude' | 'codex'; l: RateLimits | null; now: number }) {
+/** why a limit card is empty, so the user knows whether to wait or change something */
+function noLimitsWhy(agent: 'claude' | 'codex', sessions: Snapshot[], accountLimits?: boolean): { text: string; fix?: boolean } {
+  const seen = sessions.some((s) => !s.isDemo && s.agent === agent);
+  if (agent === 'claude' && accountLimits === false) return { text: "'Claude 계정에서 받아오기'를 켜면 데스크톱 앱·VS Code 세션의 한도도 보여요.", fix: true };
+  if (!seen) return { text: `${NAME[agent]} 세션이 아직 없어요. 세션이 응답하면 보여요.` };
+  return { text: agent === 'claude' ? '다음 응답부터 보여요. Pro·Max 요금제만 한도가 있어요.' : '다음 응답부터 보여요.' };
+}
+
+function LimitCard({ agent, l, now, why, onSettings }: { agent: 'claude' | 'codex'; l: RateLimits | null; now: number; why: { text: string; fix?: boolean }; onSettings?: () => void }) {
   return (
     <div className="lc">
       <div className="lc-head">
@@ -127,7 +128,7 @@ function LimitCard({ agent, l, now }: { agent: 'claude' | 'codex'; l: RateLimits
           );
         })
       ) : (
-        <p className="lc-none">아직 정보가 없어요. 다음 응답부터 보여요.</p>
+        <p className="lc-none">{why.text}{why.fix && onSettings && <> <button className="link" onClick={onSettings}>설정 열기</button></>}</p>
       )}
     </div>
   );

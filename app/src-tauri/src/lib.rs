@@ -60,8 +60,10 @@ pub struct Settings {
     pub font: String,
     /// "" = theme backdrop, a preset id, or "#rrggbb"
     pub backdrop: String,
-    /// pet name tags: "compact", "full" or "off"
+    /// pet name tags: "compact", "full", "hover" or "off"
     pub tag_style: String,
+    /// name tag outline: "soft" or "pixel"
+    pub tag_look: String,
     pub show_dock: bool,
     pub show_tabs: bool,
     /// how much idle pets move around: "calm", "normal" or "lively"
@@ -90,6 +92,10 @@ pub struct Settings {
     /// Claude usage from the account (macOS): the login Claude Code keeps in the Keychain is read
     /// in memory and sent only to Anthropic's usage endpoint; nothing is stored
     pub claude_account_limits: bool,
+    /// token counts as "si" (12.4K, 340M) or "ko" (1.2만, 3.4억)
+    pub token_unit: String,
+    /// dashboard cards the user turned off ("map", "activity", "usage", "board", "sessions", "picked")
+    pub dash_hidden: Vec<String>,
 }
 
 impl Default for Settings {
@@ -116,6 +122,7 @@ impl Default for Settings {
             font: "mixed".into(),
             backdrop: String::new(),
             tag_style: "compact".into(),
+            tag_look: "soft".into(),
             show_dock: true,
             show_tabs: false,
             pet_energy: "normal".into(),
@@ -130,6 +137,8 @@ impl Default for Settings {
             auto_update_check: true,
             ui_zoom: 1.0,
             claude_account_limits: true,
+            token_unit: "si".into(),
+            dash_hidden: Vec::new(),
         }
     }
 }
@@ -515,6 +524,33 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
 /// desktop apps, or by a schedule (Codex automations, `codex exec`). A log being written means the
 /// agent is working; a quiet log means its turn is over; long quiet ends the session. Only the log
 /// files' times and their `cwd` are read (see agent_room_core::logs).
+/// Marks Claude sessions run by the desktop app, Remote Control or a claude.ai project thread,
+/// from the app's own session records (see `agent_room_core::desktop`).
+fn follow_desktop(app: &AppHandle) {
+    use agent_room_core::desktop;
+    let Some(home) = std::env::var_os("HOME") else { return };
+    let root = std::path::Path::new(&home).join("Library/Application Support/Claude/claude-code-sessions");
+    let found = desktop::scan(&root, now_ms(), 24 * 3_600_000);
+    if found.is_empty() {
+        return;
+    }
+    let shared = app.state::<Shared>();
+    let mut out = Vec::new();
+    {
+        let mut store = shared.store.lock().unwrap();
+        for snap in store.snapshots().into_iter().filter(|s| s.agent == agent_room_core::model::AgentKind::Claude) {
+            // a session continued in a new record: the most recently active record wins
+            let rec = found.iter().filter(|r| r.cli_ids.contains(&snap.session_id)).max_by_key(|r| r.last_activity);
+            if let Some(r) = rec {
+                out.extend(store.set_origin(&snap.key, Some(r.origin.as_str().into()), r.title.clone()));
+            }
+        }
+    }
+    for u in out {
+        publish(app, u);
+    }
+}
+
 fn follow_logs(app: &AppHandle) {
     use agent_room_core::logs;
     use agent_room_core::model::{AgentKind, EvKind};
@@ -1750,6 +1786,7 @@ pub fn run() {
                         // "완료" runs out with time, not with an event
                         sync_island(&h);
                         follow_logs(&h);
+                        follow_desktop(&h);
                         let d = shared.procs.lock().unwrap().scan_agents();
                         let changed = { let mut cur = shared.detected.lock().unwrap(); let c = *cur != d; *cur = d; c };
                         if changed {
