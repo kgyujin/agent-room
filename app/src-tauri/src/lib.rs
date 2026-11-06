@@ -641,7 +641,10 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
     drop(procs);
     // the hook reports it; a session seen only in its log (Agent Room restarted since its last hook)
     // is looked up in the desktop app's own session records instead
-    let desktop = shared.desktop_ids.lock().unwrap().get(&key).cloned().or_else(|| {
+    // the cached id is read in its own statement: the guard of a lock taken inside a `let`'s
+    // expression lives to the end of it, and the fallback below takes the same lock
+    let cached = shared.desktop_ids.lock().unwrap().get(&key).cloned();
+    let desktop = cached.or_else(|| {
         let cli = key.strip_prefix("claude:")?;
         let found = desktop_id_from_records(cli)?;
         shared.desktop_ids.lock().unwrap().insert(key.clone(), found.clone());
