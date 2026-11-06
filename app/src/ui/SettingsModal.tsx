@@ -218,7 +218,7 @@ export function SettingsModal(props: {
                     <span>{L('지금 버전', 'Version')} <b className="ver">{version || '—'}</b></span>
                     <button className="btn" onClick={props.onCheckUpdate} disabled={!IN_TAURI}>{L('업데이트 확인', 'Check for updates')}</button>
                   </div>
-                  <Toggle label={L('새 버전 자동 확인', 'Check for new versions')} hint={L('실행할 때와 6시간마다 확인하고, 설치 전에 물어봐요', 'At launch and every 6 hours; asks before installing')} v={s.autoUpdateCheck ?? true} on={(v) => set('autoUpdateCheck', v)} />
+                  <Toggle label={L('새 버전 자동 확인', 'Check for new versions')} hint={L('앱을 켤 때 확인하고, 새 버전이 있으면 설치할지 물어봐요', 'Checks when the app starts and asks before installing')} v={s.autoUpdateCheck ?? true} on={(v) => set('autoUpdateCheck', v)} />
                 </Group>
               </>
             )}
