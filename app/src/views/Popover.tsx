@@ -10,6 +10,7 @@ import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { fmtTokens, useUsageHistory } from '../ui/Usage';
 import { AgentMark, Icon } from '../ui/icons';
 import { useLive } from './useLive';
+import { L } from '../i18n';
 
 /** height of one session row in CSS px (kept in step with .pp-row) */
 const ROW_H = 36;
@@ -47,37 +48,37 @@ export function Popover() {
       <header className="pop-head">
         <b>Agent Room</b>
         <span className="pp-counts">
-          {todo.length > 0 && <em className="todo">내 차례 {todo.length}</em>}
-          {work.length > 0 && <em>작업 중 {work.length}</em>}
-          {!todo.length && !work.length && <em className="calm">{live.length ? '모두 쉬는 중' : unhooked ? '연결 안 됨' : '대기 중'}</em>}
+          {todo.length > 0 && <em className="todo">{L('내 차례', 'Your turn')} {todo.length}</em>}
+          {work.length > 0 && <em>{L('작업 중', 'Working')} {work.length}</em>}
+          {!todo.length && !work.length && <em className="calm">{live.length ? L('모두 쉬는 중', 'All resting') : unhooked ? L('연결 안 됨', 'Not connected') : L('대기 중', 'Idle')}</em>}
         </span>
       </header>
       {showLimits && <UsageBlock sessions={list} now={now} />}
       <div className="pp-list" ref={box}>
         {live.length ? (
           <>
-            <h4>세션 <span>{live.length}</span></h4>
+            <h4>{L('세션', 'Sessions')} <span>{live.length}</span></h4>
             {rows.map((s) => (
               <div key={s.key} className="pp-rowwrap">
                 <Row s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom || s.isDemo ? 'select' : 'focus', s.key)} />
                 <ApproveButtons s={s} now={now} compact />
               </div>
             ))}
-            {more > 0 && <button className="pp-more" onClick={() => act('open')}>+{more}개 더 · 방에서 보기</button>}
+            {more > 0 && <button className="pp-more" onClick={() => act('open')}>{L(`+${more}개 더 · 방에서 보기`, `+${more} more · see the room`)}</button>}
           </>
         ) : (
           <div className="pp-empty">
-            <p className="muted">{!unhooked && running ? `에이전트 ${running}개가 실행 중이에요. ` : ''}{unhooked ? '아직 연결된 에이전트가 없어요. 연결하면 Claude Code나 Codex가 일할 때 여기에 바로 나타나요.' : 'Claude Code나 Codex가 작업을 시작하면 여기에 바로 나타나요.'}</p>
-            {unhooked && <button className="btn primary" onClick={() => act('settings', 'agents')}>에이전트 연결하기</button>}
+            <p className="muted">{!unhooked && running ? L(`에이전트 ${running}개가 실행 중이에요. `, `${running} agents running. `) : ''}{unhooked ? L('아직 연결된 에이전트가 없어요. 연결하면 Claude Code나 Codex가 일할 때 여기에 바로 나타나요.', 'No agent connected yet. Once connected, Claude Code and Codex show up here as they work.') : L('Claude Code나 Codex가 작업을 시작하면 여기에 바로 나타나요.', 'Claude Code and Codex show up here when they start working.')}</p>
+            {unhooked && <button className="btn primary" onClick={() => act('settings', 'agents')}>{L('에이전트 연결하기', 'Connect agents')}</button>}
           </div>
         )}
       </div>
       <footer className="pop-foot">
-        <button onClick={() => act('open')}><Icon name="panel" size={16} />방 열기</button>
-        <button onClick={() => act('dashboard')}><Icon name="monitor" size={16} />대시보드</button>
-        <button onClick={() => act('mini')}><Icon name="mini" size={16} />룸만 띄우기</button>
-        <button onClick={() => act('settings')}><Icon name="gear" size={16} />설정</button>
-        <button onClick={() => act('quit')} className="quit">종료</button>
+        <button onClick={() => act('open')}><Icon name="panel" size={16} />{L('방 열기', 'Room')}</button>
+        <button onClick={() => act('dashboard')}><Icon name="monitor" size={16} />{L('대시보드', 'Dashboard')}</button>
+        <button onClick={() => act('mini')}><Icon name="mini" size={16} />{L('룸만 띄우기', 'Mini')}</button>
+        <button onClick={() => act('settings')}><Icon name="gear" size={16} />{L('설정', 'Settings')}</button>
+        <button onClick={() => act('quit')} className="quit">{L('종료', 'Quit')}</button>
       </footer>
     </div>
   );
@@ -97,7 +98,7 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
             l.windows.map((w) => {
               const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
               return (
-                <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={[w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : '', paceNote(w, l.at) ?? ''].filter(Boolean).join(' · ') || undefined}>
+                <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={[w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '', paceNote(w, l.at) ?? ''].filter(Boolean).join(' · ') || undefined}>
                   {/* running low: when it comes back matters more than which window it is */}
                   <small>{left <= 30 && w.resetsAt && w.resetsAt > now ? fmtUntil(w.resetsAt - now) : windowLabel(w.minutes)}</small>
                   <i className={`lc-bar a-${a}`}><i style={{ width: `${left}%` }} /></i>
@@ -106,14 +107,14 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
               );
             })
           ) : (
-            <span className="pp-none">한도 정보 없음</span>
+            <span className="pp-none">{L('한도 정보 없음', 'No limit info')}</span>
           )}
         </div>
       ))}
       {today && (
         <div className="pp-today">
-          오늘 <b>{fmtTokens(today.claude + today.codex)}</b> 토큰
-          {h && h.recentClaude + h.recentCodex > 0 && <> · 최근 10분 <b>{fmtTokens(Math.round((h.recentClaude + h.recentCodex) / 10))}</b>/분</>}
+          {L('오늘', 'Today')} <b>{fmtTokens(today.claude + today.codex)}</b> {L('토큰', 'tokens')}
+          {h && h.recentClaude + h.recentCodex > 0 && <> · {L('최근 10분', 'last 10 min')} <b>{fmtTokens(Math.round((h.recentClaude + h.recentCodex) / 10))}</b>/{L('분', 'min')}</>}
         </div>
       )}
     </section>
@@ -125,7 +126,7 @@ function Row({ s, name, now, onClick }: { s: Snapshot; name: string; now: number
   const todo = userTodo(s, now);
   const tone = stateTone(s);
   return (
-    <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n⌥ 클릭: 방에서 보기`}>
+    <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n${L('⌥ 클릭: 방에서 보기', '⌥-click: see it in the room')}`}>
       <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} />
       <span className="pp-name">{name}</span>
       <span className={`pp-state tone-${tone}`}><i className="pulse" />{todo ? todo.text : stateLabel(s)}</span>

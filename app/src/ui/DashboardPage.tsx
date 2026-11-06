@@ -14,15 +14,16 @@ import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
 import { ApproveButtons } from './Approve';
 import { dayMarkdown, daySummary, estCost, fmtUsd, reportName, type DayLog } from '../report';
+import { L } from '../i18n';
 
 /** the cards below the counts, in grid order; settings can turn any of them off */
 export const DASH_CARDS = [
-  ['map', '에이전트 지도'],
-  ['activity', '최근 활동'],
-  ['usage', '남은 사용량'],
-  ['board', '작업 보드'],
-  ['sessions', '세션'],
-  ['picked', '선택한 세션'],
+  ['map', '에이전트 지도', 'Agent map'],
+  ['activity', '최근 활동', 'Recent activity'],
+  ['usage', '남은 사용량', 'Usage left'],
+  ['board', '작업 보드', 'Task board'],
+  ['sessions', '세션', 'Sessions'],
+  ['picked', '선택한 세션', 'Picked session'],
 ] as const;
 
 export function DashboardPage(props: {
@@ -66,15 +67,15 @@ export function DashboardPage(props: {
   );
   const split = props.split !== undefined;
   const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
-    map: () => ['g-map', <>에이전트 지도 <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
-    activity: () => ['g-act', '최근 활동', <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
-    usage: () => ['g-use', '남은 사용량', <><LimitCards sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
-    board: () => ['g-board', '작업 보드', <TaskBoard sessions={live} now={now} onPick={pick} />],
-    sessions: () => ['g-sess', <>세션 <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
+    map: () => ['g-map', <>{L('에이전트 지도', 'Agent map')} <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
+    activity: () => ['g-act', L('최근 활동', 'Recent activity'), <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
+    usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
+    board: () => ['g-board', L('작업 보드', 'Task board'), <TaskBoard sessions={live} now={now} onPick={pick} />],
+    sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
     picked: () => ['g-pick', <>
-      {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {selected.project ?? '세션'}</> : '선택한 세션'}
-      {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>세션 열기</button>}
-    </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">세션을 누르면 작업과 타임라인이 여기에 나와요.</p>],
+      {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {selected.project ?? L('세션', 'Session')}</> : L('선택한 세션', 'Picked session')}
+      {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>{L('세션 열기', 'Open session')}</button>}
+    </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">{L('세션을 누르면 작업과 타임라인이 여기에 나와요.', 'Pick a session to see its tasks and timeline here.')}</p>],
   };
   const shown = DASH_CARDS.filter(([id]) => !props.hidden.includes(id));
   // rows grow to fill the height; a short last row lets its last card take the rest of the row
@@ -86,18 +87,18 @@ export function DashboardPage(props: {
     <div className={`dpage ${split ? 'split' : ''} ${props.mac ? 'mac' : ''}`} style={split ? { width: props.split } : undefined}>
       {props.mac && <div className="dp-drag" data-tauri-drag-region />}
       <header className="dp-head">
-        <h2>대시보드</h2>
-        <p>세션 {live.length}개 · 내 차례 {todo}건{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
-        <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />오늘 요약</button>
-        {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />지난 기록</button>}
-        <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />지침 파일</button>
-        {props.onToggleSplit && <button className="btn" onClick={props.onToggleSplit}><Icon name={split ? 'monitor' : 'panel'} />{split ? '대시보드만' : '방과 같이'}</button>}
-        <button className="btn" onClick={props.onRoom}><Icon name="iso" />{split ? '닫기' : '방으로'}</button>
-        {!split && <button className="btn" onClick={props.onSettings} aria-label="설정" title="설정"><Icon name="gear" /></button>}
+        <h2>{L('대시보드', 'Dashboard')}</h2>
+        <p>{L(`세션 ${live.length}개 · 내 차례 ${todo}건`, `${live.length} sessions · ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />{L('오늘 요약', 'Today')}</button>
+        {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />{L('지난 기록', 'Past days')}</button>}
+        <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />{L('지침 파일', 'Instruction files')}</button>
+        {props.onToggleSplit && <button className="btn" onClick={props.onToggleSplit}><Icon name={split ? 'monitor' : 'panel'} />{split ? L('대시보드만', 'Dashboard only') : L('방과 같이', 'With the room')}</button>}
+        <button className="btn" onClick={props.onRoom}><Icon name="iso" />{split ? L('닫기', 'Close') : L('방으로', 'To the room')}</button>
+        {!split && <button className="btn" onClick={props.onSettings} aria-label={L('설정', 'Settings')} title={L('설정', 'Settings')}><Icon name="gear" /></button>}
       </header>
       {waiting.length > 0 && (
-        <div className="dp-turn" role="list" aria-label="내 차례">
-          <b>내 차례</b>
+        <div className="dp-turn" role="list" aria-label={L('내 차례', 'Your turn')}>
+          <b>{L('내 차례', 'Your turn')}</b>
           {waiting.map((x) => (
             <span key={x.key} className="dp-turn-item">
             <button role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
@@ -121,7 +122,7 @@ export function DashboardPage(props: {
       {todayOpen && (
         <div className="dp-over">
           <section className="dash-card">
-            <h4 className="dash-h">오늘 요약<button className="link dp-open" onClick={() => setTodayOpen(false)}>닫기</button></h4>
+            <h4 className="dash-h">{L('오늘 요약', 'Today')}<button className="link dp-open" onClick={() => setTodayOpen(false)}>{L('닫기', 'Close')}</button></h4>
             <div className="dp-scroll"><TodayReport day={props.day} h={h} now={now} cost={props.cost} /></div>
           </section>
         </div>
@@ -129,7 +130,7 @@ export function DashboardPage(props: {
       {pastOpen && (
         <div className="dp-over">
           <section className="dash-card">
-            <h4 className="dash-h">지난 기록<button className="link dp-open" onClick={() => setPastOpen(false)}>닫기</button></h4>
+            <h4 className="dash-h">{L('지난 기록', 'Past days')}<button className="link dp-open" onClick={() => setPastOpen(false)}>{L('닫기', 'Close')}</button></h4>
             <div className="dp-scroll"><PastDays days={props.historyDays} now={now} /></div>
           </section>
         </div>
@@ -137,7 +138,7 @@ export function DashboardPage(props: {
       {memOpen && (
         <div className="dp-over">
           <section className="dash-card">
-            <h4 className="dash-h">지침 파일<button className="link dp-open" onClick={() => setMemOpen(false)}>닫기</button></h4>
+            <h4 className="dash-h">{L('지침 파일', 'Instruction files')}<button className="link dp-open" onClick={() => setMemOpen(false)}>{L('닫기', 'Close')}</button></h4>
             <div className="dp-scroll"><MemoryBrowser /></div>
           </section>
         </div>
@@ -152,29 +153,29 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
   const agents = (['claude', 'codex', 'demo'] as const)
     .map((a) => ({ a, list: sessions.filter((s) => (s.isDemo ? 'demo' : s.agent) === a) }))
     .filter((g) => g.list.length);
-  if (!agents.length) return <p className="muted pad">아직 세션이 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.</p>;
+  if (!agents.length) return <p className="muted pad">{L('아직 세션이 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.', 'No sessions yet. Claude Code and Codex show up here when they start working.')}</p>;
   return (
     <div className={`dmap ${sessions.length <= 3 ? 'few' : ''}`}>
-      <div className="dmap-root"><span>나</span><small>세션 {sessions.length}개</small></div>
+      <div className="dmap-root"><span>{L('나', 'You')}</span><small>{L(`세션 ${sessions.length}개`, `${sessions.length} sessions`)}</small></div>
       <div className="dmap-agents">
         {agents.map(({ a, list }) => {
-          const projects = [...new Set(list.map((s) => s.project ?? '프로젝트 미확인'))];
+          const projects = [...new Set(list.map((s) => s.project ?? L('프로젝트 미확인', 'Unknown project')))];
           return (
             <div key={a} className="dmap-col">
               <div className={`dmap-agent ag-${a}`}><AgentMark agent={a} size={16} /><b>{AGENT_NAME[a]}</b><small>{list.length}</small></div>
               {projects.map((p) => (
                 <div key={p} className="dmap-proj">
                   <div className="dmap-pname">{p}</div>
-                  {list.filter((s) => (s.project ?? '프로젝트 미확인') === p).map((s) => (
+                  {list.filter((s) => (s.project ?? L('프로젝트 미확인', 'Unknown project')) === p).map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
                       {(doingLabel(s) ?? s.title) && <div className="dmap-doing">{doingLabel(s) ?? s.title}</div>}
                       <div className="dmap-meta">
                         {userTodo(s, now) && <em className="wait">{userTodo(s, now)!.text}</em>}
                         {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}
-                        {s.subagents > 0 && <em>하위 에이전트 {s.subagents}</em>}
+                        {s.subagents > 0 && <em>{L('하위 에이전트', 'Subagents')} {s.subagents}</em>}
                         {s.model && <em>{s.model}</em>}
-                        {IN_TAURI && !s.isDemo && <button className="link" onClick={(e) => { e.stopPropagation(); onOpen(s.key); }}>세션 열기</button>}
+                        {IN_TAURI && !s.isDemo && <button className="link" onClick={(e) => { e.stopPropagation(); onOpen(s.key); }}>{L('세션 열기', 'Open session')}</button>}
                       </div>
                     </div>
                   ))}
@@ -193,21 +194,21 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
   const names = sessionNames(sessions);
   type Card = { key: string; text: string; s: Snapshot };
   const cols: { id: string; label: string; cards: Card[] }[] = [
-    { id: 'todo', label: '내 차례', cards: sessions.filter((s) => userTodo(s, now)).map((s) => ({ key: `${s.key}-todo`, text: userTodo(s, now)!.text, s })) },
-    { id: 'pending', label: '할 일', cards: [] },
-    { id: 'in_progress', label: '진행 중', cards: [] },
-    { id: 'completed', label: '완료', cards: [] },
+    { id: 'todo', label: L('내 차례', 'Your turn'), cards: sessions.filter((s) => userTodo(s, now)).map((s) => ({ key: `${s.key}-todo`, text: userTodo(s, now)!.text, s })) },
+    { id: 'pending', label: L('할 일', 'To do'), cards: [] },
+    { id: 'in_progress', label: L('진행 중', 'In progress'), cards: [] },
+    { id: 'completed', label: L('완료', 'Done'), cards: [] },
   ];
   for (const s of sessions)
     s.plan.forEach((p, i) => {
       const c = cols.find((x) => x.id === (p.status === 'completed' ? 'completed' : p.status === 'in_progress' ? 'in_progress' : 'pending'))!;
-      c.cards.push({ key: `${s.key}-${i}`, text: p.text || '(제목 없음)', s });
+      c.cards.push({ key: `${s.key}-${i}`, text: p.text || L('(제목 없음)', '(untitled)'), s });
     });
   const none = cols.every((c) => !c.cards.length);
   return (
     <>
-      {none && <p className="muted small pad">에이전트가 작업 목록(TodoWrite, update_plan 등)을 만들면 여기에 모여요.</p>}
-      {!none && <div className="dboard" title="작업 목록은 각 에이전트가 직접 만든 것이라 여기서 옮기거나 고칠 수 없어요. 카드를 누르면 그 세션으로 가요.">
+      {none && <p className="muted small pad">{L('에이전트가 작업 목록(TodoWrite, update_plan 등)을 만들면 여기에 모여요.', 'Task lists the agents make (TodoWrite, update_plan and the like) gather here.')}</p>}
+      {!none && <div className="dboard" title={L('작업 목록은 각 에이전트가 직접 만든 것이라 여기서 옮기거나 고칠 수 없어요. 카드를 누르면 그 세션으로 가요.', "The agents make these task lists themselves, so they can't be moved or edited here. Click a card to go to its session.")}>
         {cols.map((c) => (
           <section key={c.id} className={`dboard-col c-${c.id}`}>
             <h4>{c.label}<span>{c.cards.length}</span></h4>
@@ -226,7 +227,7 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
 
 /** Claude vs Codex share of the last 30 days, as a ring */
 function UsageShare({ h }: { h: UsageHistory | null }) {
-  if (!h) return <p className="pn-note pad">로그에서 사용량을 모으는 중…</p>;
+  if (!h) return <p className="pn-note pad">{L('로그에서 사용량을 모으는 중…', 'Reading usage from the logs…')}</p>;
   const c = h.days.reduce((a, d) => a + d.claude, 0);
   const x = h.days.reduce((a, d) => a + d.codex, 0);
   const total = c + x;
@@ -235,12 +236,12 @@ function UsageShare({ h }: { h: UsageHistory | null }) {
   const cl = total ? (c / total) * len : 0;
   return (
     <div className="dshare pad">
-      <svg viewBox="0 0 110 110" width="120" height="120" role="img" aria-label="에이전트별 토큰 비중">
+      <svg viewBox="0 0 110 110" width="120" height="120" role="img" aria-label={L('에이전트별 토큰 비중', 'Token share by agent')}>
         <circle cx="55" cy="55" r={r} fill="none" stroke="var(--hair)" strokeWidth="14" />
         {total > 0 && <circle cx="55" cy="55" r={r} fill="none" stroke="var(--codex)" strokeWidth="14" />}
         {total > 0 && <circle cx="55" cy="55" r={r} fill="none" stroke="var(--claude)" strokeWidth="14" strokeDasharray={`${cl} ${len}`} transform="rotate(-90 55 55)" />}
         <text x="55" y="53" textAnchor="middle" className="dshare-n">{fmtTokens(total)}</text>
-        <text x="55" y="68" textAnchor="middle" className="dshare-s">30일 합계</text>
+        <text x="55" y="68" textAnchor="middle" className="dshare-s">{L('30일 합계', '30-day total')}</text>
       </svg>
       <ul>
         <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{total ? Math.round((c / total) * 100) : 0}%</small></li>
@@ -257,29 +258,29 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
   const usd = d.tokens ? estCost(d.tokens, cost) : null;
   const md = dayMarkdown(d, fmtTokens, usd);
   const nums: [string, string][] = [
-    ['끝낸 요청', `${d.turns}회`],
-    ['테스트', `통과 ${d.testsOk} · 실패 ${d.testsFail}`],
-    ['승인·답변 요청', `${d.asks}회`],
-    ['고친 파일', `${d.files}개`],
-    ['토큰', d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'],
-    ...(usd !== null ? [['추정 비용', fmtUsd(usd)] as [string, string]] : []),
+    [L('끝낸 요청', 'Requests done'), String(d.turns)],
+    [L('테스트', 'Tests'), L(`통과 ${d.testsOk} · 실패 ${d.testsFail}`, `${d.testsOk} passed · ${d.testsFail} failed`)],
+    [L('승인·답변 요청', 'Approvals and questions'), String(d.asks)],
+    [L('고친 파일', 'Files edited'), String(d.files)],
+    [L('토큰', 'Tokens'), d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'],
+    ...(usd !== null ? [[L('추정 비용', 'Estimated cost'), fmtUsd(usd)] as [string, string]] : []),
   ];
   const save = async () => {
-    try { setSaved(`${await backend.saveReport(reportName(d.from), md)}에 저장했어요`); } catch (e) { setSaved(`저장하지 못했어요: ${String(e)}`); }
+    try { const at = await backend.saveReport(reportName(d.from), md); setSaved(L(`${at}에 저장했어요`, `Saved to ${at}`)); } catch (e) { setSaved(`${L('저장하지 못했어요', "Couldn't save")}: ${String(e)}`); }
   };
   const copy = async () => {
-    try { await navigator.clipboard.writeText(md); setSaved('복사했어요'); } catch { setSaved('복사하지 못했어요'); }
+    try { await navigator.clipboard.writeText(md); setSaved(L('복사했어요', 'Copied')); } catch { setSaved(L('복사하지 못했어요', "Couldn't copy")); }
   };
   return (
     <div className="dtoday">
       <div className="dash-stats">
         {nums.map(([k, v]) => <div key={k} className="dash-stat"><small>{k}</small><b>{v}</b></div>)}
       </div>
-      <h4 className="dash-h">보고서 미리보기 <small className="muted">저장하기 전에 확인하세요. 프로젝트 이름과 파일 이름이 들어가요.</small></h4>
+      <h4 className="dash-h">{L('보고서 미리보기', 'Report preview')} <small className="muted">{L('저장하기 전에 확인하세요. 프로젝트 이름과 파일 이름이 들어가요.', 'Check it before saving. It includes project and file names.')}</small></h4>
       <pre className="dtoday-md">{md}</pre>
       <div className="dtoday-act">
-        <button className="btn primary" onClick={() => void save()}>{IN_TAURI ? '다운로드 폴더에 저장' : 'Markdown 받기'}</button>
-        <button className="btn" onClick={() => void copy()}>복사</button>
+        <button className="btn primary" onClick={() => void save()}>{IN_TAURI ? L('다운로드 폴더에 저장', 'Save to Downloads') : L('Markdown 받기', 'Get Markdown')}</button>
+        <button className="btn" onClick={() => void copy()}>{L('복사', 'Copy')}</button>
         {saved && <span className="muted small">{saved}</span>}
       </div>
     </div>
@@ -305,10 +306,10 @@ function PastDays({ days, now }: { days: number; now: number }) {
     <div className="dash-log dpast">
       <div className="dash-chips">
         <input type="date" value={day} min={iso(now - (days - 1) * 86_400_000)} max={iso(now)} onChange={(e) => e.target.value && setDay(e.target.value)} />
-        <span className="muted small">{lines ? `세션 ${projects}개 · 기록 ${lines.length}개` : '읽는 중…'}</span>
-        <input type="search" placeholder="프로젝트·내용 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="muted small">{lines ? L(`세션 ${projects}개 · 기록 ${lines.length}개`, `${projects} sessions · ${lines.length} entries`) : L('읽는 중…', 'Reading…')}</span>
+        <input type="search" placeholder={L('프로젝트·내용 검색', 'Search projects and text')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {lines && !shown.length && <p className="muted pad">{lines.length ? '검색과 맞는 기록이 없어요.' : '이 날의 기록이 없어요. 기록은 설정에서 켠 뒤부터 쌓여요.'}</p>}
+      {lines && !shown.length && <p className="muted pad">{lines.length ? L('검색과 맞는 기록이 없어요.', 'Nothing matches the search.') : L('이 날의 기록이 없어요. 기록은 설정에서 켠 뒤부터 쌓여요.', 'Nothing kept for this day. History builds up once it is on in settings.')}</p>}
       <ol>
         {shown.map((l) => (
           <li key={`${l.key}-${l.entry.id}-${l.entry.at}`} className={`k-${l.entry.kind} ${l.entry.ok === false ? 'bad' : l.entry.ok === true ? 'ok' : ''}`}>
@@ -330,13 +331,13 @@ function MemoryBrowser() {
   const [q, setQ] = useState('');
   useEffect(() => { void backend.memoryFiles().then(setFiles).catch(() => setFiles([])); }, []);
   const shown = useMemo(() => (files ?? []).filter((f) => !q.trim() || `${f.label} ${f.content}`.toLowerCase().includes(q.trim().toLowerCase())), [files, q]);
-  if (!files) return <p className="muted pad">파일을 읽는 중…</p>;
-  if (!files.length) return <p className="muted pad">에이전트 지침 파일(CLAUDE.md, AGENTS.md)을 찾지 못했어요. 전역 파일과 지금 보이는 세션의 프로젝트 폴더만 찾아봐요.</p>;
+  if (!files) return <p className="muted pad">{L('파일을 읽는 중…', 'Reading files…')}</p>;
+  if (!files.length) return <p className="muted pad">{L('에이전트 지침 파일(CLAUDE.md, AGENTS.md)을 찾지 못했어요. 전역 파일과 지금 보이는 세션의 프로젝트 폴더만 찾아봐요.', 'No agent instruction files (CLAUDE.md, AGENTS.md) found. Only the global files and the project folders of the sessions shown are checked.')}</p>;
   const f = shown[Math.min(pick, shown.length - 1)];
   return (
     <div className="dmem">
       <section className="dmem-list">
-        <input type="search" placeholder="파일·내용 검색" value={q} onChange={(e) => { setQ(e.target.value); setPick(0); }} />
+        <input type="search" placeholder={L('파일·내용 검색', 'Search files and text')} value={q} onChange={(e) => { setQ(e.target.value); setPick(0); }} />
         {shown.map((x, i) => (
           <button key={x.path} className={x === f ? 'on' : ''} onClick={() => setPick(i)} title={x.path}>
             <b>{x.label}</b><small>{x.path}</small>
@@ -346,11 +347,11 @@ function MemoryBrowser() {
       <section className="dmem-view">
         {f ? (
           <>
-            <h4 className="dmem-path">{f.path}{f.truncated && ' (앞부분 200KB만)'}</h4>
+            <h4 className="dmem-path">{f.path}{f.truncated && L(' (앞부분 200KB만)', ' (first 200 KB only)')}</h4>
             <pre>{f.content}</pre>
-            <p className="pn-note pad">읽기 전용이에요. 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.</p>
+            <p className="pn-note pad">{L('읽기 전용이에요. 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.', 'Read-only. The files are read straight from this computer and sent nowhere.')}</p>
           </>
-        ) : <p className="muted pad">검색과 맞는 파일이 없어요.</p>}
+        ) : <p className="muted pad">{L('검색과 맞는 파일이 없어요.', 'No files match the search.')}</p>}
       </section>
     </div>
   );

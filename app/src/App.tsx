@@ -19,6 +19,7 @@ import { UsageStrip, useAccountLimits, userTodo } from './ui/Overview';
 import { Icon } from './ui/icons';
 import { fmtAgo, setTokenUnit } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
+import { isEn, L, setLang } from './i18n';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
 const PANEL_W = 330;
@@ -59,6 +60,9 @@ export default function App() {
   // quiet hours need local time; this changes at a daylight saving switch, and the effect sends it again
   const tzOff = -new Date().getTimezoneOffset();
   useEffect(() => void backend.setTzOffset(tzOff), [tzOff]);
+  setLang(settings.language); // read by L() while this render runs
+  const en = isEn();
+  useEffect(() => void backend.setUiLang(en), [en]);
   const [mini, setMini] = useState(false);
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
@@ -563,7 +567,7 @@ export default function App() {
     const ymd = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
     try { if (localStorage.getItem('summaryShown') === ymd) return; localStorage.setItem('summaryShown', ymd); } catch { return; }
     const t = daySummary(day, null, Date.now());
-    void backend.notifyText('오늘 요약', `끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`);
+    void backend.notifyText(L('오늘 요약', 'Today'), L(`끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`, `${t.turns} requests done · tests passed ${t.testsOk}, failed ${t.testsFail} · ${t.files} files edited`));
   }, [now, settings.dailySummary, settings.dailySummaryHour, day]);
   const openDetails = (key: string) => {
     setPinned(key);
@@ -612,7 +616,7 @@ export default function App() {
           const [x, y] = [e.clientX - r.left, e.clientY - r.top];
           const pet = sceneRef.current?.hitActor(x, y);
           const n = pet ? null : sceneRef.current?.furnitureAt(x, y) ?? null;
-          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 세션 열기' : '눌러서 이 세션 열기 · 두 번 누르면 자세히') : n ? furnTipOf(n, list, now) : null;
+          const tip = pet && sessions[pet] ? (mini ? L('두 번 눌러서 이 세션 열기', 'Double-click to open this session') : L('눌러서 이 세션 열기 · 두 번 누르면 자세히', 'Click to open this session · double-click for details')) : n ? furnTipOf(n, list, now) : null;
           if (tip !== furnTip) setFurnTip(tip);
           const hp = pet && sessions[pet] ? pet : null;
           if (hp !== hoverPet) hoverTo(hp);
@@ -621,33 +625,33 @@ export default function App() {
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? panelW : 0) + 12, left: compact ? 8 : 12 }}>
-        {!IN_TAURI && !compact && !office && !dashPage && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
+        {!IN_TAURI && !compact && !office && !dashPage && <div className="banner preview">{L('브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다', 'Browser preview · a design check, not connected to real agents')}</div>}
         {(demoRunning || demoShown) && !dashPage && (
           <div className="banner demo">
-            {compact ? '데모 · 실제 에이전트 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)'}
-            {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
+            {compact ? L('데모 · 실제 에이전트 아님', 'Demo · not real agents') : L('데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)', 'Demo mode · replaying made-up events (not real agents)')}
+            {IN_TAURI && <button onClick={toggleDemo}>{L('끄기', 'Turn off')}</button>}
           </div>
         )}
         {update && !updDialog && (
           <div className="banner update">
-            {compact ? <>새 버전 {update.version}</> : <>새 버전 {update.version}이 나왔어요</>}
-            <button onClick={() => setUpdDialog({ k: 'available', u: update })}>업데이트</button>
+            {compact ? <>{L('새 버전', 'New version')} {update.version}</> : L(`새 버전 ${update.version}이 나왔어요`, `Version ${update.version} is out`)}
+            <button onClick={() => setUpdDialog({ k: 'available', u: update })}>{L('업데이트', 'Update')}</button>
           </div>
         )}
         {!compact && !office && !dashPage && list.length > (sceneRef.current?.capacity ?? 6) && (
           <div className="banner more">
-            방에는 책상 수만큼 {sceneRef.current?.capacity ?? 6}마리만 있어요 · {list.length - (sceneRef.current?.capacity ?? 6)}개 세션 더
-            <button onClick={() => { setOffice(false); setDashView(vw >= PANEL_MIN_VW ? 'split' : 'full'); }}>모두 보기</button>
+            {L(`방에는 책상 수만큼 ${sceneRef.current?.capacity ?? 6}마리만 있어요 · ${list.length - (sceneRef.current?.capacity ?? 6)}개 세션 더`, `The room fits ${sceneRef.current?.capacity ?? 6} pets, one per desk · ${list.length - (sceneRef.current?.capacity ?? 6)} more sessions`)}
+            <button onClick={() => { setOffice(false); setDashView(vw >= PANEL_MIN_VW ? 'split' : 'full'); }}>{L('모두 보기', 'Show all')}</button>
           </div>
         )}
         {!petHintSeen && !compact && !office && !dashPage && list.some((x) => !x.isDemo) && (
           <div className="banner hint">
-            펫을 한 번 누르면 그 세션이 열리고, 두 번 누르면 자세히 볼 수 있어요
-            <button onClick={seePetHint}>알겠어요</button>
+            {L('펫을 한 번 누르면 그 세션이 열리고, 두 번 누르면 자세히 볼 수 있어요', 'Click a pet to open its session, double-click for details')}
+            <button onClick={seePetHint}>{L('알겠어요', 'Got it')}</button>
           </div>
         )}
         {flash && <div className="banner error">{flash}</div>}
-        {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
+        {serverError && <div className="banner error">{L('이벤트 수신기를 시작하지 못했습니다', 'Could not start the event listener')}: {serverError}</div>}
       </div>
 
       <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} onHover={hoverTo} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
@@ -660,7 +664,7 @@ export default function App() {
       )}
       {/* a small window has no room for the welcome card, so a first-time user still gets one clear next step */}
       {compact && !mini && !selected && (
-        <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>에이전트 연결하기</button>
+        <button className="btn primary first-hint" onClick={() => setSettingsOpen('agents')}>{L('에이전트 연결하기', 'Connect agents')}</button>
       )}
       {!compact && !office && settings.showDock && (
         <div className="dock" ref={dockRef} style={{ right: panelOpen ? panelW + 12 : 12 }}>
@@ -694,21 +698,21 @@ export default function App() {
         {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
-        {!mini && <ToolBtn icon="monitor" label="대시보드 보기" on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}
-        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
+        {!mini && <ToolBtn icon="monitor" label={L('대시보드 보기', 'Dashboard')} on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}
+        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label={L('작업 정보 패널', 'Details panel')} on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
           else if (dashSplit) setDashView('off');
           else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
         }} />}
-        {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
-        <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
-        <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? '대각선으로 보기' : '탑다운으로 보기'} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
+        {!mini && <ToolBtn icon="eye" label={office ? L('HUD 보이기', 'Show HUD') : L('사무실만 보기', 'Office only')} on={office} onClick={() => setOffice(!office)} />}
+        <ToolBtn icon="mini" label={mini ? L('창으로 보기', 'Window') : L('룸만 띄우기', 'Room only')} on={mini} onClick={() => toggleMini()} />
+        <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? L('대각선으로 보기', 'Isometric view') : L('탑다운으로 보기', 'Top-down view')} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
         {/* views above, the window itself below */}
         <i className="tb-sep" aria-hidden />
-        <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
-        <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
-        <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
+        <ToolBtn icon="pin" label={L('항상 위에 표시', 'Always on top')} on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
+        <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? L('효과음 끄기', 'Mute sounds') : L('효과음 켜기', 'Sounds on')} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
+        <ToolBtn icon="gear" label={L('설정', 'Settings')} onClick={() => setSettingsOpen('last')} />
       </div>
 
       {(dashPage || dashSplit) && (
@@ -728,7 +732,7 @@ export default function App() {
           hidden={settings.dashHidden ?? []}
           historyDays={settings.historyDays ?? 0}
           cost={settings.showCost ? { claude: settings.costClaudePerM ?? 0, codex: settings.costCodexPerM ?? 0 } : undefined}
-          notice={dashPage ? ((demoRunning || demoShown) ? '데모 모드 · 실제 에이전트 아님' : !IN_TAURI ? '브라우저 미리보기' : null) : null}
+          notice={dashPage ? ((demoRunning || demoShown) ? L('데모 모드 · 실제 에이전트 아님', 'Demo mode · not real agents') : !IN_TAURI ? L('브라우저 미리보기', 'Browser preview') : null) : null}
           mac={IS_MAC && IN_TAURI}
         />
       )}
@@ -763,24 +767,24 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** what the furniture is for (hover tooltip); keys are sprite names without their number */
-const FURN_TIPS: Record<string, string> = {
-  desk: '작업 책상 · 생각하거나 코드를 고칠 때 앉아서 종이에 적어요. 종이에 지금 상태가 그려져요',
-  stool: '작업 책상 의자',
-  rig: '테스트 장치 · 테스트나 명령을 실행할 때 여기서 작동시켜요. 불빛이 통과(초록)·실패(빨강)를 보여줘요',
-  shelf: '책장 · 파일이나 자료를 찾을 때 와요',
-  board: '게시판 · 작업 계획(할 일 목록)을 세울 때 와요',
-  sofa: '소파 · 일이 끝나면 쉬는 곳',
-  beanbag: '빈백 · 쉬는 자리',
-  coffee: '커피 카트 · 쉬는 동안 들러요',
-  table: '찻상',
-};
+const FURN_TIPS = (): Record<string, string> => ({
+  desk: L('작업 책상 · 생각하거나 코드를 고칠 때 앉아서 종이에 적어요. 종이에 지금 상태가 그려져요', 'Desk · pets sit here to think or edit code and write on paper; the paper shows what they are doing'),
+  stool: L('작업 책상 의자', 'Desk chair'),
+  rig: L('테스트 장치 · 테스트나 명령을 실행할 때 여기서 작동시켜요. 불빛이 통과(초록)·실패(빨강)를 보여줘요', 'Test rig · used to run tests and commands; the light shows pass (green) or fail (red)'),
+  shelf: L('책장 · 파일이나 자료를 찾을 때 와요', 'Bookshelf · where pets look up files and docs'),
+  board: L('게시판 · 작업 계획(할 일 목록)을 세울 때 와요', 'Board · where pets make a plan (to-do list)'),
+  sofa: L('소파 · 일이 끝나면 쉬는 곳', 'Sofa · where pets rest after work'),
+  beanbag: L('빈백 · 쉬는 자리', 'Beanbag · a place to rest'),
+  coffee: L('커피 카트 · 쉬는 동안 들러요', 'Coffee cart · visited while resting'),
+  table: L('찻상', 'Tea table'),
+});
 
 /** what a piece of furniture is for; the test rig also says the last result it shows */
 function furnTipOf(name: string, list: Snapshot[], now: number): string | null {
-  const base = FURN_TIPS[name.replace(/\d+$/, '')] ?? null;
+  const base = FURN_TIPS()[name.replace(/\d+$/, '')] ?? null;
   if (name !== 'rig') return base;
   const t = list.map((s) => s.lastTest).filter((x) => x && x.ok !== null).sort((a, b) => b!.at - a!.at)[0];
-  return t ? `${base}\n마지막 결과: ${t.ok ? '통과' : '실패'} · ${fmtAgo(now - t.at)}` : base;
+  return t ? `${base}\n${L('마지막 결과', 'Last result')}: ${t.ok ? L('통과', 'passed') : L('실패', 'failed')} · ${fmtAgo(now - t.at)}` : base;
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);

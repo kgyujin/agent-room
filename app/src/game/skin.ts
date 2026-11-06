@@ -1,4 +1,5 @@
-// Custom character ("skin") from a single local PNG in ~/.agent-room/characters/.
+
+import { L } from '../i18n';// Custom character ("skin") from a single local PNG in ~/.agent-room/characters/.
 // The image may be an enlarged pixel sprite (even at a non-integer scale, on a solid
 // background); it is reduced back to 1 art pixel = 1 px so it fits the room's pixel grid.
 // Pictures that are still too big for the room are shrunk by a whole factor, and a
@@ -143,9 +144,11 @@ export function reduce(img: HTMLImageElement): Skin {
 }
 
 /** built-in original critters (tools/art/gen_critters.py); stored in settings as 'builtin/<id>' */
+// [id, name]; the name follows the UI language
+const named = (id: string, ko: string, en: string) => Object.defineProperty([id, ko] as [string, string], 1, { get: () => L(ko, en) });
 export const BUILTIN_CRITTERS: [string, string][] = [
-  ['shiba', '아기 시바'], ['penguin', '아기 펭귄'], ['hamster', '햄찌'], ['cat', '은빛 고양이'],
-  ['rabbit', '솜토끼'], ['frog', '개굴이'], ['chick', '삐약이'],
+  named('shiba', '아기 시바', 'Baby Shiba'), named('penguin', '아기 펭귄', 'Baby Penguin'), named('hamster', '햄찌', 'Hammy'), named('cat', '은빛 고양이', 'Silver Cat'),
+  named('rabbit', '솜토끼', 'Fluffy Bunny'), named('frog', '개굴이', 'Ribbit'), named('chick', '삐약이', 'Peep'),
 ];
 
 /** pets that may appear until the user checks their own list: all the built-ins */

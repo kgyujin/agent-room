@@ -111,29 +111,29 @@ pub(crate) fn agent_label(s: &Snapshot) -> &'static str {
     match s.agent {
         agent_room_core::model::AgentKind::Claude => "Claude Code",
         agent_room_core::model::AgentKind::Codex => "Codex",
-        agent_room_core::model::AgentKind::Demo => "데모",
+        agent_room_core::model::AgentKind::Demo => tr("데모", "Demo"),
     }
 }
 
 pub(crate) fn state_label(s: &Snapshot) -> &'static str {
     use agent_room_core::session::Connection;
     if s.connection == Connection::Stale {
-        return "응답 없음";
+        return tr("응답 없음", "Not responding");
     }
     match s.state {
-        AgentState::Idle => "대기 중",
-        AgentState::Starting => "작업 시작",
-        AgentState::Planning => "분석 중",
-        AgentState::Reading => "파일 확인",
-        AgentState::Editing => "코드 작성",
-        AgentState::Running => "명령 실행",
-        AgentState::Testing => "테스트",
+        AgentState::Idle => tr("대기 중", "Idle"),
+        AgentState::Starting => tr("작업 시작", "Starting"),
+        AgentState::Planning => tr("분석 중", "Thinking"),
+        AgentState::Reading => tr("파일 확인", "Reading"),
+        AgentState::Editing => tr("코드 작성", "Editing"),
+        AgentState::Running => tr("명령 실행", "Running"),
+        AgentState::Testing => tr("테스트", "Testing"),
         AgentState::Waiting => {
-            if s.waiting.as_ref().is_some_and(|w| w.kind == "approval") { "승인 필요" } else { "입력 대기" }
+            if s.waiting.as_ref().is_some_and(|w| w.kind == "approval") { tr("승인 필요", "Needs approval") } else { tr("입력 대기", "Waiting for input") }
         }
-        AgentState::Completed => "완료",
-        AgentState::Error => "오류",
-        AgentState::Disconnected => "연결 끊김",
+        AgentState::Completed => tr("완료", "Done"),
+        AgentState::Error => tr("오류", "Error"),
+        AgentState::Disconnected => tr("연결 끊김", "Disconnected"),
     }
 }
 
@@ -167,7 +167,7 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
     // agents waiting for the user, so the menu bar stays short
     let waiting = sessions.iter().filter(|s| s.connection == agent_room_core::session::Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error)).count();
     let _ = tray.set_title((waiting > 0).then(|| waiting.to_string()).as_deref());
-    let _ = tray.set_tooltip(Some(summary.as_deref().unwrap_or("Agent Room · 연결된 에이전트 없음")));
+    let _ = tray.set_tooltip(Some(summary.as_deref().unwrap_or(tr("Agent Room · 연결된 에이전트 없음", "Agent Room · no agents connected"))));
     if let Ok(menu) = build_menu(app, &sessions) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -175,19 +175,19 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
 
 pub(crate) fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
-    menu.append(&MenuItem::with_id(app, "open", "Agent Room 열기", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "mini", "룸만 띄우기", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "open", tr("Agent Room 열기", "Open Agent Room"), true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "mini", tr("룸만 띄우기", "Room Only"), true, None::<&str>)?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     if sessions.is_empty() {
-        menu.append(&MenuItem::with_id(app, "none", "연결된 에이전트 없음", false, None::<&str>)?)?;
+        menu.append(&MenuItem::with_id(app, "none", tr("연결된 에이전트 없음", "No agents connected"), false, None::<&str>)?)?;
     }
     for s in sessions.iter().take(8) {
         let label = format!("{} · {} — {}", agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s));
         menu.append(&MenuItem::with_id(app, format!("session:{}", s.key), label, true, None::<&str>)?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(app, "settings", "설정…", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "update", "업데이트 확인…", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "settings", tr("설정…", "Settings…"), true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "update", tr("업데이트 확인…", "Check for Updates…"), true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "quit", tr("종료", "Quit"), true, None::<&str>)?)?;
     Ok(menu)
 }

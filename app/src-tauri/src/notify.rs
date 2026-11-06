@@ -14,13 +14,20 @@ pub(crate) fn notify_low_limits(app: &AppHandle, s: &Snapshot, l: &agent_room_co
     let agent = agent_label(s);
     let low = agent_room_core::limits::newly_low(agent, l, 10.0, &mut shared.limit_warned.lock().unwrap());
     for w in low {
-        let name = match w.minutes { 300 => "5시간", 10080 => "주간", _ => "사용량" };
+        let name = match w.minutes { 300 => tr("5시간", "5-hour"), 10080 => tr("주간", "weekly"), _ => tr("사용량", "usage") };
         let left = (100.0 - w.used_pct).max(0.0).round();
         let reset = w.resets_at.map(|t| {
             let mins = t.saturating_sub(agent_room_core::model::now_ms()) / 60_000;
-            if mins < 60 { format!(" {mins}분 뒤 초기화돼요.") } else if mins < 1440 { format!(" {}시간 뒤 초기화돼요.", mins / 60) } else { format!(" {}일 뒤 초기화돼요.", mins / 1440) }
+            match (is_en(), mins) {
+                (false, m) if m < 60 => format!(" {m}분 뒤 초기화돼요."),
+                (false, m) if m < 1440 => format!(" {}시간 뒤 초기화돼요.", m / 60),
+                (false, m) => format!(" {}일 뒤 초기화돼요.", m / 1440),
+                (true, m) if m < 60 => format!(" Resets in {m} min."),
+                (true, m) if m < 1440 => format!(" Resets in {} h.", m / 60),
+                (true, m) => format!(" Resets in {} days.", m / 1440),
+            }
         }).unwrap_or_default();
-        let _ = app.notification().builder().title(format!("{agent} {name} 사용량 {left}% 남음")).body(format!("남은 사용량이 얼마 없어요.{reset}")).show();
+        let _ = app.notification().builder().title(if is_en() { format!("{agent}: {left}% of {name} usage left") } else { format!("{agent} {name} 사용량 {left}% 남음") }).body(format!("{}{reset}", tr("남은 사용량이 얼마 없어요.", "Not much usage left."))).show();
     }
 }
 
@@ -65,12 +72,17 @@ pub(crate) fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
     // the project leads the title, so a glance at the banner says which session it is
     let agent = agent_label(s);
     let project = s.project.clone().unwrap_or_else(|| agent.into());
-    let tool = s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| "도구".into());
-    let (title, body) = match n {
-        Notice::Completed => (format!("{project} · 작업 완료"), format!("{agent} 작업이 끝났어요.")),
-        Notice::Failed => (format!("{project} · 오류"), s.error.as_ref().map(|e| e.message.clone()).unwrap_or_else(|| format!("{agent}에서 오류가 났어요."))),
-        Notice::NeedsApproval => (format!("{project} · {tool} 승인 필요"), format!("{agent}가 {tool} 실행 승인을 기다리고 있어요.")),
-        Notice::NeedsInput => (format!("{project} · 입력 대기"), format!("{agent}가 답을 기다리고 있어요.")),
+    let tool = s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| tr("도구", "a tool").into());
+    let err = || s.error.as_ref().map(|e| e.message.clone());
+    let (title, body) = match (n, is_en()) {
+        (Notice::Completed, false) => (format!("{project} · 작업 완료"), format!("{agent} 작업이 끝났어요.")),
+        (Notice::Failed, false) => (format!("{project} · 오류"), err().unwrap_or_else(|| format!("{agent}에서 오류가 났어요."))),
+        (Notice::NeedsApproval, false) => (format!("{project} · {tool} 승인 필요"), format!("{agent}가 {tool} 실행 승인을 기다리고 있어요.")),
+        (Notice::NeedsInput, false) => (format!("{project} · 입력 대기"), format!("{agent}가 답을 기다리고 있어요.")),
+        (Notice::Completed, true) => (format!("{project} · Done"), format!("{agent} finished its work.")),
+        (Notice::Failed, true) => (format!("{project} · Error"), err().unwrap_or_else(|| format!("{agent} ran into an error."))),
+        (Notice::NeedsApproval, true) => (format!("{project} · {tool} needs approval"), format!("{agent} is waiting for you to approve {tool}.")),
+        (Notice::NeedsInput, true) => (format!("{project} · Waiting for you"), format!("{agent} is waiting for your answer.")),
     };
     let _ = app.notification().builder().title(title).body(body).show();
 }
