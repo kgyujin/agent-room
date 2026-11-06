@@ -5,6 +5,7 @@
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFit } from './fit';
+import { Lanes } from './Lanes';
 import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
@@ -29,7 +30,7 @@ export const DASH_CARDS = [
 
 /** what a card drops, first group first and the last item of a group first, until the rest fits
  * without scrolling: the usage share and pace notes, the weekly rows, edited files, then list rows */
-const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.files li', '.dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
+const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.files li', '.lane, .dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
 
 /** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
 function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
@@ -87,11 +88,20 @@ export function DashboardPage(props: {
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
   const canOpen = (s: Snapshot) => IN_TAURI && !s.isDemo;
+  // the activity card shows lanes or the plain log; remembered per computer (a convenience only)
+  const [actView, setActView] = useState<'lanes' | 'log'>(() => { try { return localStorage.getItem('dashAct') === 'log' ? 'log' : 'lanes'; } catch { return 'lanes'; } });
+  const pickActView = (v: 'lanes' | 'log') => { setActView(v); try { localStorage.setItem('dashAct', v); } catch { /* private window */ } };
   const [whole, setWhole] = useState<(typeof DASH_CARDS)[number][0] | null>(null);
   const split = props.split !== undefined;
   const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
     map: () => ['g-map', <>{L('에이전트 지도', 'Agent map')} <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
-    activity: () => ['g-act', L('최근 활동', 'Recent activity'), <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
+    activity: () => ['g-act', <>
+      {L('최근 활동', 'Recent activity')}
+      <span className="seg-tabs" role="tablist">
+        <button role="tab" className={actView === 'lanes' ? 'on' : ''} onClick={() => pickActView('lanes')}>{L('흐름', 'Flow')}</button>
+        <button role="tab" className={actView === 'log' ? 'on' : ''} onClick={() => pickActView('log')}>{L('기록', 'Log')}</button>
+      </span>
+    </>, actView === 'lanes' ? <Lanes sessions={sessions} timelines={props.timelines} now={now} selected={selected?.key ?? null} onSelect={pick} /> : <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
     usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards ring sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
     board: () => ['g-board', L('작업 보드', 'Task board'), <TaskBoard sessions={live} now={now} onPick={pick} />],
     sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
@@ -267,33 +277,36 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
   );
 }
 
-/** Claude vs Codex share of the last 30 days, as a ring */
+/** the last 14 days of tokens as stacked bars (Claude under Codex), with each agent's 30-day share */
 function UsageShare({ h }: { h: UsageHistory | null }) {
   if (!h) return <p className="pn-note pad">{L('로그에서 사용량을 모으는 중…', 'Reading usage from the logs…')}</p>;
   const c = h.days.reduce((a, d) => a + d.claude, 0);
   const x = h.days.reduce((a, d) => a + d.codex, 0);
   const total = c + x;
-  const r = 42;
-  const len = 2 * Math.PI * r;
-  const cl = total ? (c / total) * len : 0;
+  const days = h.days.slice(-14);
+  const max = Math.max(1, ...days.map((d) => d.claude + d.codex));
+  const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
+  const dayLabel = (d: number) => new Date(d * 86_400_000).toLocaleDateString(L('ko-KR', 'en-US'), { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
   return (
     <div className="dshare pad">
-      <svg viewBox="0 0 110 110" width="120" height="120" role="img" aria-label={L('에이전트별 토큰 비중', 'Token share by agent')}>
-        <circle cx="55" cy="55" r={r} fill="none" stroke="var(--hair)" strokeWidth="14" />
-        {total > 0 && <circle cx="55" cy="55" r={r} fill="none" stroke="var(--codex)" strokeWidth="14" />}
-        {total > 0 && <circle cx="55" cy="55" r={r} fill="none" stroke="var(--claude)" strokeWidth="14" strokeDasharray={`${cl} ${len}`} transform="rotate(-90 55 55)" />}
-        <text x="55" y="53" textAnchor="middle" className="dshare-n">{fmtTokens(total)}</text>
-        <text x="55" y="68" textAnchor="middle" className="dshare-s">{L('30일 합계', '30-day total')}</text>
-      </svg>
+      <div className="ubars" role="img" aria-label={L('최근 14일 토큰', 'Tokens, last 14 days')}>
+        {days.map((d, i) => (
+          <span key={d.day} className={i === days.length - 1 ? 'today' : ''} title={`${dayLabel(d.day)} · Claude ${fmtTokens(d.claude)} · Codex ${fmtTokens(d.codex)}`}>
+            <i className="a-codex" style={{ height: `${(d.codex / max) * 100}%` }} />
+            <i className="a-claude" style={{ height: `${(d.claude / max) * 100}%` }} />
+          </span>
+        ))}
+      </div>
+      <div className="ubars-x"><small>{days.length ? dayLabel(days[0].day) : ''}</small><small>{L('오늘', 'Today')}</small></div>
       <ul>
-        <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{total ? Math.round((c / total) * 100) : 0}%</small></li>
-        <li><i style={{ background: 'var(--codex)' }} />Codex<b>{fmtTokens(x)}</b><small>{total ? Math.round((x / total) * 100) : 0}%</small></li>
+        <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{pct(c)}%</small></li>
+        <li><i style={{ background: 'var(--codex)' }} />Codex<b>{fmtTokens(x)}</b><small>{pct(x)}%</small></li>
+        <li className="sum">{L('30일 합계', '30-day total')}<b>{fmtTokens(total)}</b><small /></li>
       </ul>
     </div>
   );
 }
 
-/** today's numbers, and the same as a Markdown report to look at before it is saved */
 function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistory | null; now: number; cost?: { claude: number; codex: number } }) {
   const [saved, setSaved] = useState<string | null>(null);
   const d = daySummary(day, h, now);
