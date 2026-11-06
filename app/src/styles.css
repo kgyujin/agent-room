@@ -449,7 +449,7 @@ html.view-island, html.view-island body, html.view-island #root { background: tr
 .is-left, .is-right { flex: 1; display: flex; align-items: center; gap: 5px; min-width: 0; }
 .is-right { justify-content: flex-end; }
 .is-notch { width: var(--notch-w, 190px); flex: none; }   /* camera notch: nothing is drawn here */
-.is-who { display: flex; padding: 1px; border-radius: 4px; }
+.is-who { display: flex; padding: 1px 6px; border-radius: 4px; }
 .is-who.t-wait { box-shadow: 0 0 0 1.5px var(--wait); }
 .is-who.t-bad { box-shadow: 0 0 0 1.5px var(--bad); }
 .is-dim { color: #8a8790; font-size: 11px; }
@@ -1000,5 +1000,5 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .agent-act { display: flex !important; flex-direction: row !important; align-items: center; gap: 6px; flex: none; }
 .is-more { width: 100%; border: 1px dashed #3a3842; background: transparent; color: #a8a5ae; border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; cursor: pointer; }
 .is-more:hover { color: #fff; border-color: #6a6872; }
-.is-who-name { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #ffd28a; margin-left: 5px; }
+.is-who-name { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #ffd28a; }
 .is-who small { margin-left: 4px; font-size: 11px; color: #c9a36a; }

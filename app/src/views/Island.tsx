@@ -116,19 +116,13 @@ export function Island() {
         <div className="is-left">
           {!open && claudeLeft && <UsageLeft agent="claude" v={claudeLeft} />}
           {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
-          {/* someone needs you: say who (the longest-waiting), not just three look-alike icons */}
+          {/* someone needs you: say who (the longest-waiting); no logos on the collapsed pill */}
           {!open && todos.length > 0 && (
             <span className="is-who t-wait">
-              <AgentMark agent={todos[0].isDemo ? 'demo' : todos[0].agent} size={13} />
               <b className="is-who-name">{names[todos[0].key]}</b>
               {todos.length > 1 && <small>+{todos.length - 1}</small>}
             </span>
           )}
-          {!open && !todos.length && (working.length ? working : list).slice(0, 3).map((s) => (
-            <span key={s.key} className={`is-who t-${stateTone(s)}`}>
-              <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={13} />
-            </span>
-          ))}
           {!list.length && <span className="is-dim"><Icon name="moon" /> 대기</span>}
         </div>
         <div className="is-notch" />
