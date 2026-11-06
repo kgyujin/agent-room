@@ -4,7 +4,7 @@
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
 import { useEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
-import { fmtAgo, fmtDuration, justDone, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
+import { fmtAgo, fmtDuration, justDone, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon, type IconName } from '../ui/icons';
 import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
@@ -22,6 +22,8 @@ const STATE_ICON: Record<Snapshot['state'], IconName> = {
 };
 /** room beside the notch for the agent icons (left) and the status (right) */
 const SIDE = 88;
+/** extra room on each side for the remaining usage (Claude left, Codex right) */
+const USAGE_W = 64;
 /** used when the screen has no notch: [empty middle, bar height] */
 const NO_NOTCH: [number, number] = [24, 28];
 
@@ -37,7 +39,6 @@ export function Island() {
     const off = backend.onTrayEvent('island-screen', ask);
     return () => void off.then((f) => f());
   }, []);
-  const COLLAPSED: [number, number] = [notchW + SIDE * 2, barH];
   // `open` is how the pill is drawn; `big` is how large its window is. Opening grows the window
   // first and then morphs the pill; closing morphs the pill back and then shrinks the window,
   // so the shape change is animated instead of jumping with the window.
@@ -59,15 +60,18 @@ export function Island() {
   const done = list.filter((s) => justDone(s, now, settings?.doneShownSec ?? 60));
   // remaining plan usage per agent, one line under the list
   const showLimits = settings?.showLimits ?? true;
-  const limits = showLimits ? (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(list, a)] as const).filter((r) => r[1]) : [];
-  // lowest remaining share across agents, always shown on the collapsed pill (red at 10% or less)
-  const lows = limits.flatMap(([a, l]) => l!.windows.map((w) => ({ a, left: Math.max(0, Math.round(100 - w.usedPct)), name: windowLabel(w.minutes) })));
+  // remaining share of each agent's session (5-hour) and weekly window, always on the collapsed pill:
+  // Claude at the far left, Codex at the far right, each in its own colour
+  const usageOn = showLimits && (settings?.islandUsage ?? true);
+  const claudeLeft = usageOn ? leftOf(list, 'claude') : null;
+  const codexLeft = usageOn ? leftOf(list, 'codex') : null;
+  const COLLAPSED: [number, number] = [notchW + (SIDE + (claudeLeft || codexLeft ? USAGE_W : 0)) * 2, barH];
   const usage = useUsageHistory(7);
   const lastDay = usage?.days[usage.days.length - 1];
   const today = lastDay ? lastDay.claude + lastDay.codex : 0;
-  const low = lows.reduce<(typeof lows)[number] | null>((m, x) => (!m || x.left < m.left ? x : m), null);
 
-  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (showLimits ? USAGE_H : 0)];
+  // never narrower than the collapsed pill: hover is hit-tested against the current size
+  const openSize: [number, number] = [Math.max(420, notchW + 230, COLLAPSED[0]), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (showLimits ? USAGE_H : 0)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
@@ -111,29 +115,19 @@ export function Island() {
       onClick={enter}>
       <div className="is-bar">
         <div className="is-left">
+          {!open && claudeLeft && <UsageLeft agent="claude" v={claudeLeft} />}
           {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
-          {/* someone needs you: say who (the longest-waiting), not just three look-alike icons */}
+          {/* someone needs you: say who (the longest-waiting); no logos on the collapsed pill */}
           {!open && todos.length > 0 && (
             <span className="is-who t-wait">
-              <AgentMark agent={todos[0].isDemo ? 'demo' : todos[0].agent} size={13} />
               <b className="is-who-name">{names[todos[0].key]}</b>
               {todos.length > 1 && <small>+{todos.length - 1}</small>}
             </span>
           )}
-          {!open && !todos.length && (working.length ? working : list).slice(0, 3).map((s) => (
-            <span key={s.key} className={`is-who t-${stateTone(s)}`}>
-              <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={13} />
-            </span>
-          ))}
           {!list.length && <span className="is-dim"><Icon name="moon" /> 대기</span>}
         </div>
         <div className="is-notch" />
         <div className="is-right">
-          {low && (settings?.islandUsage ?? true) && (
-            <span className={`is-low ${low.left <= 10 ? 'low' : low.left <= 30 ? 'mid' : ''}`} title={`가장 적게 남은 사용량: ${low.name} ${low.left}%`}>
-              남음 {low.left}%
-            </span>
-          )}
           {todos.length ? (
             <span className="is-alert"><Icon name="bell" />{open ? `확인 필요 ${todos.length}` : todos.length}</span>
           ) : working.length ? (
@@ -143,6 +137,7 @@ export function Island() {
           ) : list.length ? (
             <span className="is-dim"><Icon name="moon" /></span>
           ) : null /* the left side already says 대기 */}
+          {!open && codexLeft && <UsageLeft agent="codex" v={codexLeft} />}
         </div>
       </div>
       {open && (
@@ -195,5 +190,28 @@ export function Island() {
         </div>
       )}
     </div>
+  );
+}
+
+type Left = { session: number | null; week: number | null };
+
+/** remaining percent of an agent's session (5 hours or less) and weekly window; null without a report */
+function leftOf(list: Snapshot[], agent: 'claude' | 'codex'): Left | null {
+  const l = latestLimits(list, agent);
+  if (!l) return null;
+  const pct = (w?: { usedPct: number }) => (w ? Math.max(0, Math.min(100, Math.round(100 - w.usedPct))) : null);
+  const v = { session: pct(l.windows.find((w) => w.minutes <= 300)), week: pct(l.windows.find((w) => w.minutes > 300)) };
+  return v.session === null && v.week === null ? null : v;
+}
+
+function UsageLeft({ agent, v }: { agent: 'claude' | 'codex'; v: Left }) {
+  const name = agent === 'claude' ? 'Claude' : 'Codex';
+  const parts = [v.session !== null && `세션 ${v.session}%`, v.week !== null && `주간 ${v.week}%`].filter(Boolean).join(' · ');
+  return (
+    <span className={`is-pct is-pct-${agent}`} title={`${name} 남은 사용량: ${parts}`}>
+      {v.session !== null && <b>{v.session}%</b>}
+      {v.session !== null && v.week !== null && <i>·</i>}
+      {v.week !== null && <b>{v.week}%</b>}
+    </span>
   );
 }
