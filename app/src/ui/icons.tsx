@@ -30,6 +30,7 @@ const P: Record<string, string[]> = {
   monitor: ['............', 'xxxxxxxxxxxx', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xxxxxxxxxxxx', '.....xx.....', '....xxxx....', '............', '............'],
   menubar: ['............', 'xxxxxxxxxxxx', 'xxxxxxxxxxxx', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xxxxxxxxxxxx', '.....xx.....', '....xxxx....', '............', '............'],
   island: ['............', 'xxxxxxxxxxxx', 'xo.xxxxxx.ox', 'xoo.xxxx.oox', 'xoooooooooox', 'xoooooooooox', 'xoooooooooox', 'xxxxxxxxxxxx', '.....xx.....', '....xxxx....', '............', '............'],
+  out: ['............', '...xxxxxxx..', '...xxxxxxx..', '.......xxx..', '......xxxx..', '.....xxxxx..', '....xxx.xx..', '...xxx..xx..', '..xxx.......', '..xx........', '............', '............'],
   expand: ['xxxxxx......', 'x.....x.....', 'x......x....', 'x.......x...', 'x........x..', 'x.........x.', '.x.........x', '..x........x', '...x.......x', '....x......x', '.....x.....x', '......xxxxxx'],
 };
 

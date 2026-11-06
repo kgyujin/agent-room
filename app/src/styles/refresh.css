@@ -148,3 +148,74 @@
 /* name tags: even room around the agent mark, the same on both ends of the pill */
 .nametag { padding: 2px 8px 2px 5px; gap: 5px; }
 .nametag.on { padding: 3px 10px 3px 6px; gap: 6px; }
+
+/* ------------------------------------------------ dashboard, after product dashboards and planners (2026-11):
+   a big page title, roomy white cards on the page tone, ghost pill actions, and state-tinted cards
+   with a coloured dot (like a timetable's subject cards) instead of thick left bars. */
+.t-work, .tone-work { --tone: var(--work); }
+.t-wait, .tone-wait { --tone: var(--wait); }
+.t-ok, .tone-ok { --tone: var(--ok); }
+.t-bad, .tone-bad { --tone: var(--bad); }
+.t-calm, .t-muted, .tone-calm, .tone-muted { --tone: var(--calm); }
+.dpage { background: var(--page); }
+.dp-head { border-bottom: 0; padding: 22px 24px 10px; gap: 8px; align-items: flex-end; }
+.dpage.mac .dp-head { padding-top: 36px; }
+.dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dp-head h2 { font-size: 28px; line-height: 1.1; letter-spacing: -0.02em; }
+.dp-head p { flex: none; font-size: 12.5px; }
+.dp-head .btn { background: var(--box); border: 1px solid var(--edge); border-radius: 999px; padding: 7px 14px; box-shadow: 0 1px 2px rgba(20, 20, 30, 0.04); }
+.dp-head .btn:hover { background: var(--box); border-color: color-mix(in srgb, var(--ink) 18%, transparent); }
+.dpage.split .dp-head { padding: 16px 16px 8px; }
+.dpage.split .dp-head h2 { font-size: 20px; }
+.dp-body { padding: 12px 24px 24px; }
+.dp-one { gap: 14px; }
+.dpage.split .dp-one { padding: 10px 16px 16px; gap: 12px; }
+.dp-turn { margin: 0 24px 4px; border: 1px solid color-mix(in srgb, var(--wait) 30%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--wait) 9%, var(--box)); padding: 8px 12px; }
+.dpage.split .dp-turn { margin: 0 16px 4px; }
+
+/* cards: roomy, a quiet title row with a ghost pill on the right */
+.dpage .dash-card { border-radius: 20px; box-shadow: 0 1px 2px rgba(20, 20, 30, 0.03); }
+.dp-one .dash-h { font-size: 15px; font-weight: 700; padding: 14px 16px 8px; margin: 0; min-height: 28px; }
+.dp-one .dash-h .pn-count { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.dp-whole, .dash-h .dp-open { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--edge); background: var(--box); color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.dp-whole:hover, .dash-h .dp-open:hover { background: var(--fill); text-decoration: none; }
+.dash-h .dp-open + .dp-whole { margin-left: 6px; }
+.dpage .dash-stat { border-radius: 16px; padding: 12px 14px; }
+.dp-one .dash-stat b { font-size: 24px; letter-spacing: -0.02em; }
+
+/* agent map: an agent header with its mark in a round chip, sessions as tinted cards with the dot on the right */
+.dmap-agent { background: var(--box); border: 1px solid var(--edge); border-radius: 14px; padding: 7px 10px 7px 7px; gap: 8px; }
+.dmap-agent.ag-claude { --ag: var(--claude); } .dmap-agent.ag-codex { --ag: var(--codex); } .dmap-agent.ag-demo { --ag: var(--calm); }
+.dmap-agent.ag-claude, .dmap-agent.ag-codex { border-color: var(--edge); }
+.dmap-agent > .agent-mark { box-sizing: content-box; padding: 6px; border-radius: 50%; background: color-mix(in srgb, var(--ag) 14%, var(--box)); flex: none; }
+.dmap-agent small { padding: 1px 8px; border-radius: 999px; background: var(--fill); font-weight: 700; }
+.dmap-proj { border-left: 0; margin-left: 0; padding-left: 0; }
+.dmap-pname { padding: 2px 4px 0; }
+.dmap-node { --tone: var(--calm); background: color-mix(in srgb, var(--tone) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone) 28%, transparent); border-left-width: 1px; border-radius: 14px; padding: 9px 12px; }
+.dmap-node.t-work, .dmap-node.t-wait, .dmap-node.t-bad, .dmap-node.t-ok { border-left-color: color-mix(in srgb, var(--tone) 28%, transparent); }
+.dmap-node:hover, .dmap-node.on { box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--tone) 60%, transparent); }
+.dmap-node.on { border-color: var(--tone); }
+.dmap-top .dot { flex: none; }
+.dmap-top b { color: var(--ink); }
+.dmap-meta em { background: color-mix(in srgb, var(--box) 70%, transparent); border: 1px solid var(--edge); }
+
+/* task board: plain columns with a counted header, cards tinted by their column */
+.dboard-col { background: transparent; padding: 0; gap: 8px; }
+.dp-one .dboard-col { padding: 0; }
+.dboard-col h4 { margin: 0 2px 2px; font-size: 12px; }
+.dboard-col h4 span { padding: 0 7px; border-radius: 999px; background: var(--fill); font-size: 11px; }
+.dboard-col { --tone: var(--calm); }
+.dboard-col.c-todo { --tone: var(--wait); } .dboard-col.c-in_progress { --tone: var(--work); } .dboard-col.c-completed { --tone: var(--ok); }
+.dboard-card { background: color-mix(in srgb, var(--tone) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone) 24%, transparent); border-radius: 12px; box-shadow: none; padding: 9px 11px; }
+.dboard-card .tag { background: var(--box); border: 1px solid var(--edge); }
+.dboard-card:hover { box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--tone) 55%, transparent); }
+
+/* side panel rows: the same tinted cards as the map */
+.ov .ov-row { --tone: var(--calm); }
+.ov .ov-row.t-work, .ov .ov-row.t-wait, .ov .ov-row.t-ok, .ov .ov-row.t-bad { background: color-mix(in srgb, var(--tone) 5%, var(--box)); border-color: color-mix(in srgb, var(--tone) 22%, transparent); }
+/* card contents line up with the card title (16px in) */
+.dp-one .dmap { padding: 2px 16px 16px; }
+.dp-one .dboard { padding: 2px 16px 16px; gap: 10px 12px; }
+.dp-one .lc-grid { padding: 0 16px; }
+.dp-one .dshare { padding: 12px 18px; }
+.dmap-node { border-radius: 10px; }

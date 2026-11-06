@@ -45,7 +45,7 @@ function FitCard({ cls, title, style, onWhole, children }: { cls: string; title:
   const cut = dropped + (squeezed ? 1 : 0);
   return (
     <section className={`dash-card ${cls}`} style={style}>
-      <h4 className="dash-h">{title}{cut > 0 && <button className="link dp-whole" onClick={onWhole}>{L('전체 보기', 'Show all')}</button>}</h4>
+      <h4 className="dash-h">{title}{cut > 0 && <button className="dp-whole" onClick={onWhole}><Icon name="out" size={12} />{L('전체 보기', 'Show all')}</button>}</h4>
       <div className="dp-scroll" ref={ref}>{children}</div>
     </section>
   );
@@ -110,8 +110,10 @@ export function DashboardPage(props: {
     <div className={`dpage ${split ? 'split' : ''} ${props.mac ? 'mac' : ''}`} style={split ? { width: props.split } : undefined}>
       {props.mac && <div className="dp-drag" data-tauri-drag-region />}
       <header className="dp-head">
-        <h2>{L('대시보드', 'Dashboard')}</h2>
-        <p>{L(`세션 ${live.length}개 · 내 차례 ${todo}건`, `${live.length} sessions · ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        <div className="dp-title">
+          <h2>{L('대시보드', 'Dashboard')}</h2>
+          <p>{L(`세션 ${live.length}개 · 내 차례 ${todo}건`, `${live.length} sessions · ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        </div>
         <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />{L('오늘 요약', 'Today')}</button>
         {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />{L('지난 기록', 'Past days')}</button>}
         <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />{L('지침 파일', 'Instruction files')}</button>
