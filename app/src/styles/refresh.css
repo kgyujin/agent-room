@@ -422,3 +422,65 @@
 }
 .dboard-col h4 em { font-style: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dboard-col h4 span { flex: none; }
+
+/* the side panel and dashboard timelines draw their own dot on the rail (.tl-dot); the older
+   pseudo-element dot sat 3px off the rail and showed as a second, off-centre circle */
+.panel .timeline li::after, .dpage .timeline li::after { display: none; }
+.dp-one .timeline li:not(.fit-off):not(:has(~ li:not(.fit-off)))::before { bottom: 50%; }
+/* the Auto tab has no mark, so it takes even padding instead of the tabs' icon-side padding */
+.tab.tab-auto { padding: 4px 12px; justify-content: center; }
+/* the number cards open what they count */
+.dash-stat.go { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.dash-stat.go:hover { border-color: var(--accent); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 18%, transparent); }
+.dash-stat.go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* today's summary: a sentence first, then when the agents worked, then the counts */
+.dt-hero { background: var(--accent-soft); border-radius: var(--r-md); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.dt-lead { margin: 0; font-size: 17px; font-weight: 800; color: var(--ink); }
+.dt-story { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.dt-kpis { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 4px; }
+.dt-kpis span { display: flex; flex-direction: column; }
+.dt-kpis b { font-size: 18px; font-weight: 800; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.dt-kpis .wait b { color: var(--wait); }
+.dt-kpis small { font-size: 11px; color: var(--ink-soft); font-weight: 600; }
+.dt-chart { background: #fff; border: 1px solid var(--edge); border-radius: var(--r-md); padding: 12px 14px 8px; }
+.dt-bars { display: flex; align-items: flex-end; justify-content: center; gap: 4px; height: 110px; border-bottom: 1px solid var(--edge); }
+.dt-bar { flex: 1; min-width: 0; max-width: 56px; height: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; background: color-mix(in srgb, var(--ink) 4%, transparent); overflow: hidden; }
+.dt-bar i { display: block; min-height: 0; }
+.dt-bar i.work { background: color-mix(in srgb, var(--work) 75%, var(--box)); }
+.dt-bar i.wait { background: var(--wait); }
+.dt-bar.now { box-shadow: inset 0 0 0 1px var(--accent); }
+.dt-hours { display: flex; justify-content: center; gap: 4px; margin-top: 4px; }
+.dt-hours span { flex: 1; min-width: 0; max-width: 56px; text-align: center; font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: visible; }
+.dt-legend { padding: 8px 0 0; }
+.dt-legend small { margin-left: auto; font-size: 10.5px; }
+.dt-split i.ok { background: var(--ok); }
+.dt-split i.bad { background: var(--bad); }
+.dt-sess-top { align-items: center; }
+.dt-meter { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 6%, transparent); overflow: hidden; }
+.dt-meter i { display: block; height: 100%; border-radius: 3px; background: var(--claude); min-width: 2px; }
+.dt-meter.a-codex i { background: var(--codex); }
+
+/* instruction files: find inside, outline, line numbers */
+.dmem-list button b { display: flex; align-items: center; gap: 6px; }
+.dmem-n { margin-left: auto; font-style: normal; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
+.dmem-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px 0; flex-wrap: wrap; }
+.dmem-bar .dmem-path { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.dmem-bar .btn { padding: 3px 10px; font-size: 12px; }
+.dmem-find { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.dmem-find .btn { padding: 2px 8px; }
+.dmem-body { display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 1fr); gap: 10px; margin: 8px 12px; align-items: start; }
+.dmem-body:not(:has(.dmem-toc)) { grid-template-columns: minmax(0, 1fr); }
+.dmem-toc { display: flex; flex-direction: column; gap: 1px; position: sticky; top: 0; max-height: 70vh; overflow: auto; }
+.dmem-toc button { border: 0; background: transparent; text-align: left; font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; color: var(--ink); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dmem-toc button:hover { background: var(--accent-soft); color: var(--accent-ink); }
+.dmem-toc .lv1 { font-weight: 700; }
+.dmem-toc .lv3 { padding-left: 20px; color: var(--ink-soft); }
+.dmem-text { background: #fff; border: 1px solid var(--edge); border-radius: 10px; padding: 8px 0; max-height: 70vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.6; user-select: text; -webkit-user-select: text; }
+.dmem-text > div { display: grid; grid-template-columns: 40px minmax(0, 1fr); }
+.dmem-text .ln { text-align: right; padding-right: 10px; color: var(--ink-soft); opacity: 0.6; user-select: none; -webkit-user-select: none; }
+.dmem-text .tx { white-space: pre-wrap; word-break: break-word; padding-right: 12px; }
+.dmem-text .h .tx { font-weight: 700; color: var(--accent-ink); }
+.dmem-text mark { background: color-mix(in srgb, var(--wait) 30%, transparent); color: inherit; border-radius: 2px; }
+.dmem-text mark.cur { background: var(--wait); color: #fff; }
+@container (max-width: 560px) { .dmem-body { grid-template-columns: minmax(0, 1fr); } .dmem-toc { display: none; } }

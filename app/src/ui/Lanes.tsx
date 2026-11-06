@@ -40,6 +40,8 @@ export function Lanes({ sessions, timelines, now, minutes = 30, selected, onSele
       onPointerMove={(e) => {
         const d = drag.current;
         if (!d) return;
+        // released outside the lanes before the drag began (no capture yet): forget it
+        if (!(e.buttons & 1)) { drag.current = null; return; }
         if (!d.moved && Math.abs(e.clientX - d.x) < 4) return;
         if (!d.moved) { d.moved = true; e.currentTarget.setPointerCapture(e.pointerId); }
         move(d.back + (e.clientX - d.x) * perPx());

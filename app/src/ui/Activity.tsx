@@ -34,7 +34,10 @@ function Spark({ v }: { v: number[] }) {
 
 const STAT_ICON = { todo: 'bell', work: 'bolt', done: 'check', today: 'note', week: 'clock' } as const;
 
-export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; cost?: { claude: number; codex: number } }) {
+export type StatId = 'todo' | 'work' | 'done' | 'today' | 'week';
+
+/** onOpen: a card opens the view behind its number (the sessions it counts, today's summary, usage) */
+export function StatCards({ sessions, now, h, cost, onOpen }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; cost?: { claude: number; codex: number }; onOpen?: (id: StatId) => void }) {
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const days = h?.days ?? [];
   const today = days.length ? sum(days.slice(-1)) : 0;
@@ -46,7 +49,7 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
   // small trend lines: daily totals of the last two weeks, and the rolling 7-day total over the same days
   const daily = days.slice(-14).map((d) => d.claude + d.codex);
   const weekly = days.length >= 7 ? days.slice(-14).map((_, i, a) => sum(days.slice(Math.max(0, days.length - a.length + i - 6), days.length - a.length + i + 1))) : [];
-  const cards: { id: 'todo' | 'work' | 'done' | 'today' | 'week'; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend>; spark?: number[] }[] = [
+  const cards: { id: StatId; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend>; spark?: number[] }[] = [
     { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인·답변 기다림', 'Waiting for you') },
     { id: 'work', label: L('작업 중', 'Working'), value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: L(`열린 세션 ${live.length}개`, `${live.length} open sessions`) },
     { id: 'done', label: L('완료한 요청', 'Requests done'), value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: L(`수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개`, `${sessions.reduce((a, x) => a + x.filesEdited.length, 0)} files edited`) },
@@ -56,7 +59,7 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
   return (
     <div className="dash-stats">
       {cards.map((c) => (
-        <div key={c.id} className={`dash-stat st-${c.id}`}>
+        <div key={c.id} className={`dash-stat st-${c.id} ${onOpen ? 'go' : ''}`} {...(onOpen ? { role: 'button', tabIndex: 0, onClick: () => onOpen(c.id), onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } } } : {})}>
           <i className="ds-ic"><Icon name={STAT_ICON[c.id]} size={14} /></i>
           <small>{c.label}</small>
           <b>{c.value}{c.tr && <em className={c.tr.up ? 'up' : 'down'}>{c.tr.text}</em>}</b>
@@ -69,11 +72,11 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
 }
 
 /** every session in one table, the one needing the user first */
-type SessFilter = 'all' | 'todo' | 'work' | 'rest';
+export type SessFilter = 'all' | 'todo' | 'work' | 'rest';
 const SESS_FILTERS = (): [SessFilter, string][] => [['all', L('전체', 'All')], ['todo', L('내 차례', 'Your turn')], ['work', L('작업 중', 'Working')], ['rest', L('쉬는 중', 'Resting')]];
 
-export function SessionTable({ sessions: all, now, selected, onSelect }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void }) {
-  const [f, setF] = useState<SessFilter>('all');
+export function SessionTable({ sessions: all, now, selected, onSelect, filter = 'all' }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; filter?: SessFilter }) {
+  const [f, setF] = useState<SessFilter>(filter);
   const [q, setQ] = useState('');
   if (!all.length) return <p className="muted small pad">{L('아직 세션이 없어요.', 'No sessions yet.')}</p>;
   const names = sessionNames(all);

@@ -61,6 +61,8 @@ export interface Backend {
   usageHistory(days: number): Promise<UsageHistory>;
   /** CLAUDE.md / AGENTS.md the agents load (global and per session folder), read-only */
   memoryFiles(): Promise<MemoryFile[]>;
+  /** opens one of those files in the system's text editor */
+  openMemoryFile(path: string): Promise<void>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
@@ -108,6 +110,7 @@ const tauriBackend: Backend = {
   doubleClickMs: () => tauriInvoke('double_click_ms'),
   usageHistory: (days) => tauriInvoke('usage_history', { tzOffsetMin: -new Date().getTimezoneOffset(), days }),
   memoryFiles: () => tauriInvoke('memory_files'),
+  openMemoryFile: (path) => tauriInvoke('open_memory_file', { path }),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
@@ -257,8 +260,9 @@ function previewBackend(): Backend {
         recentClaude: 1_300_000, recentCodex: 240_000, streakLongest: 6, streakCurrent: 5,
       };
     },
+    openMemoryFile: async () => undefined,
     memoryFiles: async () => [
-      { label: L('전역 · Claude Code', 'Global · Claude Code'), path: '~/.claude/CLAUDE.md', truncated: false, content: L('# 미리보기용 예시\n\n- 한국어로 답하기\n- 커밋은 작게 나누지 말 것\n', '# Preview example\n\n- Answer in English\n- Keep commits coarse\n') },
+      { label: L('전역 · Claude Code', 'Global · Claude Code'), path: '~/.claude/CLAUDE.md', truncated: false, content: L('# 미리보기용 예시\n\n## 말투\n\n- 한국어로 답하기\n- 결론부터 말하기\n\n## 커밋\n\n- 커밋은 작게 나누지 말 것\n- 커밋 메시지는 영어로\n\n## 테스트\n\n- 고친 뒤 테스트를 꼭 돌리기\n', '# Preview example\n\n## Tone\n\n- Answer in English\n- Lead with the answer\n\n## Commits\n\n- Keep commits coarse\n- Write commit messages in English\n\n## Tests\n\n- Always run the tests after a change\n') },
       { label: 'cozy-project · AGENTS.md', path: '/demo/cozy-project/AGENTS.md', truncated: false, content: L('# cozy-project\n\n테스트는 `npm test`로 돌립니다.\n', '# cozy-project\n\nRun the tests with `npm test`.\n') },
     ],
     getSettings: async () => settings,

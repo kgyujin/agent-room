@@ -227,6 +227,23 @@ export default function App() {
       backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
     }
   }, [selected?.key, panelOpen, dashPage, dashSplit, mini, list, timelines]);
+  // while a dashboard is up, every session's log is read again now and then, so anything a live
+  // update missed (one that came while the first read was on its way) shows up without reopening it
+  const listKeys = list.map((x) => x.key).join('\n');
+  useEffect(() => {
+    if (!(dashPage || dashSplit)) return;
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      for (const k of listKeys.split('\n').filter(Boolean)) {
+        void backend.timeline(k).then((t) => setTimelines((p) => {
+          const have = new Set(t.map((e) => e.id));
+          const newer = (p[k] ?? []).filter((e) => !have.has(e.id) && e.at >= (t[t.length - 1]?.at ?? 0));
+          return { ...p, [k]: [...t, ...newer].slice(-300) };
+        }), () => {});
+      }
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [dashPage, dashSplit, listKeys]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {

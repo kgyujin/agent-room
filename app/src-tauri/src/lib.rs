@@ -399,6 +399,34 @@ fn memory_files(state: tauri::State<Shared>) -> Vec<MemoryFile> {
     out
 }
 
+/// Opens one of the instruction files in the system's text editor. Only a path the list above
+/// would show is accepted, so the page can't open arbitrary files.
+#[tauri::command]
+fn open_memory_file(state: tauri::State<Shared>, path: String) -> Result<(), String> {
+    if !memory_files(state).iter().any(|f| f.path == path) {
+        return Err("not an instruction file".into());
+    }
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg("-t").arg(&path);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("notepad");
+        c.arg(&path);
+        c
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&path);
+        c
+    };
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn remove_session(app: AppHandle, key: String) {
     let u = app.state::<Shared>().store.lock().unwrap().remove(&key);
@@ -742,7 +770,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, set_tz_offset, set_ui_lang, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear, answer_approval
+            tray_action, set_tz_offset, set_ui_lang, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, open_memory_file, save_report, notify_text, history_read, history_clear, answer_approval
         ])
         .setup(|app| {
             let handle = app.handle().clone();

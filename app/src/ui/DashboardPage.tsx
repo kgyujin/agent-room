@@ -10,12 +10,12 @@ import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
-import { ActivityLog, SessionTable, StatCards } from './Activity';
+import { ActivityLog, SessionTable, StatCards, type SessFilter, type StatId } from './Activity';
 import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
 import { ApproveButtons } from './Approve';
-import { dayMarkdown, daySummary, estCost, fmtUsd, reportName, type DayLog } from '../report';
+import { dayMarkdown, daySummary, estCost, fmtSpan, fmtUsd, reportName, type DayLog } from '../report';
 import { L } from '../i18n';
 
 /** the cards below the counts, in grid order; settings can turn any of them off */
@@ -94,6 +94,13 @@ export function DashboardPage(props: {
   const [actView, setActView] = useState<'lanes' | 'log'>(() => { try { return localStorage.getItem('dashAct') === 'log' ? 'log' : 'lanes'; } catch { return 'lanes'; } });
   const pickActView = (v: 'lanes' | 'log') => { setActView(v); try { localStorage.setItem('dashAct', v); } catch { /* private window */ } };
   const [whole, setWhole] = useState<(typeof DASH_CARDS)[number][0] | null>(null);
+  // the sessions overlay opened from a number card starts on the sessions that number counts
+  const [wholeFilter, setWholeFilter] = useState<SessFilter>('all');
+  const openStat = (id: StatId) => {
+    if (id === 'done') { setTodayOpen(true); return; }
+    if (id === 'todo' || id === 'work') { setWholeFilter(id); setWhole('sessions'); return; }
+    setWhole('usage');
+  };
   // Escape closes an open overlay first, before the window shortcut closes the whole dashboard
   const overlay = !!whole || todayOpen || pastOpen || memOpen;
   useEffect(() => {
@@ -167,18 +174,18 @@ export function DashboardPage(props: {
         </div>
       )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
-        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} cost={props.cost} /></div>
+        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} cost={props.cost} onOpen={openStat} /></div>
         {shown.map(([id], i) => {
           const [cls, title, body] = cards[id]();
           const last = i === shown.length - 1 && rest > 0;
-          return <FitCard key={id} cls={last ? `${cls} dp-last` : cls} title={title} style={last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined} onWhole={() => setWhole(id)}>{body}</FitCard>;
+          return <FitCard key={id} cls={last ? `${cls} dp-last` : cls} title={title} style={last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined} onWhole={() => { setWholeFilter('all'); setWhole(id); }}>{body}</FitCard>;
         })}
       </div>
-      {whole && !props.hidden.includes(whole) && (
+      {whole && (
         <div className="dp-over" onClick={() => setWhole(null)}>
           <section className={`dash-card ${cards[whole]()[0]}`} onClick={(e) => e.stopPropagation()}>
             <h4 className="dash-h">{cards[whole]()[1]}<button className="link dp-open" onClick={() => setWhole(null)}>{L('닫기', 'Close')}</button></h4>
-            <div className="dp-scroll">{cards[whole]()[2]}</div>
+            <div className="dp-scroll">{whole === 'sessions' ? <SessionTable filter={wholeFilter} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} /> : cards[whole]()[2]}</div>
           </section>
         </div>
       )}
@@ -341,20 +348,63 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
   const copy = async () => {
     try { await navigator.clipboard.writeText(md); setSaved(L('복사했어요', 'Copied')); } catch { setSaved(L('복사하지 못했어요', "Couldn't copy")); }
   };
+  const total = d.tokens ? d.tokens.claude + d.tokens.codex : 0;
+  // the chart runs from the first active hour (at least eight hours back) to the current hour
+  const nowH = Math.min(23, Math.floor((now - d.from) / 3_600_000));
+  const startH = Math.max(0, Math.min(nowH - 7, d.first !== null ? Math.floor((d.first - d.from) / 3_600_000) : nowH - 7));
+  const hours = d.hours.slice(startH, nowH + 1).map((x, i) => ({ h: startH + i, ...x }));
+  // sessions run side by side, so an hour can hold more than 60 minutes of work; the tallest bar sets the scale
+  const scale = Math.max(3_600_000, ...hours.map((x) => x.work + x.wait));
+  const busiest = hours.reduce<(typeof hours)[number] | null>((m, x) => (x.work + x.wait > (m ? m.work + m.wait : 0) ? x : m), null);
+  const ranked = [...d.sessions].sort((x, y) => y.workMs - x.workMs || y.turns - x.turns);
+  const maxWork = Math.max(1, ...ranked.map((x) => x.workMs));
+  const quiet = !d.turns && !d.workMs && !d.asks;
+  const step = hours.length > 16 ? 3 : hours.length > 8 ? 2 : 1;
+  const agentOf = (name: string) => (name === AGENT_NAME.codex ? 'codex' : 'claude');
   return (
     <div className="dtoday">
+      <section className="dt-hero">
+        <p className="dt-lead">{quiet
+          ? L('오늘은 아직 받은 활동이 없어요.', 'Nothing has happened today yet.')
+          : L(`오늘 프로젝트 ${d.sessions.length}곳에서 요청 ${d.turns}건을 끝냈어요.`, `${d.turns} requests done across ${d.sessions.length} projects today.`)}</p>
+        {!quiet && (
+          <p className="dt-story">
+            {busiest && busiest.work + busiest.wait > 0 && L(`가장 바빴던 때는 ${busiest.h}시`, `Busiest around ${busiest.h}:00`)}
+            {ranked[0]?.workMs > 0 && L(`, 가장 오래 일한 곳은 ${ranked[0].project}예요.`, `, most time on ${ranked[0].project}.`)}
+            {d.testsFail > 0 ? L(` 테스트가 ${d.testsFail}번 실패했어요.`, ` Tests failed ${d.testsFail} times.`) : d.testsOk > 0 ? L(` 테스트는 모두 통과했어요.`, ` Every test run passed.`) : ''}
+          </p>
+        )}
+        <div className="dt-kpis">
+          <span><b>{fmtSpan(d.workMs)}</b><small>{L('에이전트 작업', 'Agents working')}</small></span>
+          <span className="wait"><b>{fmtSpan(d.waitMs)}</b><small>{L('내 차례 기다림', 'Waiting for you')}</small></span>
+          {d.first !== null && <span><b>{fmtClock(d.first).slice(0, 5)}–{fmtClock(d.last ?? now).slice(0, 5)}</b><small>{L('활동 시간대', 'Active between')}</small></span>}
+        </div>
+      </section>
+      <section className="dt-chart" aria-label={L('시간대별 작업', 'Work by hour')}>
+        <div className="dt-bars">
+          {hours.map((x) => (
+            <div key={x.h} className={`dt-bar ${x.h === nowH ? 'now' : ''}`} title={L(`${x.h}시 · 작업 ${fmtSpan(x.work)} · 기다림 ${fmtSpan(x.wait)}`, `${x.h}:00 · working ${fmtSpan(x.work)} · waiting ${fmtSpan(x.wait)}`)}>
+              <i className="wait" style={{ height: `${(x.wait / scale) * 100}%` }} />
+              <i className="work" style={{ height: `${(x.work / scale) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+        <div className="dt-hours">{hours.map((x) => <span key={x.h}>{(x.h - startH) % step === 0 ? L(`${x.h}시`, `${x.h}h`) : ''}</span>)}</div>
+        <div className="lane-legend dt-legend"><span><i className="seg work" />{L('작업', 'Working')}</span><span><i className="seg wait" />{L('내 차례', 'Your turn')}</span><small>{L(`세션 시간을 더한 값 · 맨 위 ${fmtSpan(scale)}`, `Sessions added up · top ${fmtSpan(scale)}`)}</small></div>
+      </section>
       <div className="dt-tiles">
         <Tile k={L('끝낸 요청', 'Requests done')} v={d.turns} />
         <div className={`dt-tile ${d.testsOk + d.testsFail ? '' : 'zero'}`}>
           <small>{L('테스트', 'Tests')}</small>
           <div className="dt-tests"><b className="ok">{d.testsOk}</b><span>{L('통과', 'passed')}</span><b className={d.testsFail ? 'bad' : ''}>{d.testsFail}</b><span>{L('실패', 'failed')}</span></div>
+          {d.testsOk + d.testsFail > 0 && <span className="dt-split"><i className="ok" style={{ flex: d.testsOk }} /><i className="bad" style={{ flex: d.testsFail }} /></span>}
         </div>
         <Tile k={L('승인·답변 요청', 'Approvals and questions')} v={d.asks} />
         <Tile k={L('고친 파일', 'Files edited')} v={d.files} />
-        <div className={`dt-tile ${d.tokens ? '' : 'zero'}`}>
+        <div className={`dt-tile ${total ? '' : 'zero'}`}>
           <small>{L('토큰', 'Tokens')}</small>
-          <b>{d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'}</b>
-          {d.tokens && d.tokens.claude + d.tokens.codex > 0 && (
+          <b>{d.tokens ? fmtTokens(total) : '—'}</b>
+          {d.tokens && total > 0 && (
             <span className="dt-split" title={`Claude Code ${fmtTokens(d.tokens.claude)} · Codex ${fmtTokens(d.tokens.codex)}`}>
               <i className="a-claude" style={{ flex: d.tokens.claude }} /><i className="a-codex" style={{ flex: d.tokens.codex }} />
             </span>
@@ -362,13 +412,17 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
         </div>
         {usd !== null && <div className="dt-tile"><small>{L('추정 비용', 'Estimated cost')}</small><b>{fmtUsd(usd)}</b></div>}
       </div>
-      <h4 className="dash-h">{L('세션별', 'By session')} <span className="pn-count">{d.sessions.length}</span></h4>
-      {d.sessions.length ? (
+      <h4 className="dash-h">{L('프로젝트별 작업 시간', 'Working time by project')} <span className="pn-count">{d.sessions.length}</span></h4>
+      {ranked.length ? (
         <ul className="dt-sess">
-          {d.sessions.map((x, i) => (
+          {ranked.map((x, i) => (
             <li key={`${x.project}-${i}`}>
-              <div className="dt-sess-top"><b>{x.project}</b><small>{x.agent}</small><span>{L(`요청 ${x.turns}회 · 파일 ${x.files.length}개`, `${x.turns} requests · ${x.files.length} files`)}</span></div>
-              {x.files.length > 0 && <div className="dt-files">{x.files.slice(0, 8).map((f) => <code key={f}>{f.split('/').pop()}</code>)}{x.files.length > 8 && <small>+{x.files.length - 8}</small>}</div>}
+              <div className="dt-sess-top">
+                <AgentMark agent={agentOf(x.agent)} size={13} /><b>{x.project}</b>
+                <span>{fmtSpan(x.workMs)} · {L(`요청 ${x.turns} · 파일 ${x.files.length}`, `${x.turns} requests · ${x.files.length} files`)}</span>
+              </div>
+              <span className={`dt-meter a-${agentOf(x.agent)}`}><i style={{ width: `${(x.workMs / maxWork) * 100}%` }} /></span>
+              {x.files.length > 0 && <div className="dt-files">{x.files.slice(0, 8).map((f) => <code key={f} title={f}>{f.split('/').pop()}</code>)}{x.files.length > 8 && <small>+{x.files.length - 8}</small>}</div>}
             </li>
           ))}
         </ul>
@@ -427,35 +481,76 @@ function PastDays({ days, now }: { days: number; now: number }) {
   );
 }
 
-/** the CLAUDE.md / AGENTS.md files the agents load, read-only */
+/** the CLAUDE.md / AGENTS.md files the agents load: search across and inside them, jump by heading, open in an editor */
 function MemoryBrowser() {
   const [files, setFiles] = useState<MemoryFile[] | null>(null);
   const [pick, setPick] = useState(0);
   const [q, setQ] = useState('');
+  const [hit, setHit] = useState(0);
+  const [note, setNote] = useState<string | null>(null);
+  const view = useRef<HTMLDivElement>(null);
   useEffect(() => { void backend.memoryFiles().then(setFiles).catch(() => setFiles([])); }, []);
-  const shown = useMemo(() => (files ?? []).filter((f) => !q.trim() || `${f.label} ${f.content}`.toLowerCase().includes(q.trim().toLowerCase())), [files, q]);
+  const query = q.trim().toLowerCase();
+  const count = (text: string) => { if (!query) return 0; let n = 0; for (let i = text.toLowerCase().indexOf(query); i >= 0; i = text.toLowerCase().indexOf(query, i + query.length)) n++; return n; };
+  const shown = useMemo(() => (files ?? []).filter((f) => !query || `${f.label} ${f.content}`.toLowerCase().includes(query)), [files, query]);
+  const f = shown.length ? shown[Math.min(pick, shown.length - 1)] : null;
+  const lines = useMemo(() => (f ? f.content.split('\n') : []), [f]);
+  const heads = useMemo(() => lines.map((t, i) => ({ i, m: /^(#{1,3})\s+(.+)/.exec(t) })).filter((x) => x.m).map((x) => ({ line: x.i, level: x.m![1].length, text: x.m![2] })), [lines]);
+  const total = f ? count(f.content) : 0;
+  // the current match scrolls into view whenever it or the file changes
+  useEffect(() => { view.current?.querySelector('mark.cur')?.scrollIntoView({ block: 'center' }); }, [hit, f, query]);
   if (!files) return <p className="muted pad">{L('파일을 읽는 중…', 'Reading files…')}</p>;
   if (!files.length) return <p className="muted pad">{L('에이전트 지침 파일(CLAUDE.md, AGENTS.md)을 찾지 못했어요. 전역 파일과 지금 보이는 세션의 프로젝트 폴더만 찾아봐요.', 'No agent instruction files (CLAUDE.md, AGENTS.md) found. Only the global files and the project folders of the sessions shown are checked.')}</p>;
-  const f = shown[Math.min(pick, shown.length - 1)];
+  const go = (d: number) => total && setHit((h) => (h + d + total) % total);
+  const toLine = (n: number) => view.current?.querySelector(`[data-line="${n}"]`)?.scrollIntoView({ block: 'start' });
+  // highlight matches; numbering them across the file marks the current one
+  let k = 0;
+  const mark = (t: string) => {
+    if (!query) return t || '\u00a0';
+    const out: React.ReactNode[] = [];
+    let at = 0;
+    for (let i = t.toLowerCase().indexOf(query); i >= 0; i = t.toLowerCase().indexOf(query, at)) {
+      out.push(t.slice(at, i), <mark key={i} className={k === hit % Math.max(1, total) ? 'cur' : ''}>{t.slice(i, i + query.length)}</mark>);
+      k++;
+      at = i + query.length;
+    }
+    out.push(t.slice(at));
+    return out;
+  };
   return (
     <div className="dmem">
       <section className="dmem-list">
-        <input type="search" placeholder={L('파일·내용 검색', 'Search files and text')} value={q} onChange={(e) => { setQ(e.target.value); setPick(0); }} />
+        <input type="search" placeholder={L('파일·내용 검색', 'Search files and text')} value={q} autoFocus
+          onChange={(e) => { setQ(e.target.value); setPick(0); setHit(0); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go(e.shiftKey ? -1 : 1); } }} />
         {shown.map((x, i) => (
-          <button key={x.path} className={x === f ? 'on' : ''} onClick={() => setPick(i)} title={x.path}>
-            <b>{x.label}</b><small>{x.path}</small>
+          <button key={x.path} className={x === f ? 'on' : ''} onClick={() => { setPick(i); setHit(0); }} title={x.path}>
+            <b>{x.label}{query && <em className="dmem-n">{count(x.content)}</em>}</b><small>{x.path}</small>
           </button>
         ))}
+        {!shown.length && <p className="muted small pad">{L('검색과 맞는 파일이 없어요.', 'No files match the search.')}</p>}
       </section>
-      <section className="dmem-view">
-        {f ? (
-          <>
-            <h4 className="dmem-path">{f.path}{f.truncated && L(' (앞부분 200KB만)', ' (first 200 KB only)')}</h4>
-            <pre>{f.content}</pre>
-            <p className="pn-note pad">{L('읽기 전용이에요. 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.', 'Read-only. The files are read straight from this computer and sent nowhere.')}</p>
-          </>
-        ) : <p className="muted pad">{L('검색과 맞는 파일이 없어요.', 'No files match the search.')}</p>}
-      </section>
+      {f && (
+        <section className="dmem-view">
+          <div className="dmem-bar">
+            <h4 className="dmem-path" title={f.path}>{f.path}{f.truncated && L(' (앞부분 200KB만)', ' (first 200 KB only)')}</h4>
+            {query && <span className="dmem-find">{total ? `${(hit % total) + 1}/${total}` : L('없음', 'none')}<button className="btn" onClick={() => go(-1)} disabled={!total} aria-label={L('이전', 'Previous')}>↑</button><button className="btn" onClick={() => go(1)} disabled={!total} aria-label={L('다음', 'Next')}>↓</button></span>}
+            <button className="btn" onClick={() => void navigator.clipboard.writeText(f.path).then(() => setNote(L('경로를 복사했어요', 'Path copied')), () => undefined)}>{L('경로 복사', 'Copy path')}</button>
+            {IN_TAURI && <button className="btn primary" onClick={() => void backend.openMemoryFile(f.path).catch((e) => setNote(String(e)))}>{L('편집기로 열기', 'Open in editor')}</button>}
+          </div>
+          <div className="dmem-body">
+            {heads.length > 1 && (
+              <nav className="dmem-toc" aria-label={L('목차', 'Outline')}>
+                {heads.map((h) => <button key={h.line} className={`lv${h.level}`} onClick={() => toLine(h.line)}>{h.text}</button>)}
+              </nav>
+            )}
+            <div className="dmem-text" ref={view}>
+              {lines.map((t, i) => <div key={i} data-line={i} className={/^#{1,3}\s/.test(t) ? 'h' : ''}><span className="ln">{i + 1}</span><span className="tx">{mark(t)}</span></div>)}
+            </div>
+          </div>
+          <p className="pn-note pad">{note ?? L(`줄 ${lines.length}개 · 제목 ${heads.length}개 · 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.`, `${lines.length} lines · ${heads.length} headings · read straight from this computer and sent nowhere.`)}</p>
+        </section>
+      )}
     </div>
   );
 }

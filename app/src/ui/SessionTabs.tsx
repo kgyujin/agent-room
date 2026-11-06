@@ -9,7 +9,7 @@ export function SessionTabs({ sessions, selected, pinned, onSelect }: { sessions
   return (
     // a plain mouse wheel only scrolls up and down; turn it sideways so tabs past the edge can be reached
     <div className="tabs" role="tablist" onWheel={(e) => { if (!e.deltaX && e.deltaY) e.currentTarget.scrollLeft += e.deltaY; }}>
-      <button className={`tab ${pinned === null ? 'on' : ''}`} onClick={() => onSelect(null)} title={L('가장 주의가 필요한 세션을 자동으로 보여줘요', 'Shows the session that needs you most')}>
+      <button className={`tab tab-auto ${pinned === null ? 'on' : ''}`} onClick={() => onSelect(null)} title={L('가장 주의가 필요한 세션을 자동으로 보여줘요', 'Shows the session that needs you most')}>
         {L('자동', 'Auto')}
       </button>
       {sessions.map((s) => (
