@@ -3,11 +3,12 @@
 import type { Snapshot, TimelineEntry, UsageHistory } from './types';
 import { AGENT_NAME } from './labels';
 import { L } from './i18n';
+import { segments } from './lanes';
 
 export interface DaySummary {
   /** local midnight the day starts at */
   from: number;
-  sessions: { project: string; agent: string; turns: number; files: string[] }[];
+  sessions: { project: string; agent: string; turns: number; files: string[]; workMs: number }[];
   turns: number;
   testsOk: number;
   testsFail: number;
@@ -15,7 +16,19 @@ export interface DaySummary {
   failures: number;
   files: number;
   tokens: { claude: number; codex: number } | null;
+  /** time the agents spent working and waiting for the user, summed over sessions */
+  workMs: number;
+  waitMs: number;
+  /** the same per local hour of the day (24 entries, ms) */
+  hours: { work: number; wait: number }[];
+  /** the first and last event of the day */
+  first: number | null;
+  last: number | null;
 }
+
+const HOUR = 3_600_000;
+/** a session that went quiet in the middle of work (closed terminal, crash) stops counting this long after its last event */
+const QUIET = 15 * 60_000;
 
 export function startOfDay(now: number): number {
   const d = new Date(now);
@@ -45,7 +58,7 @@ export function addToDay(d: DayLog | null, s: Snapshot, entries: TimelineEntry[]
 
 export function daySummary(day: DayLog | null, h: UsageHistory | null, now: number): DaySummary {
   const from = startOfDay(now);
-  const out: DaySummary = { from, sessions: [], turns: 0, testsOk: 0, testsFail: 0, asks: 0, failures: 0, files: 0, tokens: null };
+  const out: DaySummary = { from, sessions: [], turns: 0, testsOk: 0, testsFail: 0, asks: 0, failures: 0, files: 0, tokens: null, workMs: 0, waitMs: 0, hours: Array.from({ length: 24 }, () => ({ work: 0, wait: 0 })), first: null, last: null };
   for (const s of day && day.from === from ? Object.values(day.byKey) : []) {
     const today = s.entries;
     const turns = today.filter((e) => e.kind === 'turn_complete').length;
@@ -57,7 +70,25 @@ export function daySummary(day: DayLog | null, h: UsageHistory | null, now: numb
     // only files edited today, not everything the session touched since it started
     const files = [...new Set(today.filter((e) => e.kind === 'tool' && e.activity === 'edit' && e.detail).map((e) => e.detail!))];
     out.files += files.length;
-    out.sessions.push({ project: s.project ?? L('프로젝트 미확인', 'Unknown project'), agent: AGENT_NAME[s.agent], turns, files });
+    let workMs = 0;
+    if (today.length) {
+      const first = Math.min(...today.map((e) => e.at));
+      const last = Math.max(...today.map((e) => e.at));
+      out.first = out.first === null ? first : Math.min(out.first, first);
+      out.last = out.last === null ? last : Math.max(out.last, last);
+      for (const g of segments(today, from, Math.min(now, last + QUIET))) {
+        const ms = g.to - g.from;
+        if (g.phase === 'work') { workMs += ms; out.workMs += ms; } else out.waitMs += ms;
+        // split across the hours it covers
+        for (let t = g.from; t < g.to;) {
+          const h = Math.floor((t - from) / HOUR);
+          const end = Math.min(g.to, from + (h + 1) * HOUR);
+          if (h >= 0 && h < 24) out.hours[h][g.phase === 'work' ? 'work' : 'wait'] += end - t;
+          t = end;
+        }
+      }
+    }
+    out.sessions.push({ project: s.project ?? L('프로젝트 미확인', 'Unknown project'), agent: AGENT_NAME[s.agent], turns, files, workMs });
   }
   // the usage history's last day is today in the local time zone
   const last = h?.days[h.days.length - 1];
@@ -69,6 +100,14 @@ export function daySummary(day: DayLog | null, h: UsageHistory | null, now: numb
 export function estCost(tokens: { claude: number; codex: number }, perM: { claude: number; codex: number } | undefined): number | null {
   if (!perM || (!perM.claude && !perM.codex)) return null;
   return (tokens.claude / 1e6) * perM.claude + (tokens.codex / 1e6) * perM.codex;
+}
+
+/** a stretch of time in hours and minutes: "1시간 5분", "12분", "1h 5m" */
+export function fmtSpan(ms: number): string {
+  const m = Math.round(ms / 60_000);
+  const h = Math.floor(m / 60);
+  if (h) return L(`${h}시간${m % 60 ? ` ${m % 60}분` : ''}`, `${h}h${m % 60 ? ` ${m % 60}m` : ''}`);
+  return L(`${m}분`, `${m}m`);
 }
 
 export function fmtUsd(v: number): string {
@@ -88,13 +127,14 @@ export function dayMarkdown(d: DaySummary, fmtTok: (n: number) => string, cost: 
     L(`- 테스트: 통과 ${d.testsOk}회, 실패 ${d.testsFail}회`, `- Tests: ${d.testsOk} passed, ${d.testsFail} failed`),
     L(`- 승인·답변 요청: ${d.asks}회`, `- Approvals and questions: ${d.asks}`),
     L(`- 고친 파일: ${d.files}개`, `- Files edited: ${d.files}`),
+    L(`- 작업 시간: ${fmtSpan(d.workMs)} (내 차례 기다림 ${fmtSpan(d.waitMs)})`, `- Working time: ${fmtSpan(d.workMs)} (waiting for you ${fmtSpan(d.waitMs)})`),
   ];
   if (d.tokens) lines.push(`${L('- 토큰', '- Tokens')}: Claude Code ${fmtTok(d.tokens.claude)}, Codex ${fmtTok(d.tokens.codex)}`);
   if (cost !== null) lines.push(L(`- 추정 비용: ${fmtUsd(cost)} (설정한 단가로 계산한 추정치)`, `- Estimated cost: ${fmtUsd(cost)} (from the prices you set)`));
   lines.push('', L('## 세션', '## Sessions'), '');
   if (!d.sessions.length) lines.push(L('오늘 활동한 세션이 없어요.', 'No sessions were active today.'), '');
   for (const s of d.sessions) {
-    lines.push(`### ${s.project} (${s.agent})`, '', L(`- 끝낸 요청: ${s.turns}회`, `- Requests done: ${s.turns}`));
+    lines.push(`### ${s.project} (${s.agent})`, '', L(`- 끝낸 요청: ${s.turns}회`, `- Requests done: ${s.turns}`), L(`- 작업 시간: ${fmtSpan(s.workMs)}`, `- Working time: ${fmtSpan(s.workMs)}`));
     if (s.files.length) lines.push(`${L('- 고친 파일', '- Files edited')}: ${s.files.map((f) => `\`${f}\``).join(', ')}`);
     lines.push('');
   }

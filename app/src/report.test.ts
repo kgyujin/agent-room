@@ -27,6 +27,22 @@ describe('daySummary', () => {
     // next day starts over
     expect(daySummary(addToDay(day, s, [], now + 86_400_000), null, now + 86_400_000).turns).toBe(0);
   });
+  it('sums working and waiting time per hour, and stops a session that went quiet', () => {
+    const m = 60_000;
+    const t0 = new Date(2026, 10, 6, 13, 50).getTime();
+    // works 13:50-14:10 (split over two hours), waits 14:10-14:15, works until 14:20
+    const tl = [e('turn_start', t0), e('approval', t0 + 20 * m), e('tool', t0 + 25 * m), e('turn_complete', t0 + 30 * m)];
+    // another session started at 14:30 and never reported again: counts 15 minutes, not until 15:00
+    const s2 = { ...s, key: 'claude:b', project: 'api' } as Snapshot;
+    let day = addToDay(null, s, tl, now);
+    day = addToDay(day, s2, [{ ...e('turn_start', t0 + 40 * m), id: 99 }], now);
+    const d = daySummary(day, null, now);
+    expect(d.hours[13]).toEqual({ work: 10 * m, wait: 0 });
+    expect(d.hours[14]).toEqual({ work: 10 * m + 5 * m + 15 * m, wait: 5 * m });
+    expect([d.workMs, d.waitMs]).toEqual([40 * m, 5 * m]);
+    expect(d.sessions.map((x) => x.workMs)).toEqual([25 * m, 15 * m]);
+    expect([d.first, d.last]).toEqual([t0, t0 + 40 * m]);
+  });
   it('estimates cost only with prices', () => {
     expect(estCost({ claude: 2e6, codex: 1e6 }, undefined)).toBeNull();
     expect(estCost({ claude: 2e6, codex: 1e6 }, { claude: 3, codex: 1 })).toBe(7);
