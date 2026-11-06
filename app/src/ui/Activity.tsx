@@ -20,6 +20,18 @@ function trend(cur: number, prev: number): { text: string; up: boolean } | null 
 
 const sum = (d: UsageHistory['days']) => d.reduce((a, x) => a + x.claude + x.codex, 0);
 
+/** a tiny trend line with a soft fill under it */
+function Spark({ v }: { v: number[] }) {
+  const max = Math.max(...v, 1);
+  const pts = v.map((x, i) => `${((i / (v.length - 1)) * 100).toFixed(1)},${(26 - (x / max) * 22).toFixed(1)}`).join(' ');
+  return (
+    <svg className="ds-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden>
+      <polygon points={`0,28 ${pts} 100,28`} />
+      <polyline points={pts} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 const STAT_ICON = { todo: 'bell', work: 'bolt', done: 'check', today: 'note', week: 'clock' } as const;
 
 export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; cost?: { claude: number; codex: number } }) {
@@ -31,12 +43,15 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
   const prevWeek = sum(days.slice(-14, -7));
   const last = days[days.length - 1];
   const usd = last ? estCost(last, cost) : null;
-  const cards: { id: 'todo' | 'work' | 'done' | 'today' | 'week'; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend> }[] = [
+  // small trend lines: daily totals of the last two weeks, and the rolling 7-day total over the same days
+  const daily = days.slice(-14).map((d) => d.claude + d.codex);
+  const weekly = days.length >= 7 ? days.slice(-14).map((_, i, a) => sum(days.slice(Math.max(0, days.length - a.length + i - 6), days.length - a.length + i + 1))) : [];
+  const cards: { id: 'todo' | 'work' | 'done' | 'today' | 'week'; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend>; spark?: number[] }[] = [
     { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인·답변 기다림', 'Waiting for you') },
     { id: 'work', label: L('작업 중', 'Working'), value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: L(`열린 세션 ${live.length}개`, `${live.length} open sessions`) },
     { id: 'done', label: L('완료한 요청', 'Requests done'), value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: L(`수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개`, `${sessions.reduce((a, x) => a + x.filesEdited.length, 0)} files edited`) },
-    { id: 'today', label: L('오늘 토큰', 'Tokens today'), value: h ? fmtTokens(today) : '—', sub: h ? `${L('어제', 'Yesterday')} ${fmtTokens(yday)}${usd !== null ? ` · ${L('추정', 'est.')} ${fmtUsd(usd)}` : ''}` : L('불러오는 중', 'Loading'), tr: trend(today, yday) },
-    { id: 'week', label: L('최근 7일 토큰', 'Tokens, last 7 days'), value: h ? fmtTokens(week) : '—', sub: h ? `${L('그 전 7일', 'The 7 before')} ${fmtTokens(prevWeek)}` : L('불러오는 중', 'Loading'), tr: trend(week, prevWeek) },
+    { id: 'today', label: L('오늘 토큰', 'Tokens today'), value: h ? fmtTokens(today) : '—', sub: h ? `${L('어제', 'Yesterday')} ${fmtTokens(yday)}${usd !== null ? ` · ${L('추정', 'est.')} ${fmtUsd(usd)}` : ''}` : L('불러오는 중', 'Loading'), tr: trend(today, yday), spark: daily },
+    { id: 'week', label: L('최근 7일 토큰', 'Tokens, last 7 days'), value: h ? fmtTokens(week) : '—', sub: h ? `${L('그 전 7일', 'The 7 before')} ${fmtTokens(prevWeek)}` : L('불러오는 중', 'Loading'), tr: trend(week, prevWeek), spark: weekly },
   ];
   return (
     <div className="dash-stats">
@@ -46,6 +61,7 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
           <small>{c.label}</small>
           <b>{c.value}{c.tr && <em className={c.tr.up ? 'up' : 'down'}>{c.tr.text}</em>}</b>
           {c.sub && <span>{c.sub}</span>}
+          {c.spark && c.spark.length > 1 && <Spark v={c.spark} />}
         </div>
       ))}
     </div>
@@ -85,7 +101,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect }: { sessi
           return (
             <tr key={s.key} className={`${selected === s.key ? 'on' : ''} tone-row-${stateTone(s)}`} onClick={() => onSelect(s.key)}>
               <td className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={s.cwd ?? undefined}>{names[s.key]}</b></td>
-              <td><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
+              <td><span className={`st-badge tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
               <td className="num opt2">{fmtDuration(now - s.startedAt)}</td>
               <td className="num opt">{s.completedTurns}</td>
