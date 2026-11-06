@@ -3,8 +3,7 @@ import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, timel
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 import { Overview } from './Overview';
-import { UsageBoard, useUsageHistory } from './Usage';
-import { ActivityLog, SessionTable, StatCards } from './Activity';
+import { UsageBoard } from './Usage';
 
 export type Tab = 'overview' | 'usage' | 'timeline' | 'tasks' | 'session';
 const TAB_NAME: Record<Tab, string> = { overview: '현황', usage: '사용량', timeline: '타임라인', tasks: '작업', session: '세션' };
@@ -13,15 +12,11 @@ const PER_SESSION: Tab[] = ['timeline', 'tasks', 'session'];
 
 export function DetailPanel(props: {
   width: number;
-  /** wide window: every section at once instead of tabs */
-  dashboard?: boolean;
   s: Snapshot | null;
   sessions: Snapshot[];
   onSelect: (k: string) => void;
   showLimits: boolean;
   timeline: TimelineEntry[];
-  /** every session's log, for the dashboard's activity console */
-  timelines?: Record<string, TimelineEntry[]>;
   tab: Tab;
   setTab: (t: Tab) => void;
   now: number;
@@ -29,7 +24,6 @@ export function DetailPanel(props: {
   onForget?: () => void;
 }) {
   const { s, tab, setTab } = props;
-  if (props.dashboard) return <Dashboard {...props} />;
   return (
     <aside className="panel" style={{ width: props.width }}>
       <header>
@@ -58,68 +52,6 @@ export function DetailPanel(props: {
         {s && tab === 'timeline' && <Timeline entries={props.timeline} />}
         {s && tab === 'tasks' && <Tasks s={s} />}
         {s && tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
-      </div>
-    </aside>
-  );
-}
-
-/** full-screen panel: headline cards, 현황 and 사용량 side by side, every session in a table,
- *  one activity log across sessions, then the selected session's tasks and details */
-function Dashboard(props: Parameters<typeof DetailPanel>[0]) {
-  const { s, sessions, now } = props;
-  const h = useUsageHistory(30);
-  const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
-  const errors = live.filter((x) => x.state === 'error').length;
-  return (
-    <aside className="panel dash" style={{ width: props.width }}>
-      <header>
-        <div>
-          <h3 className="dash-title">대시보드</h3>
-          <p className="dash-sub">세션 {live.length}개{errors ? <> · <b className="tone-bad">오류 {errors}건</b></> : null} · 이벤트가 오는 즉시 갱신</p>
-        </div>
-        <button className="tool" onClick={props.onClose} aria-label="패널 닫기" title="패널 닫기">
-          <Icon name="close" />
-        </button>
-      </header>
-      <div className="panel-body dash-body">
-        <StatCards sessions={sessions} now={now} h={h} />
-        <div className="dash-grid">
-          <section className="dash-card">
-            <h4 className="dash-h">현황</h4>
-            <Overview sessions={sessions} now={now} selected={s?.key ?? null} onSelect={props.onSelect} showLimits={false} />
-          </section>
-          <section className="dash-card">
-            <h4 className="dash-h">사용량</h4>
-            <div className="pad"><UsageBoard sessions={sessions} now={now} /></div>
-          </section>
-        </div>
-        <section className="dash-card dash-wide">
-          <h4 className="dash-h">세션 <span className="pn-count">{sessions.length}</span></h4>
-          <SessionTable sessions={sessions} now={now} selected={s?.key ?? null} onSelect={props.onSelect} />
-        </section>
-        <section className="dash-card dash-wide">
-          <h4 className="dash-h">활동 기록</h4>
-          <ActivityLog sessions={sessions} timelines={props.timelines ?? {}} onSelect={props.onSelect} />
-        </section>
-        {s && (
-          <>
-            <div className="pn-who dash-who">
-              <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-              <b>{s.project ?? '프로젝트 미확인'}</b>
-              <span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span>
-            </div>
-            <div className="dash-grid">
-              <section className="dash-card">
-                <h4 className="dash-h">작업</h4>
-                <Tasks s={s} />
-              </section>
-              <section className="dash-card">
-                <h4 className="dash-h">정보</h4>
-                <SessionInfo s={s} now={now} onForget={props.onForget} />
-              </section>
-            </div>
-          </>
-        )}
       </div>
     </aside>
   );
