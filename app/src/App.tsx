@@ -67,7 +67,7 @@ export default function App() {
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
   const [hovered, setHovered] = useState(false);
-  // update available on GitHub Releases: checked at launch and every 6 hours when the setting is on,
+  // update available on GitHub Releases: checked once at launch when the setting is on,
   // or on demand from the app menu, the menu bar menu and Settings. A found update asks first (dialog);
   // "나중에" leaves a small banner instead of asking again for the same version.
   const [update, setUpdate] = useState<AppUpdate | null>(null);
@@ -113,9 +113,8 @@ export default function App() {
         setUpdDialog((d) => d ?? { k: 'available', u });
       }
     }, () => undefined);
-    const first = window.setTimeout(run, 4000);
-    const id = window.setInterval(run, 6 * 3600_000);
-    return () => { clearTimeout(first); clearInterval(id); };
+    const first = window.setTimeout(run, 2000);
+    return () => clearTimeout(first);
   }, [autoUpdate]);
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });
@@ -138,6 +137,8 @@ export default function App() {
   const [dockRef, dockH] = useHeight();
   // banners stack above the room so they never cover its wall
   const [bannersRef, bannersH] = useHeight();
+  // the status pills and session tabs can take two rows in a narrow room; banners start below them
+  const [topRef, topH] = useHeight();
   // the toolbar shares the top row with the session tabs
   const [toolbarRef, , toolbarW] = useHeight();
   const [skins, setSkins] = useState<Record<string, Skin>>({});
@@ -403,13 +404,27 @@ export default function App() {
   // room-only: the controls show while the pointer is over the room itself (or the buttons),
   // not over the clear part of the window
   const pointAt = useRef<(p: [number, number] | null) => void>(() => undefined);
+  // clicks on the clear part pass through to whatever is under the window (macOS only reports the
+  // pointer to us, so the window stops taking clicks until the pointer is back over something drawn)
+  const passing = useRef(false);
+  const passThrough = (on: boolean) => {
+    if (passing.current === on) return;
+    passing.current = on;
+    void win().then((w) => w?.setIgnoreCursorEvents(on)).catch(() => undefined);
+  };
   pointAt.current = (p) => {
     if (!p) return setHovered(false);
     if (!mini) return setHovered(true);
     const t = toolbarRef.current?.getBoundingClientRect();
     const onBar = !!t && p[0] >= t.left - 8 && p[0] <= t.right + 8 && p[1] >= t.top - 8 && p[1] <= t.bottom + 8;
-    setHovered(onBar || !!sceneRef.current?.hitRoom(p[0], p[1]));
+    const onRoom = !!sceneRef.current?.hitRoom(p[0], p[1]);
+    // name tags, banners and other page parts over the clear area still take clicks
+    const el = document.elementFromPoint(p[0], p[1]);
+    const onUi = !!el && el.tagName !== 'CANVAS' && el !== document.body && el !== document.documentElement && !el.classList.contains('app');
+    setHovered(onBar || onRoom);
+    passThrough(!settingsOpen && !(onBar || onRoom || onUi));
   };
+  useEffect(() => { if (!mini || settingsOpen) passThrough(false); }, [mini, settingsOpen]);
 
   // room-only: a window dragged partly off the screen slides back once it is let go
   useEffect(() => {
@@ -624,7 +639,7 @@ export default function App() {
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
-      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? panelW : 0) + 12, left: compact ? 8 : 12 }}>
+      <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? panelW : 0) + 12, left: compact ? 8 : 12, top: !mini && topH > 48 ? 14 + topH + 8 : undefined }}>
         {!IN_TAURI && !compact && !office && !dashPage && <div className="banner preview">{L('브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다', 'Browser preview · a design check, not connected to real agents')}</div>}
         {(demoRunning || demoShown) && !dashPage && (
           <div className="banner demo">
@@ -657,7 +672,7 @@ export default function App() {
       <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} onHover={hoverTo} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && (
-        <div className="topleft" style={{ right: (panelOpen ? panelW : 0) + toolbarW + 24 }}>
+        <div className="topleft" ref={topRef} style={{ right: (panelOpen ? panelW : 0) + toolbarW + 24 }}>
           {!compact && <StatusPills sessions={list} now={now} onSelect={setPinned} />}
           {settings.showTabs && <SessionTabs sessions={list} selected={selected?.key ?? null} onSelect={setPinned} pinned={pinned} />}
         </div>

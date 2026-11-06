@@ -74,7 +74,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect }: { sessi
     {!sessions.length && <p className="muted small pad">{L('맞는 세션이 없어요.', 'No matching sessions.')}</p>}
     {sessions.length > 0 && <table className="dash-table">
       <thead>
-        <tr><th>{L('세션', 'Session')}</th><th>{L('상태', 'State')}</th><th>{L('진행', 'Progress')}</th><th className="num">{L('경과', 'Elapsed')}</th><th className="num opt">{L('요청', 'Requests')}</th><th className="num opt">{L('파일', 'Files')}</th><th className="num">{L('마지막 활동', 'Last active')}</th></tr>
+        <tr><th>{L('세션', 'Session')}</th><th>{L('상태', 'State')}</th><th>{L('진행', 'Progress')}</th><th className="num opt2">{L('경과', 'Elapsed')}</th><th className="num opt">{L('요청', 'Requests')}</th><th className="num opt">{L('파일', 'Files')}</th><th className="num">{L('마지막 활동', 'Last active')}</th></tr>
       </thead>
       <tbody>
         {sessions.map((s) => {
@@ -84,7 +84,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect }: { sessi
               <td className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={s.cwd ?? undefined}>{names[s.key]}</b></td>
               <td><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
-              <td className="num">{fmtDuration(now - s.startedAt)}</td>
+              <td className="num opt2">{fmtDuration(now - s.startedAt)}</td>
               <td className="num opt">{s.completedTurns}</td>
               <td className="num opt">{s.filesEdited.length}</td>
               <td className="num">{fmtAgo(now - s.lastEventAt)}</td>
@@ -145,7 +145,7 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
                 <div className="row" onClick={() => (compact ? onSelect(s.key) : setOpen(open === id ? null : id))}>
                   <i />
                   <time>{fmtClock(e.at)}</time>
-                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} />{names[s.key]}</span>
+                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} /><span className="nm">{names[s.key]}</span></span>
                   <span className="txt" title={timelineText(e)}>{timelineText(e)}</span>
                 </div>
                 {open === id && (
