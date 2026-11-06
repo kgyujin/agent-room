@@ -180,6 +180,7 @@ export default function App() {
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'last')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
+        await backend.onTrayEvent('open-dashboard', () => { setOffice(false); void toggleRef.current(false); setDashView(window.innerWidth >= PANEL_MIN_VW ? 'split' : 'full'); }),
         await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );

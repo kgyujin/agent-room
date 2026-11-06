@@ -143,6 +143,14 @@ export interface Settings {
   /** answer Claude Code permission requests in Agent Room; Claude Code waits this long for the answer */
   approveInApp?: boolean;
   approveWaitSec?: number;
+  /** no notifications between these local hours */
+  quietHours?: boolean;
+  quietFrom?: number;
+  quietTo?: number;
+  /** notify once more after a request has waited this many minutes (0 = never) */
+  renotifyMin?: number;
+  /** the island opens for a moment when a session starts waiting on the user */
+  islandPeek?: boolean;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

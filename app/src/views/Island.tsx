@@ -95,6 +95,21 @@ export function Island() {
   // click-only: coming back before the close delay keeps the island open, but never opens it
   const stay = () => clearTimeout(leave.current);
   const [w, h] = open ? openSize : COLLAPSED;
+  // a session newly waiting on the user opens the island for a moment (setting), then it closes
+  // again unless the pointer came over it meanwhile
+  const seen = useRef<Set<string> | null>(null);
+  const todoKeys = todos.map((s) => s.key).join(',');
+  useEffect(() => {
+    const keys = new Set(todoKeys ? todoKeys.split(',') : []);
+    const fresh = seen.current !== null && [...keys].some((k) => !seen.current!.has(k));
+    seen.current = keys;
+    if (!fresh || !(settings?.islandPeek ?? true) || open) return;
+    enter();
+    leave.current = window.setTimeout(() => {
+      setOpen(false);
+      shrink.current = window.setTimeout(() => setBig(false), 360);
+    }, 3000);
+  }, [todoKeys]);
   const hoverRef = useRef({ enter, exit, stay, hoverOpens });
   hoverRef.current = { enter, exit, stay, hoverOpens };
   useEffect(() => {
