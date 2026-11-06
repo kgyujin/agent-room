@@ -142,3 +142,9 @@
 /* keyboard focus is visible, mouse focus is not */
 :where(button, a, [tabindex], select, input, summary):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent-strong) 70%, transparent); outline-offset: 2px; }
 :where(button, a, [tabindex], summary):focus:not(:focus-visible) { outline: none; }
+
+/* the bottom bar keeps its inner padding (the plain .card rule above would zero it) */
+.card.shud { padding: 10px 16px 10px 14px; }
+/* name tags: even room around the agent mark, the same on both ends of the pill */
+.nametag { padding: 2px 8px 2px 5px; gap: 5px; }
+.nametag.on { padding: 3px 10px 3px 6px; gap: 6px; }
