@@ -150,7 +150,7 @@ export function SettingsModal(props: {
                   <Field label={L('색 테마', 'Colour theme')}>
                     <div className="swatches">
                       {UI_THEMES.map((th) => (
-                        <button key={th.id} className={`swatch theme ${(s.uiTheme || 'peach') === th.id ? 'on' : ''}`} title={th.name} aria-label={th.name}
+                        <button key={th.id} className={`swatch theme ${(s.uiTheme || 'clean') === th.id ? 'on' : ''}`} title={th.name} aria-label={th.name}
                           style={{ background: `linear-gradient(135deg, ${th.vars['--accent']} 50%, ${th.vars['--frame-l']} 50%)` }} onClick={() => set('uiTheme', th.id)} />
                       ))}
                     </div>

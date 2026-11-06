@@ -19,7 +19,7 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', roomView: 'iso', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'clean', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
   doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto',
