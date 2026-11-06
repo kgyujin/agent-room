@@ -688,7 +688,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
       const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current, shortRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < 22)) p.y -= 22;
+        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H)) p.y -= TAG_H;
         placed.push(p);
       }
       // keep every tag inside the window: one pushed past the top edge comes back down (it may then overlap
@@ -725,7 +725,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: a.x, top: a.y }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {/* which pet is which: the project by default; what it does joins it when picked or with full tags
                 (the ring under the pet and the dot already show the state) */}
@@ -747,7 +747,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 }
 
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
-const TAG_H = 22;
+const TAG_H = 26;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag, cut to keep tags small */
 const tagName = (s: Snapshot) => {
@@ -760,7 +760,7 @@ function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean)
   if (!s) return 40;
   const text = withProject ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s);
   let w = 40;
-  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 12 : 7.2;
   return Math.min(w, 260);
 }
 
