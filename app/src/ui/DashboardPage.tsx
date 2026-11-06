@@ -12,6 +12,7 @@ import { ActivityLog, SessionTable, StatCards } from './Activity';
 import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
+import { dayMarkdown, daySummary, estCost, fmtUsd, reportName } from '../report';
 
 /** the cards below the counts, in grid order; settings can turn any of them off */
 export const DASH_CARDS = [
@@ -41,6 +42,8 @@ export function DashboardPage(props: {
   accountLimits: boolean;
   /** settings: card ids turned off */
   hidden: string[];
+  /** settings: blended USD prices per million tokens, when the user wants an estimated cost */
+  cost?: { claude: number; codex: number };
   /** a short note that would otherwise float over the page as a banner (demo, preview) */
   notice?: string | null;
   mac: boolean;
@@ -48,6 +51,7 @@ export function DashboardPage(props: {
   const { sessions, now, selected } = props;
   const h = useUsageHistory(30);
   const [memOpen, setMemOpen] = useState(false);
+  const [todayOpen, setTodayOpen] = useState(false);
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
@@ -79,6 +83,7 @@ export function DashboardPage(props: {
       <header className="dp-head">
         <h2>대시보드</h2>
         <p>세션 {live.length}개 · 내 차례 {todo}건{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />오늘 요약</button>
         <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />지침 파일</button>
         {props.onToggleSplit && <button className="btn" onClick={props.onToggleSplit}><Icon name={split ? 'monitor' : 'panel'} />{split ? '대시보드만' : '방과 같이'}</button>}
         <button className="btn" onClick={props.onRoom}><Icon name="iso" />{split ? '닫기' : '방으로'}</button>
@@ -97,13 +102,21 @@ export function DashboardPage(props: {
         </div>
       )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
-        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} /></div>
+        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} cost={props.cost} /></div>
         {shown.map(([id], i) => {
           const [cls, title, body] = cards[id]();
           const last = i === shown.length - 1 && rest > 0;
           return <Fragment key={id}>{card(last ? `${cls} dp-last` : cls, title, body, last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined)}</Fragment>;
         })}
       </div>
+      {todayOpen && (
+        <div className="dp-over">
+          <section className="dash-card">
+            <h4 className="dash-h">오늘 요약<button className="link dp-open" onClick={() => setTodayOpen(false)}>닫기</button></h4>
+            <div className="dp-scroll"><TodayReport sessions={sessions} timelines={props.timelines} h={h} now={now} cost={props.cost} /></div>
+          </section>
+        </div>
+      )}
       {memOpen && (
         <div className="dp-over">
           <section className="dash-card">
@@ -216,6 +229,42 @@ function UsageShare({ h }: { h: UsageHistory | null }) {
         <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{total ? Math.round((c / total) * 100) : 0}%</small></li>
         <li><i style={{ background: 'var(--codex)' }} />Codex<b>{fmtTokens(x)}</b><small>{total ? Math.round((x / total) * 100) : 0}%</small></li>
       </ul>
+    </div>
+  );
+}
+
+/** today's numbers, and the same as a Markdown report to look at before it is saved */
+function TodayReport({ sessions, timelines, h, now, cost }: { sessions: Snapshot[]; timelines: Record<string, TimelineEntry[]>; h: UsageHistory | null; now: number; cost?: { claude: number; codex: number } }) {
+  const [saved, setSaved] = useState<string | null>(null);
+  const d = daySummary(sessions, timelines, h, now);
+  const usd = d.tokens ? estCost(d.tokens, cost) : null;
+  const md = dayMarkdown(d, fmtTokens, usd);
+  const nums: [string, string][] = [
+    ['끝낸 요청', `${d.turns}회`],
+    ['테스트', `통과 ${d.testsOk} · 실패 ${d.testsFail}`],
+    ['승인·답변 요청', `${d.asks}회`],
+    ['고친 파일', `${d.files}개`],
+    ['토큰', d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'],
+    ...(usd !== null ? [['추정 비용', fmtUsd(usd)] as [string, string]] : []),
+  ];
+  const save = async () => {
+    try { setSaved(`${await backend.saveReport(reportName(d.from), md)}에 저장했어요`); } catch (e) { setSaved(`저장하지 못했어요: ${String(e)}`); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(md); setSaved('복사했어요'); } catch { setSaved('복사하지 못했어요'); }
+  };
+  return (
+    <div className="dtoday">
+      <div className="dash-stats">
+        {nums.map(([k, v]) => <div key={k} className="dash-stat"><small>{k}</small><b>{v}</b></div>)}
+      </div>
+      <h4 className="dash-h">보고서 미리보기 <small className="muted">저장하기 전에 확인하세요. 프로젝트 이름과 파일 이름이 들어가요.</small></h4>
+      <pre className="dtoday-md">{md}</pre>
+      <div className="dtoday-act">
+        <button className="btn primary" onClick={() => void save()}>{IN_TAURI ? '다운로드 폴더에 저장' : 'Markdown 받기'}</button>
+        <button className="btn" onClick={() => void copy()}>복사</button>
+        {saved && <span className="muted small">{saved}</span>}
+      </div>
     </div>
   );
 }

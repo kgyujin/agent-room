@@ -1137,7 +1137,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
   .dpage.split .dp-one > .dash-card { height: 260px; grid-column: auto; }
 }
 .dp-over { position: absolute; inset: 0; z-index: 3; background: rgba(58, 40, 50, 0.22); display: flex; padding: 48px 24px 24px; }
-.dp-over > .dash-card { flex: 1; display: flex; flex-direction: column; min-height: 0; margin: 0; }
+.dp-over > .dash-card { background: var(--bg, #fbf3ea); flex: 1; display: flex; flex-direction: column; min-height: 0; margin: 0; }
 .dp-over .dash-h { display: flex; align-items: center; }
 .dp-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; user-select: text; -webkit-user-select: text; }
 @media (max-width: 760px) {
@@ -1245,3 +1245,13 @@ button.link:hover { text-decoration: underline; }
 /* a narrow room (beside the dashboard) keeps the status pills to a dot and a number */
 .topleft { container-type: inline-size; }
 @container (max-width: 340px) { .pill .pl { display: none; } .pill { padding: 0 10px; } }
+
+/* the day summary overlay */
+.dtoday { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.dtoday .dash-stats { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin: 0; }
+.dtoday-md { margin: 0; padding: 10px 12px; background: #fff; border: 1px solid var(--hair); border-radius: 10px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; max-height: 50vh; overflow: auto; user-select: text; -webkit-user-select: text; }
+.dtoday-act { display: flex; align-items: center; gap: 8px; }
+.dash-chips input.sess-q { min-width: 110px; flex: 1; max-width: 200px; }
+.num-in { width: 90px; border: 1px solid var(--hair); border-radius: 8px; padding: 4px 8px; font: inherit; background: #fff; }
+.info.keys dt { font-family: var(--font-display); font-weight: 700; }
+.dtoday .dash-h { padding: 0; gap: 8px; display: flex; align-items: baseline; flex-wrap: wrap; }

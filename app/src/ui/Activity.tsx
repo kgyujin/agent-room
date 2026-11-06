@@ -3,11 +3,12 @@
 // filter chips and search. Everything comes from hook events and the agents' local usage logs.
 import { useMemo, useState } from 'react';
 import type { Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { fmtAgo, fmtClock, fmtDuration, sessionNames, stateLabel, stateTone, timelineText } from '../labels';
+import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, sessionNames, stateLabel, stateTone, timelineText } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 import { isActive, userTodo } from './Overview';
 import { fmtTokens } from './Usage';
+import { estCost, fmtUsd } from '../report';
 
 /** "+27%" against the previous period; null when there is nothing to compare with */
 function trend(cur: number, prev: number): { text: string; up: boolean } | null {
@@ -18,18 +19,20 @@ function trend(cur: number, prev: number): { text: string; up: boolean } | null 
 
 const sum = (d: UsageHistory['days']) => d.reduce((a, x) => a + x.claude + x.codex, 0);
 
-export function StatCards({ sessions, now, h }: { sessions: Snapshot[]; now: number; h: UsageHistory | null }) {
+export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; cost?: { claude: number; codex: number } }) {
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const days = h?.days ?? [];
   const today = days.length ? sum(days.slice(-1)) : 0;
   const yday = days.length > 1 ? sum(days.slice(-2, -1)) : 0;
   const week = sum(days.slice(-7));
   const prevWeek = sum(days.slice(-14, -7));
+  const last = days[days.length - 1];
+  const usd = last ? estCost(last, cost) : null;
   const cards: { id: string; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend> }[] = [
     { id: 'todo', label: '내 차례', value: String(live.filter((x) => userTodo(x, now)).length), sub: '승인·답변 기다림' },
     { id: 'work', label: '작업 중', value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: `열린 세션 ${live.length}개` },
     { id: 'done', label: '완료한 요청', value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: `수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개` },
-    { id: 'today', label: '오늘 토큰', value: h ? fmtTokens(today) : '—', sub: h ? `어제 ${fmtTokens(yday)}` : '불러오는 중', tr: trend(today, yday) },
+    { id: 'today', label: '오늘 토큰', value: h ? fmtTokens(today) : '—', sub: h ? `어제 ${fmtTokens(yday)}${usd !== null ? ` · 추정 ${fmtUsd(usd)}` : ''}` : '불러오는 중', tr: trend(today, yday) },
     { id: 'week', label: '최근 7일 토큰', value: h ? fmtTokens(week) : '—', sub: h ? `그 전 7일 ${fmtTokens(prevWeek)}` : '불러오는 중', tr: trend(week, prevWeek) },
   ];
   return (
@@ -46,11 +49,29 @@ export function StatCards({ sessions, now, h }: { sessions: Snapshot[]; now: num
 }
 
 /** every session in one table, the one needing the user first */
-export function SessionTable({ sessions, now, selected, onSelect }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void }) {
-  if (!sessions.length) return <p className="muted small pad">아직 세션이 없어요.</p>;
-  const names = sessionNames(sessions);
+type SessFilter = 'all' | 'todo' | 'work' | 'rest';
+const SESS_FILTERS: [SessFilter, string][] = [['all', '전체'], ['todo', '내 차례'], ['work', '작업 중'], ['rest', '쉬는 중']];
+
+export function SessionTable({ sessions: all, now, selected, onSelect }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void }) {
+  const [f, setF] = useState<SessFilter>('all');
+  const [q, setQ] = useState('');
+  if (!all.length) return <p className="muted small pad">아직 세션이 없어요.</p>;
+  const names = sessionNames(all);
+  const kind = (s: Snapshot): SessFilter => (userTodo(s, now) ? 'todo' : isActive(s) ? 'work' : 'rest');
+  const query = q.trim().toLowerCase();
+  const sessions = all.filter((s) => (f === 'all' || kind(s) === f) && (!query || `${names[s.key]} ${s.project ?? ''} ${s.cwd ?? ''} ${AGENT_NAME[s.agent]} ${s.title ?? ''}`.toLowerCase().includes(query)));
   return (
-    <table className="dash-table">
+    <>
+    {all.length > 3 && (
+      <div className="dash-chips">
+        {SESS_FILTERS.map(([id, label]) => (
+          <button key={id} className={f === id ? 'on' : ''} onClick={() => setF(id)}>{label}<span>{id === 'all' ? all.length : all.filter((s) => kind(s) === id).length}</span></button>
+        ))}
+        <input type="search" className="sess-q" placeholder="프로젝트·경로·에이전트" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+    )}
+    {!sessions.length && <p className="muted small pad">맞는 세션이 없어요.</p>}
+    {sessions.length > 0 && <table className="dash-table">
       <thead>
         <tr><th>세션</th><th>상태</th><th>진행</th><th className="num">경과</th><th className="num opt">요청</th><th className="num opt">파일</th><th className="num">마지막 활동</th></tr>
       </thead>
@@ -70,7 +91,8 @@ export function SessionTable({ sessions, now, selected, onSelect }: { sessions: 
           );
         })}
       </tbody>
-    </table>
+    </table>}
+    </>
   );
 }
 

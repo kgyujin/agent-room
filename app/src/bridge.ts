@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [],
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0,
 };
 
 export interface Backend {
@@ -59,6 +59,9 @@ export interface Backend {
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
+  /** writes a previewed report to ~/Downloads/<name> and returns the path */
+  saveReport(name: string, text: string): Promise<string>;
+  notifyText(title: string, body: string): Promise<void>;
   listCharacters(): Promise<CharacterFile[]>;
   /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
   setTrayFrames(frames: number[][]): Promise<void>;
@@ -98,6 +101,8 @@ const tauriBackend: Backend = {
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
+  saveReport: (name, text) => tauriInvoke('save_report', { name, text }),
+  notifyText: (title, body) => tauriInvoke('notify_text', { title, body }),
   listCharacters: () => tauriInvoke('list_characters'),
   setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
@@ -222,6 +227,14 @@ function previewBackend(): Backend {
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
+    saveReport: async (name, text) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+      a.download = name;
+      a.click();
+      return `다운로드/${name}`;
+    },
+    notifyText: async () => undefined,
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
     setTrayFrames: async () => {},
