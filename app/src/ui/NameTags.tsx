@@ -49,11 +49,16 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
         const settled = s.state === 'completed' && !justDone(s, Date.now(), hideRef.current.doneSec);
         return settled || (s.state === 'idle' && s.connection === 'live');
       };
-      let a = (scene.current?.anchors() ?? []).filter((p) => !hiddenRest(p) && (keep(p) || (!fewRef.current && (hv === null || p.key === hv))));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
       const nm = sessionNames(Object.values(sessRef.current));
       const w = (p: Anchor) => (p.key.startsWith(GROUP) ? 46 : tagWidth(sessRef.current[p.key], nm[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current));
+      let a = (scene.current?.anchors() ?? []).filter((p) => !hiddenRest(p) && (keep(p) || (!fewRef.current && (hv === null || p.key === hv))));
+      // a pet waiting on the user is never covered: another pet's tag over its body or bubble steps aside
+      // (it comes back while that pet is pointed at, or once the wait is over)
+      const urgent = a.filter((p) => needsYou(sessRef.current[p.key]) && p.foot !== undefined);
+      const covers = (p: Anchor, u: Anchor) => p.key !== u.key && Math.abs(p.x - u.x) < w(p) / 2 + (u.half ?? 12) && p.y > u.y && p.y - TAG_H < u.foot!;
+      a = a.filter((p) => keep(p) || p.key === hv || !urgent.some((u) => covers(p, u)));
       // three or more tags crowded together become one bundle tag ("펫 3"), opened by a click;
       // the picked and waiting pets always keep their own tag
       const near = (p: Anchor, q: Anchor) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H * 1.5;

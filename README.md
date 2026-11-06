@@ -118,7 +118,7 @@ xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 - Claude 데스크톱 앱이 남기는 세션 기록(`~/Library/Application Support/Claude/claude-code-sessions/**/local_*.json`)에서 하루 안에 바뀐 것만 열어, CLI 세션 id, 제목, 보관 여부, 원격 제어 표시만 읽습니다. 그래서 데스크톱 앱, 원격 제어, claude.ai 프로젝트에서 시작한 세션을 구분해 보여 줍니다. 앱의 키 파일(`remote-control-state.json`, `~/.claude/sessions/*.key`)은 열지 않습니다. 클라우드에서만 도는 세션은 이 컴퓨터에 흔적이 없어 보이지 않습니다.
 - 대시보드의 "지침 파일"은 전역과 지금 보이는 세션 폴더의 `CLAUDE.md`, `AGENTS.md`를 읽기 전용으로 보여 줄 뿐 어디에도 보내지 않습니다.
 - 남은 사용량은 에이전트가 이미 내놓는 숫자만 읽습니다. Claude는 상태줄 입력의 `rate_limits`, Codex는 rollout 로그의 `rate_limits`입니다.
-- 상태줄이 없는 Claude 세션(데스크톱 앱, VS Code)을 위해 "Claude 계정에서 받아오기"가 켜져 있으면 Claude Code가 키체인에 둔 로그인을 `/usr/bin/security`로 읽어 Anthropic 사용량 API(`/api/oauth/usage`)에 5분에 한 번 묻습니다. 토큰은 메모리에서 한 번 쓰고 버리며 저장·갱신하지 않고, `curl`에 인자가 아닌 표준 입력으로 넘깁니다. LLM 호출이 아니라 토큰을 쓰지 않습니다.
+- 상태줄이 없는 Claude 세션(데스크톱 앱, VS Code)을 위해 "Claude 계정에서 받아오기"(기본으로 켜져 있어요. 설정 > 일반 > 사용량에서 이 항목이나 "남은 사용량 보이기"를 끄면 묻지 않아요)가 켜져 있으면 Claude Code가 키체인에 둔 로그인을 `/usr/bin/security`로 읽어 Anthropic 사용량 API(`/api/oauth/usage`)에 5분에 한 번 묻습니다. 토큰은 메모리에서 한 번 쓰고 버리며 저장·갱신하지 않고, `curl`에 인자가 아닌 표준 입력으로 넘깁니다. LLM 호출이 아니라 토큰을 쓰지 않습니다.
 
 ## 동작 방식
 

@@ -31,11 +31,12 @@ function turnMs(s: Snapshot, now: number) {
 }
 
 /** rough time left: average time per finished plan step x steps left (null until one step is done
- *  and the turn has run a minute; steps the agent marks done right away would make it meaningless) */
+ *  and the turn has run a minute; steps the agent marks done right away would make it meaningless).
+ *  None while the session waits on the user: no step moves until they answer */
 export function etaMs(s: Snapshot, now: number): number | null {
   const p = progressOf(s);
   const t = turnMs(s, now);
-  if (!p || !t || t < 60_000 || p.done < 1 || p.done >= p.total || !isActive(s)) return null;
+  if (!p || !t || t < 60_000 || p.done < 1 || p.done >= p.total || !isActive(s) || userTodo(s, now)) return null;
   return (t / p.done) * (p.total - p.done);
 }
 
