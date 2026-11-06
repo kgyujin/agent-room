@@ -226,34 +226,115 @@ def arch_inside(u, z, u0, w, z0, h, inset=0):
 GLASS = object()   # marker: leave the pixel clear so the app's sky shows through
 
 
+# Wall fixtures are drawn as pixel grids: on a wall, half a unit along it and one unit up is
+# exactly one pixel in both cameras, so a grid cell maps 1:1 onto the screen (iso just shears it).
+def grid_at(grid, u, z, u0, ztop):
+    """the grid's cell under wall point (u, z); grid rows run top-down from height ztop"""
+    i, j = math.floor((u - u0) * 2), math.floor(ztop - z)
+    if 0 <= j < len(grid) and 0 <= i < len(grid[j]):
+        return grid[j][i]
+    return None
+
+
+def window_grid(w, h):
+    """wooden casement with a cross mullion, streaked glass and a gathered lace curtain on the left"""
+    g = [['h2'] * w for _ in range(h)]
+    for j in range(h):
+        for i in range(w):
+            if i == 0 or j == 0 or i == w - 1 or j == h - 1:
+                g[j][i] = 'h0'
+            elif j == 1 or i == 1:
+                g[j][i] = 'h3'
+            elif j == h - 2 or i == w - 2:
+                g[j][i] = 'h1'
+    x0, x1, y0, y1 = 3, w - 3, 5, h - 3            # glass area (header beam above it)
+    for i in range(2, w - 2):
+        g[2][i], g[3][i], g[4][i] = 'h2', 'h1', 'h0'
+    mx, my = w // 2 - 1, y0 + (y1 - y0) // 2 - 1
+    for j in range(y0, y1):
+        for i in range(x0, x1):
+            if i in (x0, x1 - 1) or j == y1 - 1:
+                g[j][i] = 'h0'
+            elif i in (mx, mx + 1):
+                g[j][i] = 'h2' if i == mx else 'h1'
+            elif j in (my, my + 1):
+                g[j][i] = 'h3' if j == my else 'h1'
+            elif j == y0:
+                g[j][i] = 'h0'
+            else:
+                g[j][i] = GLASS
+    # two short diagonal glints per pane
+    for pi, pj in ((x0 + 2, y0 + 2), (mx + 3, y0 + 2), (x0 + 2, my + 3), (mx + 3, my + 3)):
+        for d in range(4):
+            for t in (0, 1):
+                i, j = pi + 3 - d + t, pj + d
+                if g[j][i] is GLASS:
+                    g[j][i] = 'b3'
+    # curtain: straight under the rod, tied back at the middle, flaring to a lace hem
+    tie = y0 + (y1 - y0) // 2 + 2
+    for j in range(2, h - 1):
+        if j < tie:
+            wd = 9 - max(0, (j - 8)) * 5 // max(1, tie - 8)
+        else:
+            wd = 4 + (j - tie) * 5 // max(1, h - 2 - tie)
+        for i in range(1, 1 + wd):
+            edge = i == wd
+            if edge:
+                col = 'c0'
+            elif j == tie or j == tie - 1:
+                col = 'r1' if j == tie else 'r2'
+            elif (i + (1 if j > tie else 0)) % 3 == 0:
+                col = 'c1'
+            else:
+                col = 'c3'
+            g[j][i] = col
+        if j == h - 2:
+            for i in range(1, 1 + wd):
+                g[j][i] = 'c1' if i % 2 else 'c3'
+    for i in range(0, w):                           # curtain rod
+        g[1][i] = 'h0' if i in (0, w - 1) else ('y0' if i % 7 == 0 else 'h0')
+    return g
+
+
+def door_grid(w, h):
+    """wooden plank door in a frame: plank seams, a cross brace, nail dots and a brass knob"""
+    g = [['h2'] * w for _ in range(h)]
+    for j in range(h):
+        for i in range(w):
+            if i == 0 or i == w - 1 or j == 0:
+                g[j][i] = 'h0'
+            elif i in (1, w - 2) or j == 1:
+                g[j][i] = 'h3' if (i == 1 or j == 1) else 'h1'
+            elif i == 2 or i == w - 3 or j == 2:
+                g[j][i] = 'h0'
+            else:
+                k_ = (i - 3) % 4
+                g[j][i] = 'h1' if k_ == 3 else ('h3' if k_ == 0 else 'h2')
+    for bj in (6, h - 7):                           # cross braces
+        for i in range(3, w - 3):
+            g[bj][i] = 'h0'
+            g[bj + 1][i] = 'h3'
+            g[bj + 2][i] = 'h2'
+            g[bj + 3][i] = 'h0'
+        for i in range(4, w - 4, 4):
+            g[bj + 2][i] = 'h0'                     # nails
+    kx, ky = w - 6, h // 2
+    for (i, j), col in {(0, 0): 'h0', (1, 0): 'h0', (-1, 1): 'h0', (0, 1): 'y2', (1, 1): 'y1', (2, 1): 'h0',
+                        (-1, 2): 'h0', (0, 2): 'y1', (1, 2): 'y0', (2, 2): 'h0', (0, 3): 'h0', (1, 3): 'h0'}.items():
+        g[ky + j][kx + i] = col
+    return g
+
+
+WIN_GRID = window_grid(R_WIN[1] * 2, R_WIN[3])
+DOOR_GRID = door_grid(R_DOOR[1] * 2, R_DOOR[2])
+
+
 def window_col(u, z, u0, w, z0, h):
-    if not arch_inside(u, z, u0, w, z0, h):
-        return None
-    if not arch_inside(u, z, u0, w, z0, h, .5):
-        return 'ink'
-    if not arch_inside(u, z, u0, w, z0, h, 1.5):
-        return 'c3'
-    if abs(u - (u0 + w / 2)) < .5 or abs(z - (z0 + h * .45)) < .5:
-        return 'c3'
-    return GLASS
+    return grid_at(WIN_GRID, u, z, u0, z0 + h)
 
 
 def door_col(u, z, u0, w, h):
-    if not (u0 <= u < u0 + w and z < h):
-        return None
-    if u < u0 + .5 or u >= u0 + w - .5 or z >= h - .5:
-        return 'ink'
-    if u < u0 + 1.5 or u >= u0 + w - 1.5 or z >= h - 1.5:
-        return 'c3'
-    if abs(u - (u0 + w - 3)) < .8 and abs(z - h * .45) < .8:
-        return 'y1'
-    for pz0, pz1 in ((3, h * .42), (h * .5, h - 4)):
-        if u0 + 3 <= u < u0 + w - 3 and pz0 <= z < pz1:
-            if u < u0 + 3.5 or z >= pz1 - .7:
-                return 's0'
-            if u >= u0 + w - 3.5 or z < pz0 + .7:
-                return 's2'
-    return 's1'
+    return grid_at(DOOR_GRID, u, z, u0, h)
 
 
 def chalk_col(u, z, u0, w, z0, h, done=3):
@@ -302,16 +383,56 @@ def left_wall(u, z):
     return v if v is not None else wall_col(u, z)
 
 
-def rug(c):
-    cx, cy, rx, ry = RUG
-    rings = ['c2', 's3', 'c2', 'r2', 'r3', 's3', 'c1', 'r2', 'c2', 's3']
+def cloth(c, x0, y0, x1, y1, fill, rim, band):
+    """a flat cloth on the floor: rasterised first, then its rings are counted in screen pixels so the
+    stitched rim and the border band stay exactly 1 px wide in both cameras"""
+    cells = {}
 
-    def col(x, y):
-        d = math.sqrt(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2)
-        if d > 1:
-            return None
-        return 'ink2' if d > .93 else rings[int(d * 9.6) % len(rings)]
-    face_top(c, cx - rx, cy - ry, cx + rx, cy + ry, 0, col)
+    class Rec:
+        def px(self, sx, sy, v):
+            cells[(sx, sy)] = v
+    face_top(Rec(), x0, y0, x1, y1, 0, lambda x, y: (x, y))
+    ring, edge = {}, [p for p in cells if any((p[0] + dx, p[1] + dy) not in cells
+                                              for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+    for p in edge:
+        ring[p] = 0
+    d = 0
+    while edge:
+        d += 1
+        nxt = []
+        for (sx, sy) in edge:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                q = (sx + dx, sy + dy)
+                if q in cells and q not in ring:
+                    ring[q] = d
+                    nxt.append(q)
+        edge = nxt
+    for (sx, sy), (x, y) in cells.items():
+        r = ring[(sx, sy)]
+        if r == 0:
+            col = rim(sx, sy)
+        elif r <= len(band):
+            col = band[r - 1](sx, sy) if callable(band[r - 1]) else band[r - 1]
+        else:
+            col = fill(x, y)
+        c.px(sx, sy, col)
+
+
+def rug(c):
+    """picnic-blanket gingham in rose and cream, with a stitched rim like the reference blankets"""
+    cx, cy, rx, ry = RUG
+
+    def gingham(x, y):
+        a, b = math.floor(x / 2) % 2, math.floor(y / 2) % 2
+        return 'r1' if a and b else ('r2' if a or b else 'c3')
+    cloth(c, cx - rx, cy - ry, cx + rx, cy + ry, gingham,
+          lambda sx, sy: 'ink2' if (sx + sy) % 2 else 'c3', ['c3', lambda sx, sy: 'r1' if (sx + sy) % 4 == 0 else 'c3'])
+
+
+def doormat(c):
+    x0, x1 = R_DOOR[0], R_DOOR[0] + R_DOOR[1]
+    cloth(c, x0, 1, x1, 6, lambda x, y: 's2' if math.floor(x) % 2 else 's1',
+          k('s0'), ['s3'])
 
 
 def shell():
@@ -369,15 +490,14 @@ def shell():
         face_front(c, X, X + CAP, Y, 0, Z, k('c0'))
         face_front(c, -CAP, X + CAP, Y, -4, 0, lambda u, z: 's0' if z < -3 else 's1' if u % 6 > .7 else 's0')
     # sills and the door bell
-    box(c, R_WIN[0] - 1, 0, R_WIN[2] - 1, R_WIN[1] + 2, 2, 1, 'c3', 'c2', 'c1')
+    box(c, R_WIN[0] - 1, 0, R_WIN[2] - 1, R_WIN[1] + 2, 2, 1, 'h3', 'h2', 'h1')
     if MODE == 'iso':
-        box(c, 0, L_WIN[0] - 1, L_WIN[2] - 1, 2, L_WIN[1] + 2, 1, 'c3', 'c2', 'c1')
+        box(c, 0, L_WIN[0] - 1, L_WIN[2] - 1, 2, L_WIN[1] + 2, 1, 'h3', 'h2', 'h1')
     bx, by = Pi(R_DOOR[0] + R_DOOR[1] / 2, 0, R_DOOR[2] + 4)
     c.stamp(['..O..', '.OYO.', '.OYO.', 'OYHYO', 'OOOOO', '..O..'], bx - 2, by - 3, {'O': 'ink', 'Y': 'y1', 'H': 'y2'})
     # floor things
     rug(c)
-    face_top(c, R_DOOR[0], 1, R_DOOR[0] + R_DOOR[1], 6, 0,
-             lambda a, b: 'r1' if (a < R_DOOR[0] + 1 or a >= R_DOOR[0] + R_DOOR[1] - 1 or b < 2 or b >= 5) else ('r1' if a % 2 < .7 else 'r2'))
+    doormat(c)
     # outline the room's silhouette (glass is interior, so it stays clear)
     c.outline()
     for key in glass:
