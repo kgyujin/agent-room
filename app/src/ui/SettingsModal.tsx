@@ -28,7 +28,7 @@ const PANE_KEYS: Partial<Record<SettingsPane, (keyof Settings)[]>> = {
   agents: ['doneShownSec', 'staleMinutes'],
   notify: ['approveInApp', 'approveWaitSec', 'dailySummary', 'dailySummaryHour', 'notifyApproval', 'notifyComplete', 'notifyLimits', 'notifyMinTurnSec', 'notifyOnlyWhenHidden', 'quietFrom', 'quietHours', 'quietTo', 'renotifyMin'],
   sound: ['bgm', 'sfx'],
-  pets: ['petBubbles', 'petEnergy'],
+  pets: ['desktopPets', 'desktopPetSize', 'petBubbles', 'petEnergy'],
   look: ['alwaysOnTop', 'alwaysOnTopRoom', 'backdrop', 'dashHidden', 'idleTags', 'roomView', 'showDock', 'showTabs', 'tagLook', 'tagStyle', 'theme'],
   bar: ['trayPet'],
   island: ['island', 'islandHideIdle', 'islandOpen', 'islandPeek', 'islandScreen', 'islandUsage'],
@@ -632,6 +632,18 @@ function Pets({ settings: s, onChange, names, onAdded }: { settings: Settings; o
           </select>
         </Field>
         <Toggle label={L('머리 위 상태 아이콘', 'Status icon over the head')} hint={L('! ? ✓ 같은 표시', 'Marks like ! ? ✓')} v={s.petBubbles ?? true} on={(v) => set('petBubbles', v)} />
+      </Group>
+      <Group title={L('바탕화면 펫', 'Desktop pets')}>
+        <Toggle label={L('화면 아래를 돌아다니기', 'Walk along the bottom of the screen')}
+          hint={L('방 밖으로 나와 Dock 위를 걸어 다녀요. 일하는 중엔 그 자리에서 일하고, 승인이 필요하면 포인터 쪽으로 달려와요. 클릭하면 그 세션을 열고, 끌어서 옮길 수 있어요. 펫이 아닌 곳은 클릭이 그대로 뒤로 지나가요.', 'They come out of the room and walk along the Dock. A working pet stays put and works; one that needs your OK runs over to the pointer. Click one to open its session, or drag it around. Clicks anywhere else go straight through.')}
+          v={s.desktopPets ?? false} on={(v) => set('desktopPets', v)} />
+        <Field label={L('크기', 'Size')}>
+          <select value={s.desktopPetSize ?? 2} disabled={!s.desktopPets} onChange={(e) => set('desktopPetSize', Number(e.target.value))}>
+            <option value={2}>{L('작게', 'Small')}</option>
+            <option value={3}>{L('보통', 'Medium')}</option>
+            <option value={4}>{L('크게', 'Large')}</option>
+          </select>
+        </Field>
       </Group>
       <p className="muted small">
         {L('추가한 PNG는 ', 'Added PNGs are kept in ')}<span className="mono">{dir}/characters/</span>{L(' 폴더에 저장되고, 이 폴더에 직접 넣어도 돼요. 확대된 도트는 1칸 = 1px 원래 크기로 줄이고 단색 배경은 투명하게 처리해요. 파일은 이 컴퓨터에만 있고 어디에도 올리지 않아요.', ', and you can put files there yourself. Scaled-up pixel art is shrunk back to 1 cell = 1 px and a plain background becomes transparent. The files stay on this computer and are uploaded nowhere.')}

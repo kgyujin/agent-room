@@ -307,3 +307,12 @@ export async function loadSkin(bytes: number[]): Promise<Skin> {
     URL.revokeObjectURL(url);
   }
 }
+
+/** every pet the user can have: the built-ins (in their picked colours) and the user's PNGs; ones that fail to load are left out */
+export async function loadAllSkins(colors: Record<string, string>, files: { name: string; bytes: number[] }[]): Promise<Record<string, Skin>> {
+  const loaded = await Promise.all([
+    ...BUILTIN_CRITTERS.map(([id]) => loadBuiltin(id, colors[id]).then((sk) => [`builtin/${id}`, sk] as const).catch(() => null)),
+    ...files.map((f) => loadSkin(f.bytes).then((sk) => [f.name, sk] as const).catch(() => null)),
+  ]);
+  return Object.fromEntries(loaded.filter((x) => x !== null));
+}

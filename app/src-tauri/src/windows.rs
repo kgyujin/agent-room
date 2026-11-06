@@ -313,11 +313,14 @@ pub(crate) fn watch_hover(app: AppHandle) {
     let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
         let mut last_island: Option<bool> = None;
         let mut last_main: Option<Option<(i32, i32)>> = None;
+        let mut last_desk: Option<Option<(i32, i32)>> = None;
         #[cfg(target_os = "macos")]
         let mut last_screen: Option<usize> = None;
         loop {
             let room_only = ROOM_ONLY.load(std::sync::atomic::Ordering::Relaxed);
-            std::thread::sleep(Duration::from_millis(if room_only { 50 } else { 120 }));
+            // desktop pets move: a click must find the pet where it is now, not where it was
+            let desk_on = app.get_webview_window("desk").is_some();
+            std::thread::sleep(Duration::from_millis(if room_only || desk_on { 50 } else { 120 }));
             #[cfg(not(target_os = "macos"))]
             let Ok(c) = app.cursor_position() else { continue };
             let at = |label: &str| -> Option<(i32, i32)> {
@@ -357,6 +360,13 @@ pub(crate) fn watch_hover(app: AppHandle) {
                     last_screen = idx;
                     sync_island(&app);
                 }
+            }
+            // the desktop pets' strip: the pointer on every tick while it is over the strip, so the
+            // page can let clicks through everywhere but on a pet
+            let desk = if desk_on { at("desk") } else { None };
+            if desk.is_some() || last_desk != Some(desk) {
+                last_desk = Some(desk);
+                let _ = app.emit_to("desk", "hover-desk", desk);
             }
             let main = at("main");
             if last_main != Some(main) || (room_only && main.is_some()) {
@@ -466,5 +476,119 @@ pub(crate) fn tray_action(app: AppHandle, action: String, key: Option<String>) {
         }
         "quit" => app.exit(0),
         _ => {}
+    }
+}
+
+// ------------------------------------------------------------------ desktop pets
+
+/// Height in points of the see-through strip along the bottom of the screen where the desktop
+/// pets walk (sitting on the Dock, or on the screen's bottom edge when the Dock hides).
+pub(crate) const DESK_H: f64 = 240.0;
+
+/// The pet each session has in the room (session key -> pet name). The room tells the app, so the
+/// same session's desktop pet looks the same.
+static PET_SKINS: Mutex<std::collections::BTreeMap<String, String>> = Mutex::new(std::collections::BTreeMap::new());
+
+#[tauri::command]
+pub(crate) fn set_pet_skins(app: AppHandle, by_session: std::collections::BTreeMap<String, String>) {
+    *PET_SKINS.lock().unwrap() = by_session.clone();
+    let _ = app.emit_to("desk", "pet-skins", by_session);
+}
+
+#[tauri::command]
+pub(crate) fn pet_skins() -> std::collections::BTreeMap<String, String> {
+    PET_SKINS.lock().unwrap().clone()
+}
+
+/// Puts the desktop pets' strip on screen, or removes it. Like the island, its web view only exists
+/// while the setting is on, so turned off it costs nothing. The strip lets every click through
+/// except on a pet (the page decides, from the pointer the hover watcher reports).
+pub(crate) fn show_desk(app: &AppHandle, on: bool) {
+    let existing = app.get_webview_window("desk");
+    if !on {
+        if let Some(w) = existing {
+            let _ = w.destroy();
+        }
+        return;
+    }
+    if existing.is_some() {
+        return;
+    }
+    let Ok(w) = WebviewWindowBuilder::new(app, "desk", WebviewUrl::App("index.html".into()))
+        .title("Agent Room")
+        .inner_size(800.0, DESK_H)
+        .decorations(false)
+        .transparent(true)
+        .resizable(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .focused(false)
+        // clicking a pet must not pull Agent Room in front of the app being used
+        .focusable(false)
+        .visible(false)
+        .visible_on_all_workspaces(true)
+        .accept_first_mouse(true)
+        .build()
+    else {
+        return;
+    };
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+        if let Ok(ptr) = w.ns_window() {
+            let ns = ptr as *mut AnyObject;
+            // NSFloatingWindowLevel = 3: over app windows, under the menu bar, the island and menus.
+            // canJoinAllSpaces (1) | stationary (16) | ignoresCycle (64); not over full-screen apps.
+            unsafe {
+                let _: () = msg_send![ns, setLevel: 3isize];
+                let _: () = msg_send![ns, setCollectionBehavior: (1usize | 16 | 64)];
+            }
+        }
+    }
+    place_desk(app, &w);
+    let _ = w.show();
+    // after show: on Linux the window must exist on screen before it can let clicks through
+    let _ = w.set_ignore_cursor_events(true);
+}
+
+/// Lays the strip along the bottom of the menu bar's display, just above the Dock.
+pub(crate) fn place_desk(app: &AppHandle, w: &WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::runtime::AnyObject;
+        use objc2::{class, msg_send};
+        let Ok(ptr) = w.ns_window() else { return };
+        let ns = ptr as usize;
+        let _ = w.run_on_main_thread(move || unsafe {
+            let ns = ns as *mut AnyObject;
+            let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+            let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
+            if ns.is_null() || count == 0 {
+                return;
+            }
+            // screens[0] holds the menu bar; Cocoa's origin is at the bottom-left
+            let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
+            let vis: MacRect = msg_send![screen, visibleFrame];
+            let r = MacRect(vis.0, vis.1, vis.2, DESK_H.min(vis.3));
+            let now: MacRect = msg_send![ns, frame];
+            if (now.0 - r.0).abs() < 0.5 && (now.1 - r.1).abs() < 0.5 && (now.2 - r.2).abs() < 0.5 && (now.3 - r.3).abs() < 0.5 {
+                return;
+            }
+            let _: () = msg_send![ns, setFrame: r, display: true];
+        });
+        let _ = app;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let Ok(Some(mon)) = app.primary_monitor() else { return };
+        let k = mon.scale_factor();
+        let area = mon.work_area();
+        let (x, y) = (area.position.x as f64 / k, area.position.y as f64 / k);
+        let (width, height) = (area.size.width as f64 / k, area.size.height as f64 / k);
+        let h = DESK_H.min(height);
+        let _ = w.set_size(tauri::LogicalSize::new(width, h));
+        let _ = w.set_position(tauri::LogicalPosition::new(x, y + height - h));
     }
 }

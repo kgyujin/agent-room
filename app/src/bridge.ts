@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'clean', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto',
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto', desktopPets: false, desktopPetSize: 2,
 };
 
 export interface Backend {
@@ -30,7 +30,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'open-dashboard', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'open-dashboard' | 'hover-desk' | 'pet-skins', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
@@ -73,6 +73,9 @@ export interface Backend {
   historyClear(): Promise<void>;
   answerApproval(key: string, allow: boolean): Promise<void>;
   listCharacters(): Promise<CharacterFile[]>;
+  /** which pet each session has in the room (the room tells the app; the desktop pets ask) */
+  setPetSkins(bySession: Record<string, string>): Promise<void>;
+  petSkins(): Promise<Record<string, string>>;
   /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
   setTrayFrames(frames: number[][]): Promise<void>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
@@ -120,6 +123,8 @@ const tauriBackend: Backend = {
   historyClear: () => tauriInvoke('history_clear'),
   answerApproval: (key, allow) => tauriInvoke('answer_approval', { key, allow }),
   listCharacters: () => tauriInvoke('list_characters'),
+  setPetSkins: (bySession) => tauriInvoke('set_pet_skins', { bySession }),
+  petSkins: () => tauriInvoke('pet_skins'),
   setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
   replaceCharacter: (name, bytes) => tauriInvoke('replace_character', { name, bytes }),
@@ -282,6 +287,8 @@ function previewBackend(): Backend {
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
     setTrayFrames: async () => {},
+    setPetSkins: async () => {},
+    petSkins: async () => ({}),
     saveCharacter: async (name, bytes) => {
       const w = window as { __previewCharacters?: CharacterFile[] };
       const stem = name.replace(/\.png$/i, '');

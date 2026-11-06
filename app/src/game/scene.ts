@@ -64,6 +64,9 @@ export class Scene {
   skins: Record<string, Skin> = {};
   /** pets new critters may get (the user's checked list) */
   pool: string[] = [];
+  /** told which pet each session has whenever that changes (the desktop pets wear the same ones) */
+  onSkins: ((bySession: Record<string, string>) => void) | null = null;
+  private lastSkins = '';
   /** offset of the scene inside the buffer (for hit testing) */
   private off = { x: 0, y: 0 };
   /** pixel ratio the canvas was last fitted at */
@@ -170,6 +173,12 @@ export class Scene {
       const from = free.length ? free : this.pool;
       m.skin = from[Math.floor(Math.random() * from.length)] ?? '';
       inRoom.add(m.skin);
+    }
+    const by = Object.fromEntries(this.mates.filter((m) => m.session && m.skin).map((m) => [m.key, m.skin]));
+    const sig = JSON.stringify(by);
+    if (sig !== this.lastSkins) {
+      this.lastSkins = sig;
+      this.onSkins?.(by);
     }
   }
 

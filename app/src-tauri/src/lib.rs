@@ -671,6 +671,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     agent_room_core::history::prune(&agent_room_core::history::dir(), now_ms(), settings.history_days as u64);
     show_island(&app, settings.island);
     sync_island(&app);
+    show_desk(&app, settings.desktop_pets);
     // the popover and island keep their pages alive, so they pick up the change from this event
     let _ = app.emit("settings-changed", &settings);
     Ok(())
@@ -768,12 +769,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, set_tz_offset, set_ui_lang, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, open_memory_file, save_report, notify_text, history_read, history_clear, answer_approval
+            tray_action, set_tz_offset, set_ui_lang, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, open_memory_file, save_report, notify_text, history_read, history_clear, answer_approval, set_pet_skins, pet_skins
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             let settings = load_settings(&handle);
             let island_on = settings.island;
+            let desk_on = settings.desktop_pets;
             {
                 let shared = handle.state::<Shared>();
                 shared.store.lock().unwrap().stale_after_ms = settings.stale_minutes.max(1) as u64 * 60_000;
@@ -805,6 +807,10 @@ pub fn run() {
                     if n % 5 == 0 {
                         // "완료" runs out with time, not with an event
                         sync_island(&h);
+                        // after a display was plugged in or out, or the Dock moved
+                        if let Some(w) = h.get_webview_window("desk") {
+                            place_desk(&h, &w);
+                        }
                         follow_logs(&h);
                         follow_desktop(&h);
                         renotify(&h);
@@ -861,6 +867,7 @@ pub fn run() {
 
             show_island(&handle, island_on);
             sync_island(&handle);
+            show_desk(&handle, desk_on);
             watch_hover(handle.clone());
             animate_tray(handle.clone());
             Ok(())
