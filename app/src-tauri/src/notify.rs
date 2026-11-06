@@ -106,7 +106,8 @@ pub(crate) fn clear_answered(app: &AppHandle, s: &Snapshot) {
         }
         let (gone, kept): (Vec<_>, Vec<_>) = sent.drain(..).partition(|(k, _)| k == &s.key);
         *sent = kept;
-        gone.into_iter().map(|(_, t)| t).collect()
+        // a title another session is still waiting under stays: notices are matched by title only
+        gone.into_iter().map(|(_, t)| t).filter(|t| !sent.iter().any(|(_, k)| k == t)).collect()
     };
     #[cfg(target_os = "macos")]
     let _ = app.run_on_main_thread(move || unsafe { mac_remove_delivered(&titles) });
