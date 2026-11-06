@@ -63,7 +63,8 @@
 /* status: round dots, soft tinted chips */
 .pulse { border-radius: 50%; }
 .agent-dot, .tab .dot { border-radius: 50%; }
-.tone-work .pulse, .tone-wait .pulse { animation: pulse 1.4s ease-in-out infinite; }
+/* no animation: the halo it animated is transparent, so it only repainted the dot 60 times a second */
+.tone-work .pulse, .tone-wait .pulse { animation: none; }
 .ov .ov-state { padding: 2px 8px; font-weight: 600; }
 
 /* progress bars: thin, rounded, no frame */

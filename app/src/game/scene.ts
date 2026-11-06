@@ -1,6 +1,6 @@
 // Canvas 2D renderer for the office. Draws at native pixel resolution into a small
 // buffer and scales it up by an integer factor (crisp pixels, very cheap).
-// Runs at 12 fps when focused, 6 fps when unfocused, and stops when hidden.
+// Runs at 12 fps when focused, 4 fps when unfocused (the window is then only glanced at), and stops when hidden.
 // One critter per session (up to one per desk), each with its own desk and screen.
 import { stateTone } from '../labels';
 import type { Snapshot } from '../types';
@@ -85,7 +85,8 @@ export class Scene {
 
   constructor(private canvas: HTMLCanvasElement, private atlas: Atlas) {
     this.ctx = canvas.getContext('2d')!;
-    this.bctx = this.buf.getContext('2d')!;
+    // read back every frame (below), so it lives in memory rather than on the GPU
+    this.bctx = this.buf.getContext('2d', { willReadFrequently: true })!;
     this.desks = atlas.layout.desks;
     this.span = this.fitSky();
     this.resize();
@@ -228,6 +229,8 @@ export class Scene {
 
   /** CSS height of the room's box at the last resize */
   private boxH = 0;
+  /** a hash of the last frame put on screen; -1 after a resize, which clears the canvas */
+  private shown = -1;
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -257,6 +260,7 @@ export class Scene {
     if (this.zoom <= 0) this.pan = { x: 0, y: 0 };
     this.buf.width = Math.ceil(w / this.scale);
     this.buf.height = Math.ceil(h / this.scale);
+    this.shown = -1;
     this.draw();
   }
 
@@ -599,7 +603,18 @@ export class Scene {
     }
     g.globalCompositeOperation = 'source-over';
 
-    // blit
+    // blit, only when the picture changed: most ticks of a quiet room repeat the last frame, and
+    // repainting the window's full-size canvas for nothing kept the GPU and the window server busy
+    // only the room and a margin for bubbles and sparks can change; the rest is the flat backdrop
+    const rx = Math.max(0, ox + room.dx - 24);
+    const ry = Math.max(0, oy + room.dy - 48);
+    const px = new Uint32Array(g.getImageData(rx, ry, Math.max(1, Math.min(W - rx, room.w + 48)), Math.max(1, Math.min(H - ry, room.h + 72))).data.buffer);
+    // where the room sits counts too (a drag moves the same picture)
+    let hash = Math.imul(2166136261 ^ (rx * 65536 + ry), 16777619);
+    for (let i = 0; i < px.length; i++) hash = Math.imul(hash ^ px[i], 16777619);
+    hash >>>= 0;
+    if (hash === this.shown) return;
+    this.shown = hash;
     const c = this.ctx;
     c.imageSmoothingEnabled = false;
     c.clearRect(0, 0, this.canvas.width, this.canvas.height);

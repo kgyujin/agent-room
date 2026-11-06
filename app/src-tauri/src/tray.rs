@@ -52,7 +52,7 @@ pub(crate) fn animate_tray(app: AppHandle) {
                 let bytes = custom.as_ref().map_or(builtin[idx], |f| f.1[idx].as_slice());
                 if let (Some(tray), Ok(img)) = (app.tray_by_id("main"), tauri::image::Image::from_bytes(bytes)) {
                     #[cfg(target_os = "macos")]
-                    mac_tray_image(&tray, bytes.to_vec(), img.width(), img.height());
+                    mac_tray_image(&tray, key, bytes.to_vec(), img.width(), img.height());
                     #[cfg(not(target_os = "macos"))]
                     let _ = tray.set_icon(Some(img));
                 }
@@ -66,11 +66,16 @@ pub(crate) fn animate_tray(app: AppHandle) {
 /// on the menu bar button at its own size (a 44 px frame shows 22pt tall and the pet fills the menu
 /// bar like other icons), in one step on the main thread: setting the icon through tray-icon first
 /// and resizing it after showed some frames at 18pt and others at 22pt.
+/// Each frame is decoded once and kept (`key`: which frame set, which frame), so the waddle, which
+/// changes frames several times a second, only swaps images on the main thread.
 #[cfg(target_os = "macos")]
-pub(crate) fn mac_tray_image(tray: &tauri::tray::TrayIcon, png: Vec<u8>, w_px: u32, h_px: u32) {
+pub(crate) fn mac_tray_image(tray: &tauri::tray::TrayIcon, key: (u64, usize), png: Vec<u8>, w_px: u32, h_px: u32) {
     use objc2::rc::{Allocated, Retained};
     use objc2::runtime::AnyObject;
     use objc2::{class, msg_send};
+    thread_local! {
+        static DECODED: std::cell::RefCell<(u64, Vec<Option<Retained<AnyObject>>>)> = const { std::cell::RefCell::new((u64::MAX, Vec::new())) };
+    }
     let _ = tray.with_inner_tray_icon(move |t| unsafe {
         let Some(item) = t.ns_status_item() else { return };
         let item = objc2::rc::Retained::as_ptr(&item) as *mut AnyObject;
@@ -78,10 +83,26 @@ pub(crate) fn mac_tray_image(tray: &tauri::tray::TrayIcon, png: Vec<u8>, w_px: u
         if button.is_null() {
             return;
         }
-        let data: *mut AnyObject = msg_send![class!(NSData), dataWithBytes: png.as_ptr().cast::<std::ffi::c_void>(), length: png.len()];
-        let alloc: Allocated<AnyObject> = msg_send![class!(NSImage), alloc];
-        let Some(image): Option<Retained<AnyObject>> = msg_send![alloc, initWithData: data] else { return };
-        let _: () = msg_send![&*image, setSize: MacSize(w_px as f64 / 2.0, h_px as f64 / 2.0)];
+        let Some(image) = DECODED.with_borrow_mut(|(set, frames)| {
+            // new frames from the settings: forget the old set
+            if *set != key.0 {
+                *set = key.0;
+                frames.clear();
+            }
+            if frames.len() <= key.1 {
+                frames.resize(key.1 + 1, None);
+            }
+            if frames[key.1].is_none() {
+                let data: *mut AnyObject = msg_send![class!(NSData), dataWithBytes: png.as_ptr().cast::<std::ffi::c_void>(), length: png.len()];
+                let alloc: Allocated<AnyObject> = msg_send![class!(NSImage), alloc];
+                let image: Option<Retained<AnyObject>> = msg_send![alloc, initWithData: data];
+                if let Some(i) = &image {
+                    let _: () = msg_send![&**i, setSize: MacSize(w_px as f64 / 2.0, h_px as f64 / 2.0)];
+                }
+                frames[key.1] = image;
+            }
+            frames[key.1].clone()
+        }) else { return };
         let _: () = msg_send![button, setImage: &*image];
         // tray-icon's click target sits over the button at the button's size; keep it matching
         let frame: MacRect = msg_send![button, frame];

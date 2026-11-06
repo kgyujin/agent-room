@@ -267,7 +267,7 @@ export default function App() {
       sceneRef.current?.resize();
     };
     window.addEventListener('resize', onResize);
-    const onVis = () => sceneRef.current?.setFps(document.hidden || !roomShownRef.current ? 0 : document.hasFocus() ? 12 : 6);
+    const onVis = () => sceneRef.current?.setFps(document.hidden || !roomShownRef.current ? 0 : document.hasFocus() ? 12 : 4);
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('focus', onVis);
     window.addEventListener('blur', onVis);
@@ -289,12 +289,12 @@ export default function App() {
       if (!w || !sceneRef.current) return;
       const [vis, min] = await Promise.all([w.isVisible(), w.isMinimized()]);
       if (!vis || min || !roomShownRef.current) sceneRef.current.setFps(0);
-      else if (!document.hidden) sceneRef.current.setFps(document.hasFocus() ? 12 : 6);
+      else if (!document.hidden) sceneRef.current.setFps(document.hasFocus() ? 12 : 4);
     }, 1500);
     return () => clearInterval(id);
   }, []);
   useEffect(() => {
-    sceneRef.current?.setFps(dashPage || document.hidden ? 0 : document.hasFocus() ? 12 : 6);
+    sceneRef.current?.setFps(dashPage || document.hidden ? 0 : document.hasFocus() ? 12 : 4);
   }, [dashPage, ready]);
 
   // ended sessions leave the office; live ones each get a desk and a critter. A session gets its

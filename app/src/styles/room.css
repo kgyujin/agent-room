@@ -45,7 +45,7 @@
 .nametag small { font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .nametag span { color: var(--ink); }
 .nametag.t-work { --tag: var(--work); }
-.nametag.t-wait { --tag: var(--wait); animation: tagwait 1.2s ease-in-out infinite; }
+.nametag.t-wait { --tag: var(--wait); animation: tagwait 1.2s ease-in-out 5; }
 .nametag.t-bad { --tag: var(--bad); }
 .nametag.t-ok { --tag: var(--ok); }
 .nametag.t-calm, .nametag.t-muted { --tag: var(--frame-l); }
