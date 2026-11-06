@@ -122,7 +122,7 @@ function previewSnapshot(state: string): Snapshot {
       { text: '테스트 작성', status: 'in_progress' }, { text: '빌드 확인', status: 'pending' },
     ],
     limits: { windows: [{ minutes: 300, usedPct: 38, resetsAt: now + 2.2 * 3_600_000 }, { minutes: 10080, usedPct: 22, resetsAt: now + 4.3 * 86_400_000 }], at: now },
-    completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0,
+    completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0, origin: 'project', title: '대시보드 다듬기',
   };
   const set = (p: Partial<Snapshot>) => Object.assign(s, p);
   switch (state) {

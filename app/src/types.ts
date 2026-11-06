@@ -39,6 +39,10 @@ export interface Snapshot {
   toolCount: number;
   filesEdited: string[];
   subagents: number;
+  /** where a Claude session was started from, from the desktop app's records */
+  origin?: 'desktop' | 'remote' | 'project' | null;
+  /** the desktop app's title for the session */
+  title?: string | null;
 }
 
 export interface TimelineEntry {
