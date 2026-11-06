@@ -632,7 +632,7 @@ export default function App() {
         {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
-        {!mini && <ToolBtn icon="monitor" label="대시보드 보기" on={dashSplit} onClick={() => setDashView(dashSplit ? 'off' : 'split')} />}
+        {!mini && <ToolBtn icon="monitor" label="대시보드 보기" on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}
         {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
