@@ -634,14 +634,70 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
     // the agent running in the same folder is the one
     let pid = pid.or_else(|| procs.agent_in(agent?, cwd.as_deref()?));
     let host = pid.and_then(|p| procs.host_app(p)).or_else(|| {
-        let name = if key.starts_with("codex:") { "Codex.app" } else { "Claude.app" };
-        let p = std::path::Path::new("/Applications").join(name);
-        p.exists().then_some(p)
+        // the Codex app now ships inside ChatGPT; the standalone Codex.app is kept for older installs
+        let names: &[&str] = if key.starts_with("codex:") { &["Codex.app", "ChatGPT.app"] } else { &["Claude.app"] };
+        names.iter().map(|n| std::path::Path::new("/Applications").join(n)).find(|p| p.exists())
     });
     drop(procs);
-    let desktop = shared.desktop_ids.lock().unwrap().get(&key).cloned();
+    // the hook reports it; a session seen only in its log (Agent Room restarted since its last hook)
+    // is looked up in the desktop app's own session records instead
+    let desktop = shared.desktop_ids.lock().unwrap().get(&key).cloned().or_else(|| {
+        let cli = key.strip_prefix("claude:")?;
+        let found = desktop_id_from_records(cli)?;
+        shared.desktop_ids.lock().unwrap().insert(key.clone(), found.clone());
+        Some(found)
+    });
     let host = host.ok_or(if pid.is_some() { "이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)" } else { "이 세션의 에이전트 프로세스를 찾지 못했어요" })?;
     open_session(&host, &key, pid, cwd.as_deref(), desktop.as_deref())
+}
+
+/// The Claude desktop app's id (`local_…`) for the Code-tab session whose CLI session id is `cli`.
+/// Only the ids in the app's records under `claude-code-sessions/<account>/<org>/local_*.json` are
+/// read; a file is parsed only when it mentions `cli`, and archived sessions are skipped (the app
+/// does not open them by link).
+fn desktop_id_from_records(cli: &str) -> Option<String> {
+    let home = std::env::var_os("HOME")?;
+    let root = std::path::Path::new(&home).join("Library/Application Support/Claude/claude-code-sessions");
+    desktop_id_in(&root, cli)
+}
+
+fn desktop_id_in(root: &std::path::Path, cli: &str) -> Option<String> {
+    // a CLI session id is a uuid; nothing else is matched against the records
+    if cli.len() != 36 || !cli.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+        return None;
+    }
+    let mut best: Option<(u64, String)> = None;
+    for account in std::fs::read_dir(root).ok()?.flatten() {
+        for org in std::fs::read_dir(account.path()).into_iter().flatten().flatten() {
+            for f in std::fs::read_dir(org.path()).into_iter().flatten().flatten() {
+                let name = f.file_name();
+                let Some(name) = name.to_str() else { continue };
+                if !name.starts_with("local_") || !name.ends_with(".json") {
+                    continue;
+                }
+                let Ok(raw) = std::fs::read(f.path()) else { continue };
+                if !raw.windows(cli.len()).any(|w| w == cli.as_bytes()) {
+                    continue;
+                }
+                let Ok(rec) = serde_json::from_slice::<serde_json::Value>(&raw) else { continue };
+                let is_cli = |k: &str| rec.get(k).and_then(|v| v.as_str()) == Some(cli);
+                let in_prior = rec.get("priorCliSessionIds").and_then(|v| v.as_array()).is_some_and(|a| a.iter().any(|v| v.as_str() == Some(cli)));
+                if !(is_cli("cliSessionId") || is_cli("lastAssistantCliSessionId") || in_prior) {
+                    continue;
+                }
+                if rec.get("isArchived").and_then(|v| v.as_bool()) == Some(true) {
+                    continue;
+                }
+                let Some(id) = rec.get("sessionId").and_then(|v| v.as_str()) else { continue };
+                // a session continued in a new record: the most recently active one is the open one
+                let at = rec.get("lastActivityAt").and_then(|v| v.as_u64()).unwrap_or(0);
+                if best.as_ref().is_none_or(|(t, _)| at > *t) {
+                    best = Some((at, id.to_string()));
+                }
+            }
+        }
+    }
+    best.map(|(_, id)| id)
 }
 
 /// Opens the session itself where possible (its terminal tab, its editor window, its Codex chat),
@@ -674,7 +730,9 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
             std::thread::sleep(Duration::from_millis(400));
             ok(Command::new("/usr/bin/open").arg(url)) || raised
         }
-        Reach::Link(url) => ok(Command::new("/usr/bin/open").arg(url)),
+        // handed to the host app itself: a scheme can also be claimed by a stale copy (an old
+        // installer volume) or another app, and `-a` also brings the host to the front
+        Reach::Link(url) => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(&url)) || ok(Command::new("/usr/bin/open").arg(url)),
         Reach::App => false,
     };
     if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
@@ -1727,5 +1785,26 @@ mod tests {
         assert_eq!(character_stem("pikachu.png"), "pikachu");
         assert_eq!(character_stem("../../etc/passwd"), "______etc_passwd");
         assert_eq!(character_stem(""), "character");
+    }
+
+    #[test]
+    fn finds_the_desktop_id_of_a_cli_session() {
+        let root = std::env::temp_dir().join(format!("agent-room-records-{}", std::process::id()));
+        let dir = root.join("acct").join("org");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cli = "35d41fe0-8614-4055-a454-95c4ead1713a";
+        let other = "11111111-2222-3333-4444-555555555555";
+        let write = |name: &str, body: serde_json::Value| std::fs::write(dir.join(name), body.to_string()).unwrap();
+        write("local_aaa.json", serde_json::json!({"sessionId": "local_aaa", "cliSessionId": other, "lastActivityAt": 9}));
+        write("local_old.json", serde_json::json!({"sessionId": "local_old", "cliSessionId": "x", "priorCliSessionIds": [cli], "lastActivityAt": 1}));
+        write("local_new.json", serde_json::json!({"sessionId": "local_new", "cliSessionId": cli, "lastActivityAt": 5}));
+        write("local_gone.json", serde_json::json!({"sessionId": "local_gone", "cliSessionId": cli, "lastActivityAt": 99, "isArchived": true}));
+        // the most recently active, unarchived record wins
+        assert_eq!(super::desktop_id_in(&root, cli).as_deref(), Some("local_new"));
+        assert_eq!(super::desktop_id_in(&root, other).as_deref(), Some("local_aaa"));
+        assert_eq!(super::desktop_id_in(&root, "99999999-2222-3333-4444-555555555555"), None);
+        // only uuids are looked up
+        assert_eq!(super::desktop_id_in(&root, "local_aaa"), None);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }
