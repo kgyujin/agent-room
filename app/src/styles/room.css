@@ -1,0 +1,52 @@
+/* name tags and controls over the room */
+/* ------------------------------------------------ office: name tags over critters, faded toolbar in office view */
+.nametags { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.nametag { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; display: flex; gap: 4px; align-items: center; white-space: nowrap;
+  padding: 1px 7px; font-size: 11px; border-radius: 999px; border: 2px solid var(--tag, var(--frame)); background: var(--box); color: var(--ink); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18); }
+.nametag b { color: var(--tag); }
+.nametag span { color: var(--ink-soft); max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.nametag.on { background: #fff3d6; }
+.nametag.a-claude { --tag: #d9773f; }
+.nametag.a-codex { --tag: #3f78c9; }
+.nametag.a-demo { --tag: #8a6fd0; }
+.toolbar.faded { opacity: 0.25; transition: opacity 0.15s; }
+.toolbar.faded:hover { opacity: 1; }
+.tool { width: 34px; height: 34px; }
+.app:not(.mini) .banners { top: 62px; }
+.swatches { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--box); box-shadow: 0 0 0 1px var(--frame-l); padding: 0; }
+.swatch.on { box-shadow: 0 0 0 2px var(--ink); }
+.swatch.orig { background: linear-gradient(135deg, #fff 45%, #d9606f 45% 55%, #fff 55%); }
+.row.tight { margin-top: 0; gap: 4px; flex-wrap: nowrap; }
+.btn.small { padding: 3px 8px; font-size: 11px; }
+.banner.update { background: #eaf7ee; color: #2f7d4a; border-color: #6fbf88; }
+
+/* window mode: the toolbar is one row at the top right; tabs share the row and scroll sideways */
+.tab { flex: none; }
+.app:not(.mini) .topleft { top: 14px; }
+@media (max-height: 600px) {
+  .dock .hud { display: block; }
+  .dock .hud-grid { display: none; }
+}
+.pet-name { display: flex; align-items: center; gap: 8px; }
+.pet-thumb { width: 50px; height: 54px; flex: none; background-size: 300px 54px; background-position: 0 0; image-rendering: pixelated; }
+.char-add { margin: 4px 0 10px; }
+.my-char-thumb { width: 50px; height: 50px; flex: none; object-fit: contain; image-rendering: pixelated; }
+.my-char .link { border: none; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline dotted; cursor: text; }
+.my-char input:not([type]) { width: 140px; font: inherit; padding: 2px 6px; }
+.my-char-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.my-char-actions .btn { padding: 3px 8px; font-size: 12px; }
+
+/* ------------------------------------------------ agent marks + status-coloured name tags */
+.agent-mark { flex: none; image-rendering: pixelated; display: block; }
+.tab span:not(.dot) { font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nametag { --tag: var(--frame); padding: 2px 7px 2px 3px; }
+.nametag .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.nametag small { font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.nametag span { color: var(--ink); }
+.nametag.t-work { --tag: var(--work); }
+.nametag.t-wait { --tag: var(--wait); animation: tagwait 1.2s ease-in-out infinite; }
+.nametag.t-bad { --tag: var(--bad); }
+.nametag.t-ok { --tag: var(--ok); }
+.nametag.t-calm, .nametag.t-muted { --tag: var(--frame-l); }
+@keyframes tagwait { 50% { transform: translate(-50%, calc(-100% - 2px)); } }

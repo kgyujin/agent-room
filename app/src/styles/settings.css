@@ -1,0 +1,47 @@
+/* settings */
+/* ------------------------------------------------ settings: sidebar of panes + one pane at a time */
+.modal.settings { width: min(760px, calc(100vw - 32px)); height: min(620px, calc(100vh - 40px)); flex-direction: row; padding: 0; overflow: hidden; }
+.set-side { width: 188px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 16px 10px 12px; background: color-mix(in srgb, var(--ink) 4%, var(--box)); border-right: 1px solid var(--hair); }
+.set-title { padding: 0 8px; font-size: 15px; font-family: var(--font-display); }
+.modal.settings .set-side nav { display: flex; flex-direction: column; gap: 2px; padding: 0; background: none; border-radius: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.modal.settings .set-side nav button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border-radius: 8px; text-align: left; font-size: 13px; font-weight: 600; color: var(--ink-soft); box-shadow: none; white-space: nowrap; }
+.modal.settings .set-side nav button:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.modal.settings .set-side nav button.on { background: var(--accent-soft); color: var(--ink); box-shadow: none; }
+.modal.settings .set-side nav button svg { flex: none; opacity: 0.8; }
+.set-ver { margin-top: auto; padding: 0 8px; font-size: 11px; color: var(--ink-soft); }
+.set-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.modal.settings .set-main header { padding: 14px 16px 12px 20px; }
+.set-main header h3 { margin: 0; font-size: 16px; font-family: var(--font-display); }
+.modal.settings .modal-body { padding: 4px 20px 20px; }
+.set-group { margin-top: 16px; }
+.set-group h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: 0.02em; }
+.set-rows { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); padding: 0 14px; }
+.set-rows > .field:last-child, .set-rows > .field:last-of-type { border-bottom: none; }
+.set-rows > p { margin: 10px 0; }
+.modal.settings .field { min-height: 44px; padding: 8px 0; }
+.modal.settings .field > span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.modal.settings .field > span small { font-size: 11px; color: var(--ink-soft); font-weight: 400; }
+.modal.settings .field.sub { padding-left: 16px; }
+.modal.settings .field.sub > span { font-size: 12.5px; color: var(--ink-soft); }
+.set-lead { margin: 12px 0 10px; }
+.set-note { margin: 0 0 12px; }
+
+/* pets: a grid of cards to check */
+.pet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.pet-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1.5px solid var(--line-soft); border-radius: 12px; background: var(--paper); min-width: 0; transition: border-color 0.12s, background 0.12s; }
+.pet-card.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--box)); }
+.pet-pick { display: flex; align-items: center; gap: 8px; cursor: pointer; min-width: 0; }
+.pet-pick input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--accent); flex: none; margin: 0; }
+.pet-pick b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pet-pick input[type='text'], .pet-pick input:not([type]) { min-width: 0; flex: 1; font: inherit; font-size: 12px; padding: 2px 4px; }
+.pet-card i.pet-thumb { width: 50px; height: 54px; margin: -8px 0 -6px -4px; background-size: 300px 54px; background-position: 0 0; }
+.pet-card img.pet-thumb { width: 40px; height: 40px; flex: none; object-fit: contain; image-rendering: pixelated; }
+.swatches.mini { gap: 2px; flex-wrap: nowrap; }
+.swatches.mini .swatch { width: 12px; height: 12px; flex: none; }
+.pet-actions { display: flex; gap: 10px; font-size: 11.5px; }
+.pet-actions .link, .pet-actions label.link { color: var(--ink-soft); cursor: pointer; background: none; border: none; padding: 0; font: inherit; font-size: 11.5px; text-decoration: underline; text-underline-offset: 2px; }
+.pet-actions .link.danger { color: var(--bad); }
+.pet-card.add { align-items: center; justify-content: center; border-style: dashed; cursor: pointer; color: var(--ink-soft); min-height: 84px; gap: 2px; }
+.pet-card.add:hover { border-color: var(--accent); color: var(--ink); }
+.pet-card.add small { font-size: 11px; }
+@media (max-width: 620px) { .set-side { width: 56px; } .set-side nav button { font-size: 0 !important; justify-content: center; } .set-title, .set-ver { display: none; } }
