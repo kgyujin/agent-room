@@ -95,8 +95,9 @@ export default function App() {
   }, [zoom]);
   const zoomRef = useRef((_: string) => {});
   zoomRef.current = (how: string) => {
-    // room-only shows only the room, so the shortcuts size it instead of the page text
-    if (mini) return void roomStepRef.current(how === 'in' ? 1 : how === 'out' ? -1 : 0);
+    // room-only shows only the room, so the shortcuts size it instead of the page text (but the
+    // settings, which get a larger window for a while, keep the text zoom)
+    if (mini && !settingsOpen) return void roomStepRef.current(how === 'in' ? 1 : how === 'out' ? -1 : 0);
     const i = ZOOMS.findIndex((z) => z >= zoom - 0.001);
     const next = how === 'reset' ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? ZOOMS.length - 1 : i) + (how === 'in' ? 1 : -1)))];
     if (next !== zoom) void saveSettings({ ...settings, uiZoom: next });
@@ -545,7 +546,7 @@ export default function App() {
   roomStepRef.current = roomStep;
   const zoomStepRef = useRef((_: number) => {});
   zoomStepRef.current = (dir: number) => {
-    if (mini) return void roomStep(dir);
+    if (mini) return void (settingsOpen || roomStep(dir));
     const sc = sceneRef.current;
     sc?.zoomBy(dir);
     try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
