@@ -271,3 +271,13 @@
 .dshare-s { font-size: 9px; }
 /* the agent map keeps each session's "doing" line unless the cell is really short */
 @container (min-height: 240px) { .dp-one .dmap-doing { display: block; } .dp-one .dmap-node, .dp-one .dmap.few .dmap-node { padding: 9px 12px; } }
+
+/* task board: all four columns side by side at any size; an empty column keeps its header and a
+   dashed slot, and long task names wrap to two lines */
+.dp-one .dboard { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off))) { display: flex; }
+.dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off)))::after { content: ''; height: 40px; border: 1.5px dashed var(--edge); border-radius: 12px; }
+.dp-one .dboard-col h4 { white-space: nowrap; overflow: hidden; }
+.dp-one .dboard-card { padding: 8px 9px; gap: 5px; }
+.dp-one .dboard-card p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: anywhere; }
+.dp-one .dboard-card .tag { max-width: 100%; }
