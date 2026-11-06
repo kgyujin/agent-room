@@ -246,7 +246,7 @@
 .ds-spark polygon { fill: color-mix(in srgb, var(--accent-strong) 9%, transparent); }
 .ds-spark polyline { fill: none; stroke: color-mix(in srgb, var(--accent-strong) 70%, transparent); stroke-width: 1.5; stroke-linejoin: round; }
 .dash-stat:has(.ds-spark) > span { padding-right: 44%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@container (max-width: 150px) { .dash-stat .ds-spark { display: none; } .dash-stat:has(.ds-spark) > span { padding-right: 0; } }
+@container (max-width: 260px) { .dash-stat .ds-spark { display: none; } .dash-stat:has(.ds-spark) > span { padding-right: 0; } }
 /* status in tables: a soft filled badge in the state colour */
 .st-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--tone, var(--calm)) 12%, var(--box)); color: color-mix(in srgb, var(--tone, var(--calm)) 80%, var(--ink)); }
 
@@ -366,10 +366,55 @@
 .dp-over .dboard { padding: 0; }
 .files li { display: flex; align-items: center; gap: 6px; }
 /* very narrow board: tighter cards, counts give way to the column names */
-@container (max-width: 300px) {
+@container (max-width: 340px) {
+  .dp-one .dboard-col { padding: 4px; }
+  .dp-one .dboard-card .tag { font-size: 0; gap: 0; padding: 2px 4px; align-self: flex-start; width: auto; }
   .dp-one .dboard-card { padding: 7px; }
   .dp-one .dboard-card p { font-size: 11.5px; }
   .dp-one .dboard-col h4 span { display: none; }
 }
 .dmap-top span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 @container (max-width: 300px) { .dp-one .dash-table tr > :last-child { display: none; } }
+/* rows that stayed after a fit share the leftover space (see ui/fit.ts) */
+.fit-spread:not(tr) { margin-bottom: var(--fit-extra, 0px) !important; }
+.dp-one .dash-table tr.fit-spread > td { padding-top: calc(6px + var(--fit-extra, 0px) / 2); padding-bottom: calc(6px + var(--fit-extra, 0px) / 2); }
+/* usage card: when the bar chart had to go, the gauges sit in the middle instead of on top of a gap */
+.dp-one .g-use .dp-scroll:not(:has(.dshare:not(.fit-off))) { display: flex; flex-direction: column; justify-content: center; }
+/* board columns are trays down to the bottom of the cell, so space under the last card is part of a column */
+.dp-one .dboard { box-sizing: border-box; min-height: 100%; overflow: visible; align-items: stretch; }
+.dp-one .dboard-col { background: color-mix(in srgb, var(--tone, var(--ink-soft)) 4%, transparent); border-radius: 12px; padding: 6px; }
+.dp-one .dboard-col h4 { margin: 0 2px 4px; }
+.dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off)))::after { flex: 1; min-height: 40px; height: auto; }
+/* welcome: every agent gets the same connect card (mark, name over status, one button) */
+.wl-agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.wl-agent { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); flex-wrap: nowrap; }
+.wl-agent .wl-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-weight: 400; }
+.wl-agent .wl-name b { font-size: 13px; font-weight: 600; }
+.wl-agent .wl-name small { flex-basis: auto; font-size: 11px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-agent .wl-ok { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--ok) 14%, var(--box)); color: var(--ok); }
+/* popover footer: five equal buttons, icon over a short label, so no language runs out of room */
+.pop-foot { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.pop-foot button { flex-direction: column; gap: 3px; padding: 6px 2px; font-size: 11px; min-width: 0; color: var(--ink); }
+.pop-foot button > :not(svg) { max-width: 100%; }
+.pop-foot button { overflow: hidden; text-overflow: ellipsis; }
+.pop-foot .quit { padding: 6px 2px; color: var(--ink); }
+.pop-foot .quit:hover { color: var(--bad); }
+/* "+N more" sits on the bottom edge of the list, so any space left over reads as the list's end */
+.pp-more { margin-top: auto; }
+/* short cells (low windows, the dashboard beside the room): tighter cards so rows still fit */
+@container (max-height: 200px) {
+  .dp-one .dmap-col { gap: 6px; }
+  .dp-one .lc-ring { width: 44px; height: 44px; }
+  .dp-one .lc-grid.rings .lc { padding: 8px 10px; gap: 4px; }
+  .dp-one .lc-r { gap: 1px; }
+}
+@container (max-height: 150px) {
+  .dp-one .dboard-col { padding: 4px; gap: 4px; }
+  .dp-one .dboard-card { padding: 6px 8px; gap: 3px; }
+  .dp-one .dboard-card p { -webkit-line-clamp: 1; }
+  .dp-one .dboard-card .tag { display: none; }
+  .dp-one .lc-ring { width: 38px; height: 38px; }
+  .dp-one .lc-r .lc-reset { display: none; }
+}
+.dboard-col h4 em { font-style: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dboard-col h4 span { flex: none; }

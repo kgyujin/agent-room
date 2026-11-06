@@ -60,8 +60,6 @@ export class Scene {
   energy: Energy = 'normal';
   /** draw the little icons over the pets' heads (setting) */
   bubbles = true;
-  /** beside the dashboard: one scale step bigger when that only crops a little of the room's sides */
-  cover = false;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
   /** pets new critters may get (the user's checked list) */
@@ -244,9 +242,8 @@ export class Scene {
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
     const box = this.roomOnly ? this.roomBox() : { w: room.w + 4, h: room.h + 4 };
     const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / box.w, availH / box.h)));
-    // the room fits the area the side panel leaves free (it keeps its size when that still fits)
-    // beside the dashboard up to about an eighth of the room's width may go under the panel
-    const fit = this.cover ? Math.max(fitIn(availW), fitIn(availW * 1.15)) : fitIn(availW);
+    // the room always fits whole in the area the side panel or dashboard leaves free
+    const fit = fitIn(availW);
     // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size;
     // the floating room always fits its window (the window-mode zoom is kept for later)
     this.zoom = Math.max(1 - fit, Math.min(4, this.zoom));
@@ -318,6 +315,20 @@ export class Scene {
     } catch { /* a canvas that can't be read keeps the whole frame */ }
     this.opaque = { key: this.atlas.img, ...box };
     return box;
+  }
+
+  /**
+   * CSS width the room needs, in a window of the current height, to be drawn one whole scale step
+   * bigger than it would be in `cssW`; null when the height already holds it back
+   */
+  widthForNextStep(cssW: number): number | null {
+    const dpr = window.devicePixelRatio || 1;
+    const room = this.atlas.frames.room;
+    const box = { w: room.w + 4, h: room.h + 4 };
+    const rect = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
+    const byH = Math.floor((rect.height - this.insetBottom - this.insetTop) * dpr / box.h);
+    const next = Math.max(1, Math.floor((cssW * dpr) / box.w)) + 1;
+    return next > byH ? null : Math.ceil((next * box.w) / dpr);
   }
 
   /** largest whole scale at which the room-only window still fits in w x h CSS px */

@@ -317,7 +317,7 @@ export function SettingsModal(props: {
               <>
                 <Group title={L('창', 'Window')}>
                   <Toggle label={L('항상 위에 표시', 'Always on top')} v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
-                  <Toggle label={L('룸만 띄울 때 항상 위에 표시', 'Always on top in room-only mode')} v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
+                  <Toggle label={L('방만 띄울 때 항상 위에 표시', 'Always on top in room-only mode')} v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
                 </Group>
                 <Group title={L('방', 'Room')}>
                   <Field label={L('시점', 'View')}>
@@ -681,6 +681,13 @@ function MyCharacter({ file, checked, onCheck, onRename, onReplace, onRemove }: 
 
 const NAMES = { claude: 'Claude Code', codex: 'OpenAI Codex CLI' };
 
+/** the install notes come from the core crate in Korean; show them in plain words in either language */
+function noteText(n: string): string {
+  if (n.includes('/hooks')) return L('Codex는 처음 한 번 허락이 필요해요. Codex에서 /hooks 를 입력하고 agent-room-hook 을 승인해 주세요.', 'Codex asks once before it runs a new connection. In Codex, type /hooks and approve agent-room-hook.');
+  if (n.includes('hooks = false')) return L('Codex 설정(~/.codex/config.toml)에서 이 기능이 꺼져 있어요. [features] 아래 hooks = false 를 true 로 바꿔 주세요.', 'This feature is turned off in Codex settings (~/.codex/config.toml). Under [features], change hooks = false to true.');
+  return n;
+}
+
 function Agents() {
   const [list, setList] = useState<HookStatus[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
@@ -706,14 +713,14 @@ function Agents() {
             <div className="field">
               <span>
                 {NAMES[h.agent]}
-                <small className="mono">{h.configPath}</small>
+                <small>{L('설정 파일', 'Settings file')} <span className="mono">{h.configPath}</span></small>
                 {!h.agentDetected && <small>{L('이 컴퓨터에서 설정 폴더를 찾지 못했어요.', 'No settings folder found on this computer.')}</small>}
               </span>
               <span className="agent-act">
                 <span className={`tag st-${h.installed}`}>{{ full: L('연결됨', 'Connected'), partial: L('다시 연결 필요', 'Needs reconnecting'), none: L('연결 안 됨', 'Not connected') }[h.installed]}</span>
                 {h.installed !== 'none' && (
-                  <button className="btn" onClick={() => run(() => backend.hooksUninstall(h.agent), L(`${NAMES[h.agent]} Hook을 제거했어요.`, `Removed the ${NAMES[h.agent]} hook.`))}>
-                    {L('제거', 'Remove')}
+                  <button className="btn" onClick={() => run(() => backend.hooksUninstall(h.agent), L(`${NAMES[h.agent]} 연결을 끊었어요.`, `Disconnected ${NAMES[h.agent]}.`))}>
+                    {L('연결 끊기', 'Disconnect')}
                   </button>
                 )}
                 <button className={`btn ${h.installed === 'full' ? '' : 'primary'}`} onClick={() => run(() => backend.hooksInstall(h.agent), L(`${NAMES[h.agent]} 연결했어요. 새로 시작하는 세션부터 표시돼요.`, `Connected ${NAMES[h.agent]}. Sessions started from now on show up.`))}>
@@ -722,17 +729,17 @@ function Agents() {
               </span>
             </div>
             {h.notes.map((n) => (
-              <div key={n} className="callout wait small">{n}</div>
+              <div key={n} className="callout wait small">{noteText(n)}</div>
             ))}
           </div>
         ))}
       </Group>
       {msg && <div className="callout small">{msg}</div>}
       <p className="muted small">
-        {L('에이전트의 공식 Hook에 작은 전달 프로그램(agent-room-hook)을 등록해요. 이 프로그램은 아무것도 출력하지 않아서 에이전트 대화에 아무것도 추가되지 않고, 추가 토큰도 쓰지 않아요. 설정을 바꾸기 전에 원본을 백업합니다.', 'Registers a small relay (agent-room-hook) in each agent\'s official hooks. It prints nothing, so nothing is added to the conversation and no extra tokens are used. The original settings are backed up before any change.')}
+        {L('연결하면 에이전트가 일할 때마다 \'지금 무엇을 하는지\'만 이 앱에 알려 주도록 에이전트 설정에 몇 줄을 더해요. 대화에는 아무것도 끼어들지 않고 토큰도 더 쓰지 않아요. 바꾸기 전에 원래 설정을 백업해 둬요.', 'Connecting adds a few lines to the agent\'s settings so it tells this app what it is doing as it works. Nothing is added to your conversations and no extra tokens are used. Your original settings are backed up first.')}
       </p>
       <p className="muted small">
-        {L('Claude Code는 남은 사용량을 상태줄(statusLine)에만 알려줘서, 상태줄 명령도 감싸요. 쓰던 상태줄이 있으면 그대로 실행해서 똑같이 보이고, 연동을 해제하면 원래대로 돌아가요.', 'Claude Code reports usage left only to its status line, so the status line command is wrapped too. Your own status line still runs and looks the same, and disconnecting puts it back.')}
+        {L('Claude Code는 남은 사용량을 화면 아래 상태 표시줄에만 알려 줘서, 그 표시줄도 함께 연결해요. 원래 쓰던 표시줄은 그대로 보이고, 연결을 끊으면 원래대로 돌아가요.', 'Claude Code reports usage left only to the status bar under its prompt, so that is connected too. Your own status bar looks the same, and disconnecting puts it back.')}
       </p>
     </>
   );
@@ -754,7 +761,7 @@ function Dev(props: { demoRunning: boolean; onToggleDemo: () => void; realCount:
       </Group>
       <Group title={L('데이터', 'Data')}>
         <p className="muted small">
-          {L('이벤트는 메모리에만 보관하고, 알림 탭의 기록 보관을 켰을 때만 이 컴퓨터에 저장해요. 프롬프트, 응답, 파일 내용, 명령 출력은 Hook 단계에서 버려집니다. 앱 데이터 폴더: ', 'Events stay in memory and are written to this computer only when history is turned on. Prompts, replies, file contents and command output are dropped in the hook. App data folder: ')}<span className="mono">{dir}</span>
+          {L('이벤트는 메모리에만 보관하고, 알림 탭의 기록 보관을 켰을 때만 이 컴퓨터에 저장해요. 프롬프트, 응답, 파일 내용, 명령 출력은 앱에 전달되기 전에 버려져요. 앱 데이터 폴더: ', 'Events stay in memory and are written to this computer only when history is turned on. Prompts, replies, file contents and command output are dropped before they reach the app. App data folder: ')}<span className="mono">{dir}</span>
         </p>
       </Group>
       <Group title={L('에이전트 설정 백업 복원', 'Restore agent settings backup')}>
@@ -773,12 +780,12 @@ function Dev(props: { demoRunning: boolean; onToggleDemo: () => void; realCount:
       </Group>
       <Group title={L('완전 제거', 'Uninstall')}>
         <p className="muted small">
-          {L('모든 에이전트 설정에서 Agent Room Hook을 지우고 ~/.agent-room/bin 의 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서', 'Removes the Agent Room hooks from every agent and deletes the relay in ~/.agent-room/bin. Run it before deleting the app. Without the app, run')}
+          {L('모든 에이전트 설정에서 Agent Room 연결을 지우고 ~/.agent-room/bin 의 작은 전달 프로그램도 삭제해요. 앱을 지우기 전에 실행하세요. 앱 없이도 터미널에서', 'Removes the Agent Room connection from every agent and deletes the small relay in ~/.agent-room/bin. Run it before deleting the app. Without the app, run')}
           <span className="mono"> ~/.agent-room/bin/agent-room-hook --uninstall</span>{L(' 로 같은 작업을 할 수 있어요.', ' in a terminal to do the same.')}
         </p>
         <div className="field">
-          <span>{L('모든 Hook 제거', 'Remove all hooks')}</span>
-          <button className="btn danger" onClick={() => backend.hooksRemoveAll().then(() => setMsg(L('모든 Hook을 제거했어요.', 'Removed every hook.')))}>{L('제거', 'Remove')}</button>
+          <span>{L('모든 에이전트 연결 끊기', 'Disconnect every agent')}</span>
+          <button className="btn danger" onClick={() => backend.hooksRemoveAll().then(() => setMsg(L('모든 연결을 끊었어요.', 'Disconnected every agent.')))}>{L('연결 끊기', 'Disconnect')}</button>
         </div>
       </Group>
       {msg && <div className="callout small">{msg}</div>}
