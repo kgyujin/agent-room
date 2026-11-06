@@ -67,7 +67,7 @@ export default function App() {
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
   const [hovered, setHovered] = useState(false);
-  // update available on GitHub Releases: checked at launch and every 6 hours when the setting is on,
+  // update available on GitHub Releases: checked once at launch when the setting is on,
   // or on demand from the app menu, the menu bar menu and Settings. A found update asks first (dialog);
   // "나중에" leaves a small banner instead of asking again for the same version.
   const [update, setUpdate] = useState<AppUpdate | null>(null);
@@ -113,9 +113,8 @@ export default function App() {
         setUpdDialog((d) => d ?? { k: 'available', u });
       }
     }, () => undefined);
-    const first = window.setTimeout(run, 4000);
-    const id = window.setInterval(run, 6 * 3600_000);
-    return () => { clearTimeout(first); clearInterval(id); };
+    const first = window.setTimeout(run, 2000);
+    return () => clearTimeout(first);
   }, [autoUpdate]);
   // office-only view: hides the status dialog, tabs and panel; the office and name tags stay
   const [office, setOffice] = useState(() => { try { return localStorage.getItem('officeView') === '1'; } catch { return false; } });

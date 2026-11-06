@@ -50,6 +50,12 @@
 /* the table drops its least needed columns when its cell is narrow */
 .dp-one .g-sess { container-type: inline-size; }
 @container (max-width: 520px) { .dash-table .opt { display: none; } }
+@container (max-width: 480px) { .dash-table .opt2 { display: none; } .dash-table .dash-prog .trk { display: none; } }
+/* a card scrolls on its own, so nothing inside it gets a second scroll bar */
+.dp-one .dash-log ol { max-height: none; overflow: visible; }
+.dp-one .dp-scroll { overflow-x: hidden; scrollbar-width: none; }
+.dp-one .dp-scroll::-webkit-scrollbar { display: none; }
+@container (max-width: 480px) { .dp-one .dash-table th, .dp-one .dash-table td { padding-left: 5px; padding-right: 5px; } .dp-one .dash-table .who { max-width: 86px; } }
 .dp-one .lc-grid { padding: 0 10px; }
 .dp-one .dshare { padding: 8px 12px; }
 .dp-one .dshare svg { width: 84px; height: 84px; }
