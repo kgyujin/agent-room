@@ -116,7 +116,7 @@ impl Default for Settings {
             pet_pool: Vec::new(),
             tray_pet: "builtin/shiba".into(),
             critter_colors: Default::default(),
-            ui_theme: "peach".into(),
+            ui_theme: "clean".into(),
             island: true,
             font: "mixed".into(),
             backdrop: String::new(),

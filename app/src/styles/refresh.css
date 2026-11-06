@@ -1,0 +1,375 @@
+/* ------------------------------------------------ soft UI pass (2026-11): calm surfaces like the Korean
+   finance and lifestyle apps (Toss, Banksalad, KakaoPay): white cards with a hairline and a soft blurred
+   shadow instead of thick two-tone frames, filled controls instead of outlined ones, round status dots,
+   one accent per theme. The room art and its pixel rules are untouched; only the HTML around it changes. */
+:root {
+  --r-lg: 16px;
+  --r-md: 12px;
+  --r-sm: 9px;
+  --edge: color-mix(in srgb, var(--ink) 9%, transparent);
+  --fill: color-mix(in srgb, var(--ink) 5.5%, transparent);
+  --fill-2: color-mix(in srgb, var(--ink) 9%, transparent);
+  --lift: 0 1px 2px rgba(40, 24, 30, 0.05), 0 8px 24px -8px rgba(40, 24, 30, 0.16);
+  --lift-hi: 0 2px 4px rgba(40, 24, 30, 0.06), 0 18px 40px -12px rgba(40, 24, 30, 0.28);
+}
+
+/* surfaces */
+.card, .toolbar, .banner, .banner.preview {
+  background: var(--box);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift);
+}
+.card { padding: 0; }
+.toolbar { border-radius: 14px; padding: 4px; }
+.banner { border-radius: 999px; }
+.tab { border: 1px solid var(--edge); box-shadow: none; background: var(--box); }
+.tab.on { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
+.panel { background: var(--box); border: 0; border-left: 1px solid var(--edge); border-radius: 0; box-shadow: -12px 0 32px -16px rgba(40, 24, 30, 0.18); padding: 0; }
+.modal { box-shadow: var(--lift-hi); }
+.modal-bg { background: color-mix(in srgb, var(--ink) 22%, transparent); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.pill { background: var(--box); border: 1px solid var(--edge); box-shadow: var(--lift); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.pill b { font-family: var(--font-body); font-weight: 800; font-size: 13.5px; }
+
+/* buttons: filled, no outline and no hard drop shadow */
+.btn { border: 0; border-radius: var(--r-sm); background: var(--fill); box-shadow: none; color: var(--ink); padding: 7px 13px; font-weight: 600; }
+.btn:hover { background: var(--fill-2); filter: none; }
+.btn.primary { background: var(--accent-strong); color: #fff; box-shadow: 0 4px 12px -6px var(--accent-strong); }
+.btn.primary:hover { background: var(--accent-strong); filter: brightness(1.06); }
+.btn.danger { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad-ink, var(--bad)); border: 0; }
+.tool { border-radius: 10px; color: var(--ink-soft); }
+.tool:hover { background: var(--fill); color: var(--ink); }
+.tool.on { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* segmented tabs (side panel, settings): the picked one is a white chip on a light track */
+.panel nav, .modal nav { background: var(--fill); border-radius: 11px; padding: 3px; }
+.panel nav button.on, .modal nav button.on { background: var(--box); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.1), 0 2px 6px -2px rgba(40, 24, 30, 0.12); color: var(--ink); }
+
+/* fields: a light filled box, a ring only when focused */
+.field select, .field input[type='number'], .num-in, .dash-chips input, .sess-q, input[type='search'], input[type='date'] {
+  border: 1px solid transparent; border-radius: 10px; background-color: var(--fill); color: var(--ink); box-shadow: none; outline: none;
+}
+.field select { padding: 6px 28px 6px 10px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23826c74' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+.field select:focus, .field input:focus, .num-in:focus, .dash-chips input:focus, .sess-q:focus, input[type='search']:focus, input[type='date']:focus {
+  border-color: color-mix(in srgb, var(--accent-strong) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); background-color: var(--box);
+}
+
+/* switches: iOS-like track, white knob, the theme accent when on */
+.toggle i { width: 36px; height: 21px; border: 0; border-radius: 999px; background: var(--fill-2); transition: background 0.15s; }
+.toggle i::after { top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(40, 24, 30, 0.25); transition: left 0.15s; }
+.toggle input:checked + i { background: var(--accent-strong); }
+.toggle input:checked + i::after { left: 17px; background: #fff; }
+
+/* status: round dots, soft tinted chips */
+.pulse { border-radius: 50%; }
+.agent-dot, .tab .dot { border-radius: 50%; }
+.tone-work .pulse, .tone-wait .pulse { animation: pulse 1.4s ease-in-out infinite; }
+.ov .ov-state { padding: 2px 8px; font-weight: 600; }
+
+/* progress bars: thin, rounded, no frame */
+.bar { border: 0; height: 6px; border-radius: 999px; background: var(--fill-2); box-sizing: border-box; }
+.bar i { border-radius: 999px; }
+
+/* checklists and the timeline rail */
+.tasks .box { border: 1.5px solid color-mix(in srgb, var(--ink) 28%, transparent); border-radius: 5px; background: var(--box); box-shadow: none; }
+.tasks .st-completed .box { background: var(--ok); border-color: var(--ok); box-shadow: none; }
+.tasks .st-in_progress .box { background: var(--box); border-color: var(--wait); box-shadow: inset 0 0 0 2.5px var(--box), inset 0 0 0 8px var(--wait); }
+.timeline li { border-bottom: 0; --mk: color-mix(in srgb, var(--ink) 25%, transparent); }
+.timeline li::before { background: var(--edge); }
+.timeline li::after { box-shadow: 0 0 0 3px var(--box); }
+.callout { border: 0; background: var(--fill); }
+
+/* side panel rows and the dock */
+.ov .ov-row { border: 1px solid var(--edge); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.04); border-radius: var(--r-md); }
+.ov .ov-row::before { width: 3px; border-radius: 0 3px 3px 0; top: 10px; bottom: 10px; }
+.dock .hud-grid { border-left: 1px solid var(--edge); }
+
+/* dashboard: borderless cards on the page tone, bigger quiet headings */
+.dash-card { background: var(--box); border: 1px solid var(--edge); border-radius: var(--r-lg); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.04); }
+.dash-stat, .dt-tile, .lc, .dt-sess li { border: 1px solid var(--edge); border-radius: var(--r-md); box-shadow: none; }
+.dash-h { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.dash-stat b { font-weight: 800; letter-spacing: -0.01em; }
+.dash-chips button { border: 0; background: var(--fill); }
+.dash-chips button.on { background: var(--ink); color: var(--box); }
+.dash-log li, .dash-table td, .dash-table th { border-color: var(--edge); }
+.dboard-col { background: var(--fill); border: 0; border-radius: var(--r-md); }
+.dboard-card { border: 0; box-shadow: 0 1px 2px rgba(40, 24, 30, 0.08); border-radius: 10px; }
+.dmap-node { border: 1px solid var(--edge); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.05); }
+.dmap-agent { border-width: 1px; }
+.dash-log .tag, .dboard-card .tag { border: 0; background: var(--fill); color: var(--ink-soft); border-radius: 6px; }
+.dp-turn button { border: 0; box-shadow: 0 1px 2px rgba(40, 24, 30, 0.08); }
+.dp-head .btn { background: var(--box); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.06); border: 1px solid var(--edge); }
+.dp-head .btn:hover { background: var(--fill); }
+
+/* settings: grouped rows on white, quiet section titles */
+.modal.settings .set-main { background: var(--box); }
+.char-add { border: 1px dashed var(--edge); background: var(--fill); }
+.set-rows { border: 0; background: #fff; box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgba(40, 24, 30, 0.04); }
+.set-rows > .field { border-bottom-color: var(--edge); }
+.dash-card, .dash-stat, .dt-tile, .dt-sess li, .lc { background: #fff; }
+
+/* menu bar popover */
+.pop { border: 1px solid var(--edge); border-radius: 14px; }
+.pop-head, .pop-foot { background: var(--box); border-color: var(--edge); }
+.pop-foot button { border: 0; background: var(--fill); border-radius: 9px; padding: 7px 4px; }
+.pop-foot button:hover { background: var(--fill-2); border: 0; }
+
+/* menu bar popover sessions: grouped by urgency, two lines per row (who + when, then state + what it is doing) */
+.pp-g { display: flex; flex-direction: column; flex: none; }
+.pp-g + .pp-g { margin-top: 4px; }
+.pp-g h4 { letter-spacing: 0.01em; }
+.pp-g h4 span { color: var(--ink-soft); font-weight: 600; }
+.pp-g-todo h4 { color: var(--wait-ink, var(--wait)); }
+.pp-row { height: auto; min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+.pp-row:hover { background: var(--fill); }
+.pp-row.t-wait { background: color-mix(in srgb, var(--wait) 10%, var(--box)); }
+.pp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pp-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pp-top .pp-name { flex: 1; min-width: 0; }
+.pp-row .pp-state { max-width: none; min-width: 0; gap: 6px; }
+.pp-state b { flex: none; font-weight: 600; color: var(--ink); }
+.pp-state em { flex: 1; min-width: 0; font-style: normal; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-g:not(:has(.pp-rowwrap:not(.fit-off))) { display: none; }
+.pp-state em::before { content: '·'; margin-right: 6px; }
+.pp-g-todo .pp-state b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pp-more { border: 0; background: var(--fill); }
+.pp-more:hover { background: var(--fill-2); color: var(--ink); }
+
+/* one status language everywhere (like Claude Code's agent view): colour says the state, working and
+   "needs you" breathe, resting or gone is a hollow ring */
+.tone-calm .pulse, .tone-muted .pulse { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.7; }
+
+/* keyboard focus is visible, mouse focus is not */
+:where(button, a, [tabindex], select, input, summary):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent-strong) 70%, transparent); outline-offset: 2px; }
+:where(button, a, [tabindex], summary):focus:not(:focus-visible) { outline: none; }
+
+/* the bottom bar keeps its inner padding (the plain .card rule above would zero it) */
+.card.shud { padding: 10px 16px 10px 14px; }
+/* name tags: even room around the agent mark, the same on both ends of the pill */
+.nametag { padding: 2px 8px 2px 5px; gap: 5px; }
+.nametag.on { padding: 3px 10px 3px 6px; gap: 6px; }
+
+/* ------------------------------------------------ dashboard, after product dashboards and planners (2026-11):
+   a big page title, roomy white cards on the page tone, ghost pill actions, and state-tinted cards
+   with a coloured dot (like a timetable's subject cards) instead of thick left bars. */
+.t-work, .tone-work { --tone: var(--work); }
+.t-wait, .tone-wait { --tone: var(--wait); }
+.t-ok, .tone-ok { --tone: var(--ok); }
+.t-bad, .tone-bad { --tone: var(--bad); }
+.t-calm, .t-muted, .tone-calm, .tone-muted { --tone: var(--calm); }
+.dpage { background: var(--page); }
+.dp-head { border-bottom: 0; padding: 22px 24px 10px; gap: 8px; align-items: flex-end; }
+.dpage.mac .dp-head { padding-top: 36px; }
+.dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dp-head h2 { font-size: 28px; line-height: 1.1; letter-spacing: -0.02em; }
+.dp-head p { flex: none; font-size: 12.5px; }
+.dp-head .btn { background: var(--box); border: 1px solid var(--edge); border-radius: 999px; padding: 7px 14px; box-shadow: 0 1px 2px rgba(20, 20, 30, 0.04); }
+.dp-head .btn:hover { background: var(--box); border-color: color-mix(in srgb, var(--ink) 18%, transparent); }
+.dpage.split .dp-head { padding: 16px 16px 8px; }
+.dpage.split .dp-head h2 { font-size: 20px; }
+.dp-body { padding: 12px 24px 24px; }
+.dp-one { gap: 14px; }
+.dpage.split .dp-one { padding: 10px 16px 16px; gap: 12px; }
+.dp-turn { margin: 0 24px 4px; border: 1px solid color-mix(in srgb, var(--wait) 30%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--wait) 9%, var(--box)); padding: 8px 12px; }
+.dpage.split .dp-turn { margin: 0 16px 4px; }
+
+/* cards: roomy, a quiet title row with a ghost pill on the right */
+.dpage .dash-card { border-radius: 20px; box-shadow: 0 1px 2px rgba(20, 20, 30, 0.03); }
+.dp-one .dash-h { font-size: 15px; font-weight: 700; padding: 14px 16px 8px; margin: 0; min-height: 28px; }
+.dp-one .dash-h .pn-count { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.dp-whole, .dash-h .dp-open { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--edge); background: var(--box); color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.dp-whole:hover, .dash-h .dp-open:hover { background: var(--fill); text-decoration: none; }
+.dash-h .dp-open + .dp-whole { margin-left: 6px; }
+.dpage .dash-stat { border-radius: 16px; padding: 12px 14px; }
+.dp-one .dash-stat b { font-size: 24px; letter-spacing: -0.02em; }
+
+/* agent map: an agent header with its mark in a round chip, sessions as tinted cards with the dot on the right */
+.dmap-agent { background: var(--box); border: 1px solid var(--edge); border-radius: 14px; padding: 7px 10px 7px 7px; gap: 8px; }
+.dmap-agent.ag-claude { --ag: var(--claude); } .dmap-agent.ag-codex { --ag: var(--codex); } .dmap-agent.ag-demo { --ag: var(--calm); }
+.dmap-agent.ag-claude, .dmap-agent.ag-codex { border-color: var(--edge); }
+.dmap-agent > .agent-mark { box-sizing: content-box; padding: 6px; border-radius: 50%; background: color-mix(in srgb, var(--ag) 14%, var(--box)); flex: none; }
+.dmap-agent small { padding: 1px 8px; border-radius: 999px; background: var(--fill); font-weight: 700; }
+.dmap-proj { border-left: 0; margin-left: 0; padding-left: 0; }
+.dmap-pname { padding: 2px 4px 0; }
+.dmap-node { background: color-mix(in srgb, var(--tone, var(--calm)) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone, var(--calm)) 28%, transparent); border-left-width: 1px; border-radius: 14px; padding: 9px 12px; }
+.dmap-node.t-work, .dmap-node.t-wait, .dmap-node.t-bad, .dmap-node.t-ok { border-left-color: color-mix(in srgb, var(--tone, var(--calm)) 28%, transparent); }
+.dmap-node:hover, .dmap-node.on { box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--tone, var(--calm)) 60%, transparent); }
+.dmap-node.on { border-color: var(--tone); }
+.dmap-top .dot { flex: none; }
+.dmap-top b { color: var(--ink); }
+.dmap-meta em { background: color-mix(in srgb, var(--box) 70%, transparent); border: 1px solid var(--edge); }
+
+/* task board: plain columns with a counted header, cards tinted by their column */
+.dboard-col { background: transparent; padding: 0; gap: 8px; }
+.dp-one .dboard-col { padding: 0; }
+.dboard-col h4 { margin: 0 2px 2px; font-size: 12px; }
+.dboard-col h4 span { padding: 0 7px; border-radius: 999px; background: var(--fill); font-size: 11px; }
+.dboard-col.c-todo { --tone: var(--wait); } .dboard-col.c-in_progress { --tone: var(--work); } .dboard-col.c-completed { --tone: var(--ok); }
+.dboard-card { background: color-mix(in srgb, var(--tone, var(--calm)) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone, var(--calm)) 24%, transparent); border-radius: 12px; box-shadow: none; padding: 9px 11px; }
+.dboard-card .tag { background: var(--box); border: 1px solid var(--edge); }
+.dboard-card:hover { box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--tone, var(--calm)) 55%, transparent); }
+
+/* side panel rows: the same tinted cards as the map */
+.ov .ov-row.t-work, .ov .ov-row.t-wait, .ov .ov-row.t-ok, .ov .ov-row.t-bad { background: color-mix(in srgb, var(--tone, var(--calm)) 5%, var(--box)); border-color: color-mix(in srgb, var(--tone, var(--calm)) 22%, transparent); }
+/* card contents line up with the card title (16px in) */
+.dp-one .dmap { padding: 2px 16px 16px; }
+.dp-one .dboard { padding: 2px 16px 16px; gap: 10px 12px; }
+.dp-one .lc-grid { padding: 0 16px; }
+.dp-one .dshare { padding: 12px 18px; }
+.dmap-node { border-radius: 10px; }
+
+/* stat cards: a round tinted icon chip in the corner */
+.dash-stat { position: relative; }
+.dash-stat .ds-ic { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--tone, var(--accent-strong)) 13%, var(--box)); color: var(--tone, var(--accent-strong)); }
+.dash-stat.st-todo { --tone: var(--wait); } .dash-stat.st-work { --tone: var(--work); } .dash-stat.st-done { --tone: var(--ok); }
+.dash-stat > small { padding-right: 34px; }
+@container (max-width: 118px) { .dash-stat .ds-ic { display: none; } .dash-stat > small { padding-right: 0; } }
+
+/* side panel: the page tone behind white cards, rows tinted by state instead of a coloured left bar */
+.panel { background: var(--page); }
+.panel > header { background: var(--page); border-bottom-color: transparent; }
+.ov .ov-row::before { display: none; }
+.ov .ov-row { border-radius: 14px; padding: 11px 13px; }
+.ov .ov-row.t-wait { background: color-mix(in srgb, var(--wait) 8%, var(--box)); border-color: color-mix(in srgb, var(--wait) 35%, transparent); }
+.ov .ov-row.on { border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ov-top > .agent-mark { box-sizing: content-box; padding: 4px; border-radius: 50%; background: var(--fill); flex: none; }
+.ov-doing, .ov .ov-meta { padding-left: 31px; }
+.ov .ov-step { margin-left: 31px; }
+.ov h4 { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+
+/* the session table and its filters sit inside the card's padding */
+.dp-one .g-sess .dash-chips { padding: 0 16px 8px; margin: 0; }
+.dp-one .g-sess .dash-table { width: calc(100% - 16px); margin: 0 8px 8px; }
+
+/* stat cards: a soft trend line along the bottom (tokens) */
+.dash-stat .ds-spark { position: absolute; right: 14px; bottom: 12px; width: 40%; height: 26px; pointer-events: none; }
+.ds-spark polygon { fill: color-mix(in srgb, var(--accent-strong) 9%, transparent); }
+.ds-spark polyline { fill: none; stroke: color-mix(in srgb, var(--accent-strong) 70%, transparent); stroke-width: 1.5; stroke-linejoin: round; }
+.dash-stat:has(.ds-spark) > span { padding-right: 44%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container (max-width: 150px) { .dash-stat .ds-spark { display: none; } .dash-stat:has(.ds-spark) > span { padding-right: 0; } }
+/* status in tables: a soft filled badge in the state colour */
+.st-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--tone, var(--calm)) 12%, var(--box)); color: color-mix(in srgb, var(--tone, var(--calm)) 80%, var(--ink)); }
+
+/* dashboard usage: each window as a ring gauge, side by side under the agent name */
+.lc-grid.rings .lc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border-radius: 14px; padding: 10px 12px; }
+.lc-grid.rings .lc-head, .lc-grid.rings .lc-none { grid-column: 1 / -1; }
+.lc-r { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; min-width: 0; }
+.lc-ring { width: 54px; height: 54px; }
+.lc-ring circle { fill: none; stroke-width: 6; }
+.lc-ring .trk { stroke: var(--fill-2); }
+.lc-ring .val { stroke: color-mix(in srgb, var(--ink) 55%, transparent); stroke-linecap: round; }
+.lc-r.mid .lc-ring .val { stroke: var(--wait); }
+.lc-r.low .lc-ring .val { stroke: var(--bad); }
+.lc-ring text { font-size: 13px; font-weight: 800; fill: var(--ink); font-variant-numeric: tabular-nums; }
+.lc-r.low .lc-ring text { fill: var(--bad); }
+.lc-r .lc-name { font-size: 11.5px; font-weight: 600; color: var(--ink); max-width: 100%; }
+.lc-r .lc-reset { font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dp-one .dshare { padding: 8px 18px; }
+/* the agent map keeps each session's "doing" line unless the cell is really short */
+@container (min-height: 240px) { .dp-one .dmap-doing { display: block; } .dp-one .dmap-node, .dp-one .dmap.few .dmap-node { padding: 9px 12px; } }
+
+/* task board: all four columns side by side at any size; an empty column keeps its header and a
+   dashed slot, and long task names wrap to two lines */
+.dp-one .dboard { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off))) { display: flex; }
+.dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off)))::after { content: ''; height: 40px; border: 1.5px dashed var(--edge); border-radius: 12px; }
+.dp-one .dboard-col h4 { white-space: nowrap; overflow: hidden; }
+.dp-one .dboard-card { padding: 8px 9px; gap: 5px; }
+.dp-one .dboard-card p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: break-word; hyphens: auto; }
+.dp-one .dboard-card .tag { max-width: 100%; }
+
+/* a small segmented switch inside a card title */
+.seg-tabs { display: inline-flex; margin-left: 10px; padding: 2px; border-radius: 9px; background: var(--fill); }
+.seg-tabs button { border: 0; background: transparent; font: inherit; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); padding: 3px 9px; border-radius: 7px; cursor: pointer; }
+.seg-tabs button.on { background: var(--box); color: var(--ink); box-shadow: 0 1px 2px rgba(20, 20, 30, 0.1); }
+
+/* activity lanes: one row per session over the last half hour */
+.lanes { display: flex; flex-direction: column; gap: 4px; padding: 0 16px 12px; }
+.lane-axis, .lane { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 10px; }
+.lane-axis { height: 18px; }
+.lane-axis .lane-track { height: 18px; background: none; }
+.lane-axis em { position: absolute; top: 2px; transform: translateX(-50%); font-style: normal; font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; }
+.lane-axis em.now { transform: translateX(-100%); color: var(--accent-ink); font-weight: 700; }
+.lane { border: 0; background: transparent; padding: 3px 0; font: inherit; color: var(--ink); text-align: left; cursor: pointer; border-radius: 8px; }
+.lane:hover .lane-name b, .lane.on .lane-name b { color: var(--accent-ink); }
+.lane-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.lane-name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-track { position: relative; height: 20px; border-radius: 6px; background: var(--fill); }
+.lane-track .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.lane-track .seg { position: absolute; top: 3px; bottom: 3px; min-width: 3px; border-radius: 4px; }
+.seg.work { background: color-mix(in srgb, var(--work) 75%, var(--box)); }
+.seg.wait { background: var(--wait); }
+.lane-track .fail { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--box); }
+.lane-track::after { content: ''; position: absolute; right: 0; top: -2px; bottom: -2px; width: 2px; border-radius: 1px; background: var(--accent-strong); }
+.lane-axis .lane-track::after { display: none; }
+.lane-legend { display: flex; gap: 14px; padding: 6px 0 0 122px; font-size: 11px; color: var(--ink-soft); }
+.lane-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lane-legend .seg { display: inline-block; width: 14px; height: 8px; border-radius: 3px; }
+.lane-legend .fail { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+@container (max-width: 380px) { .lane-axis, .lane { grid-template-columns: 76px minmax(0, 1fr); } .lane-legend { padding-left: 86px; } }
+
+/* 14 days of tokens: stacked bars, today in full colour */
+.dshare { flex-direction: column; align-items: stretch; gap: 6px; }
+.ubars { display: flex; align-items: flex-end; gap: 4px; height: 64px; }
+.ubars span { flex: 1; height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 1px; opacity: 0.55; }
+.ubars span.today, .ubars span:hover { opacity: 1; }
+.ubars i { display: block; border-radius: 3px; min-height: 0; }
+.ubars i.a-claude { background: var(--claude); }
+.ubars i.a-codex { background: var(--codex); }
+.ubars-x { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-soft); }
+.dshare ul { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
+.dshare li { display: inline-flex; gap: 6px; align-items: center; }
+.dshare li.sum { margin-left: auto; color: var(--ink-soft); }
+.dshare li small:empty { display: none; }
+
+/* usage card: the 14-day bars take whatever height is left under the rings (never a blank band) */
+.dp-one .g-use .dp-scroll { display: flex; flex-direction: column; }
+.dp-one .g-use .dshare { flex: 1 1 auto; min-height: 0; padding: 10px 16px 14px; gap: 4px; }
+.dp-one .g-use .ubars { flex: 1 1 auto; height: auto; min-height: 22px; max-height: 110px; }
+.dp-one .g-use .dshare ul { flex-wrap: nowrap; gap: 12px; white-space: nowrap; overflow: hidden; }
+.dp-one .g-use .dshare li { min-width: 0; }
+@container (max-width: 330px) { .dp-one .g-use .dshare li.sum { display: none; } }
+/* the picked-session card: a section whose rows all dropped goes away with its header */
+.dp-one .timeline:not(:has(li:not(.fit-off))) { display: none; }
+.dp-one .pn-sec:has(.files):not(:has(.files li:not(.fit-off))) { display: none; }
+
+/* nothing connected yet: one clear next step at the top of the dashboard */
+.dp-empty { display: flex; align-items: center; gap: 16px; margin: 0 24px 4px; padding: 14px 16px 14px 18px; border-radius: 16px; background: var(--box); border: 1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
+.dp-empty > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp-empty b { font-size: 14px; }
+.dp-empty span { font-size: 12.5px; color: var(--ink-soft); }
+.dp-empty .btn { flex: none; }
+.dpage.split .dp-empty { margin: 0 16px 4px; }
+/* card titles and their small switches stay on one line (long English labels end in "…") */
+.dp-one .dash-h { white-space: nowrap; min-width: 0; }
+.seg-tabs { flex: none; }
+.seg-tabs button { white-space: nowrap; }
+.dp-one .dboard-col h4 { text-overflow: ellipsis; }
+.lane-legend { flex-wrap: wrap; row-gap: 2px; } .lane-legend span { white-space: nowrap; }
+@container (max-width: 420px) { .dp-one .g-use .dshare li.sum { display: none; } }
+/* English at narrow widths: board headings keep sentence case, the session table drops progress first */
+.dboard-col h4 { text-transform: none; letter-spacing: 0; }
+@container (max-width: 380px) { .dp-one .dash-table tr > :nth-child(3) { display: none; } }
+/* scrolling fallback: the stat row keeps its own height (an auto row collapsed to 0 under the fixed-height cards) */
+@media (max-height: 560px), (max-width: 860px) { .dpage:not(.split) .dp-one { grid-template-rows: max-content; } }
+@media (max-height: 560px) { .dpage.split .dp-one { grid-template-rows: max-content; } }
+/* narrow cards: "Show all" shrinks to its icon so header controls never wrap or get pushed out */
+.dp-one > .dash-card { container-type: inline-size; }
+.dp-whole { white-space: nowrap; flex: none; }
+@container (max-width: 340px) { .dp-one .dash-h .dp-whole { font-size: 0; gap: 0; padding: 5px 7px; } }
+/* "Show all" overlay: same surface, padding and title size as the cards it opens */
+.dp-over { background: rgba(20, 22, 30, 0.28); }
+.dp-over > .dash-card { background: var(--box); border-radius: 20px; padding: 0; overflow: hidden; }
+.dp-over .dash-h { gap: 8px; padding: 18px 22px 10px; font-size: 16px; }
+.dp-over .dash-h .pn-count { margin-left: 2px; }
+.dp-over .dp-scroll { padding: 0 22px 22px; }
+.dp-over .dboard { padding: 0; }
+.files li { display: flex; align-items: center; gap: 6px; }
+/* very narrow board: tighter cards, counts give way to the column names */
+@container (max-width: 300px) {
+  .dp-one .dboard-card { padding: 7px; }
+  .dp-one .dboard-card p { font-size: 11.5px; }
+  .dp-one .dboard-col h4 span { display: none; }
+}
+.dmap-top span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 300px) { .dp-one .dash-table tr > :last-child { display: none; } }

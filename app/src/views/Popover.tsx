@@ -2,18 +2,16 @@
 // Remaining usage per agent, today's tokens, and as many sessions as fit (the user's turn first);
 // the rest is one click away in the main window.
 import { ApproveButtons } from '../ui/Approve';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFit } from '../ui/fit';
 import { backend } from '../bridge';
-import { fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
+import { doingLabel, fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import type { Snapshot } from '../types';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { fmtTokens, useUsageHistory } from '../ui/Usage';
 import { AgentMark, Icon } from '../ui/icons';
 import { useLive } from './useLive';
 import { L } from '../i18n';
-
-/** height of one session row in CSS px (kept in step with .pp-row) */
-const ROW_H = 36;
 
 export function Popover() {
   const { list, now, settings, running } = useLive();
@@ -27,21 +25,17 @@ export function Popover() {
   const live = list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
   const todo = live.filter((s) => userTodo(s, now)).sort((a, b) => userTodo(a, now)!.since - userTodo(b, now)!.since);
   const work = live.filter((s) => isActive(s) && !userTodo(s, now));
-  // as many rows as the space between the usage block and the footer holds
+  // grouped by urgency like a task inbox: the user's turn, then working, then resting.
+  // Rows that don't fit drop from the bottom (resting first) and the rest is one click away.
+  const rest = live.filter((s) => !todo.includes(s) && !work.includes(s));
+  const groups: [string, string, Snapshot[]][] = [
+    ['todo', L('내 차례', 'Your turn'), todo],
+    ['work', L('작업 중', 'Working'), work],
+    ['rest', L('쉬는 중', 'Resting'), rest],
+  ];
   const box = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState(6);
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const measure = () => setFit(Math.max(1, Math.floor((el.clientHeight - 26) / ROW_H)));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const order = [...todo, ...live.filter((s) => !todo.includes(s))];
-  const rows = order.length > fit ? order.slice(0, fit - 1) : order;
-  const more = live.length - rows.length;
+  // the user's turn never drops: those rows are why the popover was opened
+  const more = useFit(box, ['.pp-g-rest .pp-rowwrap', '.pp-g-work .pp-rowwrap']);
   const names = sessionNames(live);
   return (
     <div className="pop">
@@ -57,12 +51,16 @@ export function Popover() {
       <div className="pp-list" ref={box}>
         {live.length ? (
           <>
-            <h4>{L('세션', 'Sessions')} <span>{live.length}</span></h4>
-            {rows.map((s) => (
-              <div key={s.key} className="pp-rowwrap">
-                <Row s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom || s.isDemo ? 'select' : 'focus', s.key)} />
-                <ApproveButtons s={s} now={now} compact />
-              </div>
+            {groups.filter(([, , xs]) => xs.length).map(([id, label, xs]) => (
+              <section key={id} className={`pp-g pp-g-${id}`}>
+                <h4>{label} <span>{xs.length}</span></h4>
+                {xs.map((s) => (
+                  <div key={s.key} className="pp-rowwrap">
+                    <Row s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom || s.isDemo ? 'select' : 'focus', s.key)} />
+                    <ApproveButtons s={s} now={now} compact />
+                  </div>
+                ))}
+              </section>
             ))}
             {more > 0 && <button className="pp-more" onClick={() => act('open')}>{L(`+${more}개 더 · 방에서 보기`, `+${more} more · see the room`)}</button>}
           </>
@@ -125,12 +123,18 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
 function Row({ s, name, now, onClick }: { s: Snapshot; name: string; now: number; onClick: (inRoom: boolean) => void }) {
   const todo = userTodo(s, now);
   const tone = stateTone(s);
+  // "코드 작성 중 · Room.tsx": the state in bold, then the file or command it is on (or the session title)
+  const doing = doingLabel(s);
+  const cut = doing?.indexOf(' · ') ?? -1;
+  const what = stateLabel(s); // the same words as the dashboard and the room
+  const detail = (doing && cut >= 0 ? doing.slice(cut + 3) : null) ?? s.title;
   return (
     <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n${L('⌥ 클릭: 방에서 보기', '⌥-click: see it in the room')}`}>
-      <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} />
-      <span className="pp-name">{name}</span>
-      <span className={`pp-state tone-${tone}`}><i className="pulse" />{todo ? todo.text : stateLabel(s)}</span>
-      <span className="pp-ago">{fmtAgo(now - (todo?.since ?? s.lastEventAt))}</span>
+      <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
+      <span className="pp-main">
+        <span className="pp-top"><span className="pp-name">{name}</span><span className="pp-ago">{fmtAgo(now - (todo?.since ?? s.lastEventAt))}</span></span>
+        <span className={`pp-state tone-${tone}`}><i className="pulse" /><b>{todo ? todo.text : what}</b>{!todo && detail && <em>{detail}</em>}</span>
+      </span>
     </button>
   );
 }

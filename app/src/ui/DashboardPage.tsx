@@ -4,6 +4,8 @@
 // Everything shown comes from hook events, the agents' local usage logs and their local
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useFit } from './fit';
+import { Lanes } from './Lanes';
 import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
@@ -28,45 +30,23 @@ export const DASH_CARDS = [
 
 /** what a card drops, first group first and the last item of a group first, until the rest fits
  * without scrolling: the usage share and pace notes, the weekly rows, edited files, then list rows */
-const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.files li', '.dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
+const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-grid:not(.rings) .lc-row ~ .lc-row', '.files li', '.lane, .dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
 
 /** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
 function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [cut, setCut] = useState(0);
+  const dropped = useFit(ref, FIT_DROP);
+  // a short cell also hides card details by CSS (map activity and buttons, the session filters)
+  const [squeezed, setSqueezed] = useState(false);
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      el.querySelectorAll('.fit-off').forEach((x) => x.classList.remove('fit-off'));
-      let n = 0;
-      for (const sel of FIT_DROP) {
-        // columns (map, board) lose their last items in turn, so no column empties while another is full
-        const cols = new Map<Element, Element[]>();
-        for (const x of el.querySelectorAll(sel)) {
-          const c = x.closest('.dmap-col, .dboard-col') ?? el;
-          cols.set(c, [...(cols.get(c) ?? []), x]);
-        }
-        while (el.scrollHeight > el.clientHeight + 1) {
-          const longest = [...cols.values()].reduce((a, c) => (c.length > a.length ? c : a), [] as Element[]);
-          const x = longest.pop();
-          if (!x) break;
-          x.classList.add('fit-off');
-          n++;
-        }
-      }
-      // a short cell also hides card details by CSS (map activity and buttons, the session filters)
-      const squeezed = [...el.querySelectorAll('.dmap-doing, .dmap-meta, .dash-chips')].some((x) => getComputedStyle(x).display === 'none');
-      setCut(n + (squeezed ? 1 : 0));
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const v = !!el && [...el.querySelectorAll('.dmap-doing, .dmap-meta, .dash-chips')].some((x) => getComputedStyle(x).display === 'none');
+    if (v !== squeezed) setSqueezed(v);
   });
+  const cut = dropped + (squeezed ? 1 : 0);
   return (
     <section className={`dash-card ${cls}`} style={style}>
-      <h4 className="dash-h">{title}{cut > 0 && <button className="link dp-whole" onClick={onWhole}>{L('전체 보기', 'Show all')}</button>}</h4>
+      <h4 className="dash-h">{title}{cut > 0 && <button className="dp-whole" onClick={onWhole} title={L('전체 보기', 'Show all')}><Icon name="out" size={12} />{L('전체 보기', 'Show all')}</button>}</h4>
       <div className="dp-scroll" ref={ref}>{children}</div>
     </section>
   );
@@ -87,6 +67,8 @@ export function DashboardPage(props: {
   onToggleSplit: (() => void) | null;
   onRoom: () => void;
   onSettings: () => void;
+  /** opens the agent connection settings (shown while there are no sessions at all) */
+  onConnect?: () => void;
   /** settings: whether Claude account limits are read (explains an empty limits card) */
   accountLimits: boolean;
   /** settings: card ids turned off */
@@ -108,12 +90,33 @@ export function DashboardPage(props: {
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
   const canOpen = (s: Snapshot) => IN_TAURI && !s.isDemo;
+  // the activity card shows lanes or the plain log; remembered per computer (a convenience only)
+  const [actView, setActView] = useState<'lanes' | 'log'>(() => { try { return localStorage.getItem('dashAct') === 'log' ? 'log' : 'lanes'; } catch { return 'lanes'; } });
+  const pickActView = (v: 'lanes' | 'log') => { setActView(v); try { localStorage.setItem('dashAct', v); } catch { /* private window */ } };
   const [whole, setWhole] = useState<(typeof DASH_CARDS)[number][0] | null>(null);
+  // Escape closes an open overlay first, before the window shortcut closes the whole dashboard
+  const overlay = !!whole || todayOpen || pastOpen || memOpen;
+  useEffect(() => {
+    if (!overlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setWhole(null); setTodayOpen(false); setPastOpen(false); setMemOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [overlay]);
   const split = props.split !== undefined;
   const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
     map: () => ['g-map', <>{L('에이전트 지도', 'Agent map')} <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
-    activity: () => ['g-act', L('최근 활동', 'Recent activity'), <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
-    usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
+    activity: () => ['g-act', <>
+      {L('최근 활동', 'Recent activity')}
+      <span className="seg-tabs" role="tablist">
+        <button role="tab" className={actView === 'lanes' ? 'on' : ''} onClick={() => pickActView('lanes')}>{L('흐름', 'Flow')}</button>
+        <button role="tab" className={actView === 'log' ? 'on' : ''} onClick={() => pickActView('log')}>{L('기록', 'Log')}</button>
+      </span>
+    </>, actView === 'lanes' ? <Lanes sessions={sessions} timelines={props.timelines} now={now} selected={selected?.key ?? null} onSelect={pick} /> : <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
+    usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards ring sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
     board: () => ['g-board', L('작업 보드', 'Task board'), <TaskBoard sessions={live} now={now} onPick={pick} />],
     sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
     picked: () => ['g-pick', <>
@@ -131,8 +134,10 @@ export function DashboardPage(props: {
     <div className={`dpage ${split ? 'split' : ''} ${props.mac ? 'mac' : ''}`} style={split ? { width: props.split } : undefined}>
       {props.mac && <div className="dp-drag" data-tauri-drag-region />}
       <header className="dp-head">
-        <h2>{L('대시보드', 'Dashboard')}</h2>
-        <p>{L(`세션 ${live.length}개 · 내 차례 ${todo}건`, `${live.length} sessions · ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        <div className="dp-title">
+          <h2>{L('대시보드', 'Dashboard')}</h2>
+          <p>{L(`세션 ${live.length}개 · 내 차례 ${todo}건`, `${live.length} sessions · ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        </div>
         <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />{L('오늘 요약', 'Today')}</button>
         {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />{L('지난 기록', 'Past days')}</button>}
         <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />{L('지침 파일', 'Instruction files')}</button>
@@ -153,6 +158,12 @@ export function DashboardPage(props: {
             <ApproveButtons s={x} now={now} compact />
             </span>
           ))}
+        </div>
+      )}
+      {sessions.length === 0 && props.onConnect && (
+        <div className="dp-empty">
+          <div><b>{L('아직 보이는 세션이 없어요', 'No sessions yet')}</b><span>{L('에이전트를 연결해 두면 Claude Code나 Codex가 일할 때 여기에 바로 나타나요.', 'Once agents are connected, Claude Code and Codex show up here as they work.')}</span></div>
+          <button className="btn primary" onClick={props.onConnect}>{L('에이전트 연결 확인', 'Check agent connection')}</button>
         </div>
       )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
@@ -199,6 +210,15 @@ export function DashboardPage(props: {
   );
 }
 
+/** the second line of a map card: what is asked of the user, else the file or command it is on, else the session title
+ *  (a bare state like "승인 필요" would only repeat the label above it) */
+function mapLine(s: Snapshot, now: number): string | null {
+  const todo = userTodo(s, now);
+  if (todo) return todo.text;
+  const d = doingLabel(s);
+  return d && d.includes(' · ') ? d : s.title ?? null;
+}
+
 /** me → each agent → its projects → their sessions (with sub-agent counts), like an org chart */
 function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snapshot[]; now: number; selected: string | null; onPick: (k: string) => void; onOpen: (k: string) => void }) {
   const names = sessionNames(sessions);
@@ -221,9 +241,8 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                   {list.filter((s) => (s.project ?? L('프로젝트 미확인', 'Unknown project')) === p).map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
-                      {(doingLabel(s) ?? s.title) && <div className="dmap-doing">{doingLabel(s) ?? s.title}</div>}
+                      {mapLine(s, now) && <div className="dmap-doing">{mapLine(s, now)}</div>}
                       <div className="dmap-meta">
-                        {userTodo(s, now) && <em className="wait">{userTodo(s, now)!.text}</em>}
                         {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}
                         {s.subagents > 0 && <em>{L('하위 에이전트', 'Subagents')} {s.subagents}</em>}
                         {s.model && <em>{s.model}</em>}
@@ -277,33 +296,36 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
   );
 }
 
-/** Claude vs Codex share of the last 30 days, as a ring */
+/** the last 14 days of tokens as stacked bars (Claude under Codex), with each agent's 30-day share */
 function UsageShare({ h }: { h: UsageHistory | null }) {
   if (!h) return <p className="pn-note pad">{L('로그에서 사용량을 모으는 중…', 'Reading usage from the logs…')}</p>;
   const c = h.days.reduce((a, d) => a + d.claude, 0);
   const x = h.days.reduce((a, d) => a + d.codex, 0);
   const total = c + x;
-  const r = 42;
-  const len = 2 * Math.PI * r;
-  const cl = total ? (c / total) * len : 0;
+  const days = h.days.slice(-14);
+  const max = Math.max(1, ...days.map((d) => d.claude + d.codex));
+  const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
+  const dayLabel = (d: number) => new Date(d * 86_400_000).toLocaleDateString(L('ko-KR', 'en-US'), { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
   return (
     <div className="dshare pad">
-      <svg viewBox="0 0 110 110" width="120" height="120" role="img" aria-label={L('에이전트별 토큰 비중', 'Token share by agent')}>
-        <circle cx="55" cy="55" r={r} fill="none" stroke="var(--hair)" strokeWidth="14" />
-        {total > 0 && <circle cx="55" cy="55" r={r} fill="none" stroke="var(--codex)" strokeWidth="14" />}
-        {total > 0 && <circle cx="55" cy="55" r={r} fill="none" stroke="var(--claude)" strokeWidth="14" strokeDasharray={`${cl} ${len}`} transform="rotate(-90 55 55)" />}
-        <text x="55" y="53" textAnchor="middle" className="dshare-n">{fmtTokens(total)}</text>
-        <text x="55" y="68" textAnchor="middle" className="dshare-s">{L('30일 합계', '30-day total')}</text>
-      </svg>
+      <div className="ubars" role="img" aria-label={L('최근 14일 토큰', 'Tokens, last 14 days')}>
+        {days.map((d, i) => (
+          <span key={d.day} className={i === days.length - 1 ? 'today' : ''} title={`${dayLabel(d.day)} · Claude ${fmtTokens(d.claude)} · Codex ${fmtTokens(d.codex)}`}>
+            <i className="a-codex" style={{ height: `${(d.codex / max) * 100}%` }} />
+            <i className="a-claude" style={{ height: `${(d.claude / max) * 100}%` }} />
+          </span>
+        ))}
+      </div>
+      <div className="ubars-x"><small>{days.length ? dayLabel(days[0].day) : ''}</small><small>{L('오늘', 'Today')}</small></div>
       <ul>
-        <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{total ? Math.round((c / total) * 100) : 0}%</small></li>
-        <li><i style={{ background: 'var(--codex)' }} />Codex<b>{fmtTokens(x)}</b><small>{total ? Math.round((x / total) * 100) : 0}%</small></li>
+        <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{pct(c)}%</small></li>
+        <li><i style={{ background: 'var(--codex)' }} />Codex<b>{fmtTokens(x)}</b><small>{pct(x)}%</small></li>
+        <li className="sum">{L('30일 합계', '30-day total')}<b>{fmtTokens(total)}</b><small /></li>
       </ul>
     </div>
   );
 }
 
-/** today's numbers, and the same as a Markdown report to look at before it is saved */
 function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistory | null; now: number; cost?: { claude: number; codex: number } }) {
   const [saved, setSaved] = useState<string | null>(null);
   const d = daySummary(day, h, now);

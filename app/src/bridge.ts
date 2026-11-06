@@ -19,7 +19,7 @@ async function tauriListen<T>(event: string, cb: (payload: T) => void): Promise<
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto', roomView: 'iso', sfx: true, bgm: false, notifyComplete: true, notifyApproval: true, notifyLimits: true, notifyOnlyWhenHidden: true,
-  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
+  staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'clean', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
   doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto',
@@ -202,7 +202,28 @@ function previewBackend(): Backend {
   ];
   return {
     overview: async () => ({ sessions: first, detected: { claude: 0, codex: 0 }, serverError: null, demoRunning: false }),
-    timeline: async () => tl,
+    // each preview session gets its own made-up half hour so the activity lanes differ
+    timeline: async (key) => {
+      if (!key.startsWith('p:')) return tl;
+      const seed = [...key].reduce((a, ch) => a + ch.charCodeAt(0), 0);
+      const out: TimelineEntry[] = [];
+      let t = now - 29 * 60_000 + (seed % 7) * 60_000;
+      let id = 1;
+      while (t < now - 60_000) {
+        const work = (3 + ((seed + id) % 6)) * 60_000;
+        if (t + work + 3 * 60_000 >= now) break;
+        out.push({ id: id++, at: t, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null });
+        out.push({ id: id++, at: t + work / 3, kind: 'tool', activity: 'edit', tool: 'Edit', detail: 'App.tsx', ok: null });
+        if ((seed + id) % 3 === 0) out.push({ id: id++, at: t + work / 2, kind: 'tool_fail', activity: 'run', tool: 'Bash', detail: 'npm run build', ok: false });
+        if ((seed + id) % 4 === 1) { out.push({ id: id++, at: t + work, kind: 'approval', activity: null, tool: 'Bash', detail: null, ok: null }); t += 2 * 60_000; out.push({ id: id++, at: t + work, kind: 'tool', activity: 'run', tool: 'Bash', detail: 'npm test', ok: null }); }
+        out.push({ id: id++, at: t + work + 60_000, kind: 'turn_complete', activity: null, tool: null, detail: null, ok: null });
+        t += work + (2 + ((seed * id) % 5)) * 60_000;
+      }
+      // end in the state the preview card shows
+      if (key === 'p:claude2') out.push({ id: id++, at: now - 9000, kind: 'approval', activity: null, tool: 'Bash', detail: null, ok: null });
+      else if (key !== 'p:codex2') out.push({ id: id++, at: now - 50_000, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null });
+      return out;
+    },
     onUpdate: async (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((l) => l !== cb); }; },
     onDetected: async () => () => {},
     onTrayEvent: async () => () => {},
