@@ -4,6 +4,7 @@ import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_POOL } from '../game/skin';
 import type { Sfx, Sound } from '../game/audio';
 import type { CharacterFile, HookStatus, Settings } from '../types';
 import { Icon, type IconName } from './icons';
+import { DASH_CARDS } from './DashboardPage';
 import { BACKDROPS, UI_THEMES, backdropOf, uiTheme } from '../themes';
 
 /** settings panes, in the order they appear in the sidebar */
@@ -110,6 +111,12 @@ export function SettingsModal(props: {
                 <Group title="사용량">
                   <Toggle label="남은 사용량 보이기" hint="5시간·주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요" v={s.showLimits} on={(v) => set('showLimits', v)} />
                   {s.showLimits && <Toggle label="Claude 계정에서 받아오기" hint="데스크톱 앱·VS Code 세션의 한도도 보여요. 키체인의 Claude Code 로그인으로 Anthropic에만 묻고, 저장하지 않아요" sub v={s.claudeAccountLimits ?? true} on={(v) => set('claudeAccountLimits', v)} />}
+                  <Field label="토큰 단위" hint="토큰 수를 어떻게 줄여 쓸지 골라요">
+                    <select value={s.tokenUnit ?? 'si'} onChange={(e) => set('tokenUnit', e.target.value as 'si' | 'ko')}>
+                      <option value="si">12.4K · 340M</option>
+                      <option value="ko">1.24만 · 3.4억</option>
+                    </select>
+                  </Field>
                 </Group>
                 <Group title="업데이트">
                   <div className="field">
@@ -219,6 +226,11 @@ export function SettingsModal(props: {
                       </select>
                     </Field>
                   )}
+                </Group>
+                <Group title="대시보드 카드">
+                  {DASH_CARDS.map(([id, label]) => (
+                    <Toggle key={id} label={label} v={!(s.dashHidden ?? []).includes(id)} on={(v) => set('dashHidden', v ? (s.dashHidden ?? []).filter((x) => x !== id) : [...(s.dashHidden ?? []), id])} />
+                  ))}
                 </Group>
                 <Group title="보일 요소">
                   <Toggle label="아래쪽 상태 카드" hint="펫을 고르면 나와요" v={s.showDock} on={(v) => set('showDock', v)} />

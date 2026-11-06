@@ -16,7 +16,7 @@ import { Welcome } from './ui/Welcome';
 import { UsageStrip, useAccountLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
-import { AGENT_NAME, doingLabel, justDone, stateTone } from './labels';
+import { AGENT_NAME, doingLabel, justDone, setTokenUnit, shortName, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
@@ -52,6 +52,7 @@ export default function App() {
   const [demoRunning, setDemoRunning] = useState(false);
   const [pinned, setPinned] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  setTokenUnit(settings.tokenUnit); // read by fmtTokens while this render runs
   const [mini, setMini] = useState(false);
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
@@ -566,8 +567,8 @@ export default function App() {
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? panelW : 0) + 12, left: compact ? 8 : 12 }}>
-        {!IN_TAURI && !compact && !office && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
-        {(demoRunning || demoShown) && (
+        {!IN_TAURI && !compact && !office && !dashPage && <div className="banner preview">브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다</div>}
+        {(demoRunning || demoShown) && !dashPage && (
           <div className="banner demo">
             {compact ? '데모 · 실제 에이전트 아님' : '데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)'}
             {IN_TAURI && <button onClick={toggleDemo}>끄기</button>}
@@ -637,6 +638,8 @@ export default function App() {
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? '창으로 보기' : '룸만 띄우기'} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? '대각선으로 보기' : '탑다운으로 보기'} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
+        {/* views above, the window itself below */}
+        <i className="tb-sep" aria-hidden />
         <ToolBtn icon="pin" label="항상 위에 표시" on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
@@ -654,6 +657,9 @@ export default function App() {
           onToggleSplit={vw >= PANEL_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
           onRoom={() => setDashView('off')}
           onSettings={() => setSettingsOpen('last')}
+          accountLimits={settings.claudeAccountLimits ?? true}
+          hidden={settings.dashHidden ?? []}
+          notice={dashPage ? ((demoRunning || demoShown) ? '데모 모드 · 실제 에이전트 아님' : !IN_TAURI ? '브라우저 미리보기' : null) : null}
           mac={IS_MAC && IN_TAURI}
         />
       )}
@@ -773,10 +779,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 const TAG_H = 22;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag, cut to keep tags small */
-const tagName = (s: Snapshot, max = 14) => {
-  const n = s.project ?? AGENT_NAME[s.agent];
-  return n.length > max ? n.slice(0, max - 1) + '…' : n;
-};
+const tagName = (s: Snapshot, max = 14) => shortName(s.project ?? AGENT_NAME[s.agent], max);
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
 function tagWidth(s: Snapshot | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
