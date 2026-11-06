@@ -281,3 +281,48 @@
 .dp-one .dboard-card { padding: 8px 9px; gap: 5px; }
 .dp-one .dboard-card p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: anywhere; }
 .dp-one .dboard-card .tag { max-width: 100%; }
+
+/* a small segmented switch inside a card title */
+.seg-tabs { display: inline-flex; margin-left: 10px; padding: 2px; border-radius: 9px; background: var(--fill); }
+.seg-tabs button { border: 0; background: transparent; font: inherit; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); padding: 3px 9px; border-radius: 7px; cursor: pointer; }
+.seg-tabs button.on { background: var(--box); color: var(--ink); box-shadow: 0 1px 2px rgba(20, 20, 30, 0.1); }
+
+/* activity lanes: one row per session over the last half hour */
+.lanes { display: flex; flex-direction: column; gap: 4px; padding: 0 16px 12px; }
+.lane-axis, .lane { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 10px; }
+.lane-axis { height: 18px; }
+.lane-axis .lane-track { height: 18px; background: none; }
+.lane-axis em { position: absolute; top: 2px; transform: translateX(-50%); font-style: normal; font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; }
+.lane-axis em.now { transform: translateX(-100%); color: var(--accent-ink); font-weight: 700; }
+.lane { border: 0; background: transparent; padding: 3px 0; font: inherit; color: var(--ink); text-align: left; cursor: pointer; border-radius: 8px; }
+.lane:hover .lane-name b, .lane.on .lane-name b { color: var(--accent-ink); }
+.lane-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.lane-name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-track { position: relative; height: 20px; border-radius: 6px; background: var(--fill); }
+.lane-track .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.lane-track .seg { position: absolute; top: 3px; bottom: 3px; min-width: 3px; border-radius: 4px; }
+.seg.work { background: color-mix(in srgb, var(--work) 75%, var(--box)); }
+.seg.wait { background: var(--wait); }
+.lane-track .fail { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--box); }
+.lane-track::after { content: ''; position: absolute; right: 0; top: -2px; bottom: -2px; width: 2px; border-radius: 1px; background: var(--accent-strong); }
+.lane-axis .lane-track::after { display: none; }
+.lane-legend { display: flex; gap: 14px; padding: 6px 0 0 122px; font-size: 11px; color: var(--ink-soft); }
+.lane-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lane-legend .seg { display: inline-block; width: 14px; height: 8px; border-radius: 3px; }
+.lane-legend .fail { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+@container (max-width: 380px) { .lane-axis, .lane { grid-template-columns: 76px minmax(0, 1fr); } .lane-legend { padding-left: 86px; } }
+.dp-one .g-act .dp-scroll { container-type: size; }
+
+/* 14 days of tokens: stacked bars, today in full colour */
+.dshare { flex-direction: column; align-items: stretch; gap: 6px; }
+.ubars { display: flex; align-items: flex-end; gap: 4px; height: 64px; }
+.ubars span { flex: 1; height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 1px; opacity: 0.55; }
+.ubars span.today, .ubars span:hover { opacity: 1; }
+.ubars i { display: block; border-radius: 3px; min-height: 0; }
+.ubars i.a-claude { background: var(--claude); }
+.ubars i.a-codex { background: var(--codex); }
+.ubars-x { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-soft); }
+.dshare ul { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
+.dshare li { display: inline-flex; gap: 6px; align-items: center; }
+.dshare li.sum { margin-left: auto; color: var(--ink-soft); }
+.dshare li small:empty { display: none; }

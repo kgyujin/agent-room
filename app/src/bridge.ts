@@ -202,7 +202,27 @@ function previewBackend(): Backend {
   ];
   return {
     overview: async () => ({ sessions: first, detected: { claude: 0, codex: 0 }, serverError: null, demoRunning: false }),
-    timeline: async () => tl,
+    // each preview session gets its own made-up half hour so the activity lanes differ
+    timeline: async (key) => {
+      if (!key.startsWith('p:')) return tl;
+      const seed = [...key].reduce((a, ch) => a + ch.charCodeAt(0), 0);
+      const out: TimelineEntry[] = [];
+      let t = now - 29 * 60_000 + (seed % 7) * 60_000;
+      let id = 1;
+      while (t < now - 60_000) {
+        const work = (3 + ((seed + id) % 6)) * 60_000;
+        out.push({ id: id++, at: t, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null });
+        out.push({ id: id++, at: t + work / 3, kind: 'tool', activity: 'edit', tool: 'Edit', detail: 'App.tsx', ok: null });
+        if ((seed + id) % 3 === 0) out.push({ id: id++, at: t + work / 2, kind: 'tool_fail', activity: 'run', tool: 'Bash', detail: 'npm run build', ok: false });
+        if ((seed + id) % 4 === 1) { out.push({ id: id++, at: t + work, kind: 'approval', activity: null, tool: 'Bash', detail: null, ok: null }); t += 2 * 60_000; out.push({ id: id++, at: t + work, kind: 'tool', activity: 'run', tool: 'Bash', detail: 'npm test', ok: null }); }
+        out.push({ id: id++, at: t + work + 60_000, kind: 'turn_complete', activity: null, tool: null, detail: null, ok: null });
+        t += work + (2 + ((seed * id) % 5)) * 60_000;
+      }
+      // end in the state the preview card shows
+      if (key === 'p:claude2') out.push({ id: id++, at: now - 9000, kind: 'approval', activity: null, tool: 'Bash', detail: null, ok: null });
+      else if (key !== 'p:codex2') out.push({ id: id++, at: now - 50_000, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null });
+      return out;
+    },
     onUpdate: async (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((l) => l !== cb); }; },
     onDetected: async () => () => {},
     onTrayEvent: async () => () => {},
