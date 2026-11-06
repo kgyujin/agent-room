@@ -481,9 +481,10 @@ impl SessionStore {
 
         // a readable session name from the transcript, read again as the conversation moves on (throttled)
         if let Some(path) = sess.transcript.clone() {
-            // any event while there is no name yet (a session seen mid-way), else at a new ask or the end of a turn
-            let due = (sess.snap.chat_title.is_none() || matches!(ev.kind, EvKind::SessionStart { .. } | EvKind::PromptSubmitted | EvKind::TurnComplete))
-                && (sess.last_title_poll == 0 || ev.ts.saturating_sub(sess.last_title_poll) > 3000);
+            // always at a start, a new ask or the end of a turn (the read only covers what the log gained);
+            // while there is no name yet (a session seen mid-way), also on other events, at most every 3 s
+            let due = matches!(ev.kind, EvKind::SessionStart { .. } | EvKind::PromptSubmitted | EvKind::TurnComplete)
+                || (sess.snap.chat_title.is_none() && ev.ts.saturating_sub(sess.last_title_poll) > 3000);
             if due {
                 sess.last_title_poll = ev.ts;
                 sess.snap.chat_title = sess.chat.poll(&path);
