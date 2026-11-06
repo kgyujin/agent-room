@@ -52,7 +52,7 @@ export function UsageBoard({ sessions, now, days = 30 }: { sessions: Snapshot[];
         <div><b>{h?.streakLongest ?? 0}</b><span>{L('일', 'days')}</span><small>{L('가장 오래 연속 사용', 'Longest streak')}</small></div>
         <div><b>{h?.streakCurrent ?? 0}</b><span>{L('일', 'days')}</span><small>{L('지금 연속 사용', 'Current streak')}</small></div>
       </section>
-      <p className="pn-note">{L('토큰은 각 에이전트가 이 컴퓨터에 남긴 로그의 사용량 숫자만 더한 값이에요. 대화 내용은 읽지 않아요.', 'Tokens add up only the usage numbers in the logs each agent keeps on this computer. Conversations are never read.')}</p>
+      <p className="pn-note">{L('토큰은 각 에이전트가 이 컴퓨터에 남긴 로그의 사용량 숫자만 더한 값이에요. 이때 대화 내용은 읽지 않아요.', 'Tokens add up only the usage numbers in the logs each agent keeps on this computer. Counting them reads no conversation text.')}</p>
     </div>
   );
 }

@@ -52,8 +52,11 @@ export function useLive() {
         ),
       );
     })();
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => { unsub.forEach((u) => u()); clearInterval(id); };
+    // the clock only moves while the window is on screen (the menu bar popover is hidden most of the time)
+    const id = window.setInterval(() => !document.hidden && setNow(Date.now()), 1000);
+    const onVis = () => !document.hidden && setNow(Date.now());
+    document.addEventListener('visibilitychange', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); unsub.forEach((u) => u()); clearInterval(id); };
   }, []);
   const list = useMemo(
     () => Object.values(sessions)

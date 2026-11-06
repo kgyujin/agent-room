@@ -26,6 +26,9 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
     const id = window.setTimeout(() => setOpened([]), 15_000);
     return () => window.clearTimeout(id);
   }, [opened]);
+  // no tags drawn (turned off, or the room is covered): the following loop rests too
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
   const fullRef = useRef(full);
   fullRef.current = full;
   const selRef = useRef(selected);
@@ -94,7 +97,7 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
       }
     };
     // the room only redraws at 12 fps, so following it faster is wasted work
-    const id = window.setInterval(() => !document.hidden && loop(), 1000 / 12);
+    const id = window.setInterval(() => !document.hidden && !hiddenRef.current && loop(), 1000 / 12);
     return () => window.clearInterval(id);
   }, [scene]);
   if (hidden) return null;
