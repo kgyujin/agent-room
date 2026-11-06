@@ -484,3 +484,12 @@
 .dmem-text mark { background: color-mix(in srgb, var(--wait) 30%, transparent); color: inherit; border-radius: 2px; }
 .dmem-text mark.cur { background: var(--wait); color: #fff; }
 @container (max-width: 560px) { .dmem-body { grid-template-columns: minmax(0, 1fr); } .dmem-toc { display: none; } }
+
+/* name tags over the pets: larger, darker, evenly weighted text on a solid white pill, so English
+   project names read at a glance over the busy room */
+.nametags:not(.pixel) .nametag { background: #fff; border: 1px solid color-mix(in srgb, var(--tag) 55%, #fff); font-size: 12.5px; line-height: 16px; letter-spacing: 0.01em; box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 14%, transparent), 0 3px 10px color-mix(in srgb, var(--ink) 12%, transparent); -webkit-font-smoothing: antialiased; }
+.nametags:not(.pixel) .nametag::after { background: #fff; }
+.nametag span, .nametag .tag-project { color: var(--ink); font-weight: 700; max-width: none; }
+.nametag.on { font-size: 13.5px; line-height: 18px; }
+.nametag .dot { width: 8px; height: 8px; }
+.nametag.urgent { background: #fff6e6; }
