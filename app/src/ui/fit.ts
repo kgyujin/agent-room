@@ -9,15 +9,16 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
  */
 export function useFit(ref: RefObject<HTMLElement | null>, groups: string[]): number {
   const [cut, setCut] = useState(0);
-  // what the last fit saw: the number of elements, the length of the text and how many it hid. The
-  // page re-renders every second (clocks), and refitting each time forced dozens of layouts a second
-  // for nothing; a fit is redone only when one of these changed (or the box resized, below)
+  // what the last fit saw: the number of elements, the text and how many it hid. The page re-renders
+  // every second (clocks), and refitting each time forced dozens of layouts a second for nothing; a fit
+  // is redone only when one of these changed (or the box resized, below). The whole text, not its
+  // length: other words of the same length can wrap differently
   const seen = useRef('');
   const fitRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const sig = () => `${el.getElementsByTagName('*').length}|${el.textContent?.length ?? 0}|${el.getElementsByClassName('fit-off').length}`;
+    const sig = () => `${el.getElementsByTagName('*').length}|${el.textContent ?? ''}|${el.getElementsByClassName('fit-off').length}`;
     const fit = () => {
       el.querySelectorAll('.fit-off').forEach((x) => x.classList.remove('fit-off'));
       el.querySelectorAll<HTMLElement>('.fit-spread').forEach((x) => { x.classList.remove('fit-spread'); x.style.removeProperty('--fit-extra'); });
