@@ -1,7 +1,4 @@
 import { createRoot } from 'react-dom/client';
-import App from './App';
-import { Popover } from './views/Popover';
-import { Island } from './views/Island';
 import { IN_TAURI } from './bridge';
 import './styles.css';
 
@@ -13,7 +10,10 @@ async function view(): Promise<string> {
   return getCurrentWindow().label;
 }
 
-view().then((v) => {
+// each window loads only its own view's code: the popover and the island don't parse the room,
+// the dashboard and the settings
+view().then(async (v) => {
   document.documentElement.classList.add(`view-${v}`);
-  createRoot(document.getElementById('root')!).render(v === 'tray' ? <Popover /> : v === 'island' ? <Island /> : <App />);
+  const Page = v === 'tray' ? (await import('./views/Popover')).Popover : v === 'island' ? (await import('./views/Island')).Island : (await import('./App')).default;
+  createRoot(document.getElementById('root')!).render(<Page />);
 });

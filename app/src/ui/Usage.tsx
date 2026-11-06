@@ -20,7 +20,7 @@ export function useUsageHistory(days: number): UsageHistory | null {
     const load = () => void backend.usageHistory(days).then((r) => live && setH(r)).catch(() => undefined);
     load();
     // the scan only reads what the logs gained since the last one, so this can run often
-    const id = window.setInterval(load, 15_000);
+    const id = window.setInterval(() => !document.hidden && load(), 15_000);
     return () => { live = false; clearInterval(id); };
   }, [days]);
   return h;

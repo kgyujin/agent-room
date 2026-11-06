@@ -107,8 +107,13 @@ export function fmtDuration(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
+// one formatter per language: toLocaleTimeString builds a new one on every call, and the activity
+// lists format dozens of times a second while the clock ticks
+const clockFmt: Record<string, Intl.DateTimeFormat> = {};
 export function fmtClock(ts: number): string {
-  return new Date(ts).toLocaleTimeString(isEn() ? 'en-GB' : 'ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const loc = isEn() ? 'en-GB' : 'ko-KR';
+  clockFmt[loc] ??= new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  return clockFmt[loc].format(ts);
 }
 
 export function fmtAgo(ms: number): string {

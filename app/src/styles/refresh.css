@@ -551,3 +551,8 @@
 @container (max-width: 300px) { .dp-one .dmap-agent b { overflow: hidden; text-overflow: ellipsis; } }
 /* today view: the "by project" heading lines up with the cards under it (it took the overlay title's side padding) */
 .dp-over .dtoday .dash-h { padding: 6px 0 0; }
+/* small coloured text reads at 4.5:1 or better: the board's "진행 중"/"완료" headings were the
+   bright state colours on white (3.4:1), the popover's "내 차례" pill white on amber (2.6:1) */
+.dboard-col.c-in_progress h4 { color: #207a7c; }
+.dboard-col.c-completed h4 { color: #2f7d44; }
+.pp-counts em.todo { color: #2a1a05; }

@@ -226,11 +226,15 @@ export class Scene {
     this.timer = null;
   }
 
+  /** CSS height of the room's box at the last resize */
+  private boxH = 0;
+
   resize() {
     const dpr = window.devicePixelRatio || 1;
     this.fitDpr = dpr;
     // measure the container: the canvas itself carries a pinned CSS size from the last resize
     const rect = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
+    this.boxH = rect.height;
     const w = Math.max(1, Math.round(rect.width * dpr));
     const h = Math.max(1, Math.round(rect.height * dpr));
     // pin the CSS size to the backing store so the browser never resamples:
@@ -327,8 +331,9 @@ export class Scene {
     const dpr = window.devicePixelRatio || 1;
     const room = this.atlas.frames.room;
     const box = { w: room.w + 4, h: room.h + 4 };
-    const rect = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
-    const byH = Math.floor((rect.height - this.insetBottom - this.insetTop) * dpr / box.h);
+    // the height from the last resize (the page asks on every render; measuring forced a layout each time)
+    const height = this.boxH || (this.canvas.parentElement ?? this.canvas).getBoundingClientRect().height;
+    const byH = Math.floor((height - this.insetBottom - this.insetTop) * dpr / box.h);
     const next = Math.max(1, Math.floor((cssW * dpr) / box.w)) + 1;
     return next > byH ? null : Math.ceil((next * box.w) / dpr);
   }

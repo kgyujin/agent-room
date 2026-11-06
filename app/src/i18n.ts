@@ -15,7 +15,8 @@ export function setLang(pref: Settings['language'] | undefined): boolean {
   const next = resolveLang(pref) === 'en';
   const changed = next !== en;
   en = next;
-  if (typeof document !== 'undefined') document.documentElement.lang = en ? 'en' : 'ko';
+  // the page sets this on every render; writing the same value still touched the DOM each time
+  if (typeof document !== 'undefined' && document.documentElement.lang !== (en ? 'en' : 'ko')) document.documentElement.lang = en ? 'en' : 'ko';
   return changed;
 }
 
