@@ -214,9 +214,18 @@ export function SettingsModal(props: {
                     <select value={s.tagStyle} onChange={(e) => set('tagStyle', e.target.value as Settings['tagStyle'])}>
                       <option value="compact">프로젝트 이름만</option>
                       <option value="full">프로젝트와 하는 일</option>
+                      <option value="hover">가리킬 때만</option>
                       <option value="off">숨기기</option>
                     </select>
                   </Field>
+                  {s.tagStyle !== 'off' && (
+                    <Field label="이름표 모양" sub>
+                      <select value={s.tagLook ?? 'soft'} onChange={(e) => set('tagLook', e.target.value as 'soft' | 'pixel')}>
+                        <option value="soft">둥글게</option>
+                        <option value="pixel">픽셀 테두리</option>
+                      </select>
+                    </Field>
+                  )}
                   {s.tagStyle !== 'off' && (
                     <Field label="쉬는 펫의 이름표" sub>
                       <select value={s.idleTags ?? 'dim'} onChange={(e) => set('idleTags', e.target.value as Settings['idleTags'])}>

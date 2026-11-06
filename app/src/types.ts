@@ -98,7 +98,10 @@ export interface Settings {
   font: 'mixed' | 'system' | 'pixel';
   /** '' = theme backdrop, a BACKDROPS id, or '#rrggbb' */
   backdrop: string;
-  tagStyle: 'compact' | 'full' | 'off';
+  /** 'hover': only the pointed, picked or waiting pet shows its tag (the head icons still show) */
+  tagStyle: 'compact' | 'full' | 'hover' | 'off';
+  /** name tag outline: rounded or a pixel frame with cut corners */
+  tagLook?: 'soft' | 'pixel';
   showDock: boolean;
   showTabs: boolean;
   /** how much idle pets move around */

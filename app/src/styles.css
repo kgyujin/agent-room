@@ -911,7 +911,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 
 /* ------------------------------------------------ main screen: status pills, one-line status bar, grouped list */
 .pills { display: flex; gap: 6px; }
-.pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid var(--hair); background: var(--glass); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); box-shadow: var(--shadow); font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid var(--hair); background: var(--glass); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); box-shadow: var(--shadow); font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink); cursor: pointer; white-space: nowrap; flex: none; }
 .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .pill b { font-family: var(--font-display); font-size: 14px; font-variant-numeric: tabular-nums; }
 .pill.p-todo i { background: var(--wait); } .pill.p-work i { background: var(--work); } .pill.p-done i { background: var(--ok); }
@@ -1186,7 +1186,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .dmap-top .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .dmap-doing { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dmap-meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.dmap-meta em { font-style: normal; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: rgba(122, 86, 70, 0.08); color: var(--ink-soft); }
+.dmap-meta em { white-space: nowrap; font-style: normal; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: rgba(122, 86, 70, 0.08); color: var(--ink-soft); }
 .dmap-meta em.wait { background: rgba(217, 146, 46, 0.16); color: #9a5f12; font-weight: 700; }
 .dmap-meta .link { margin-left: auto; }
 .dmap-meta em.o-project, .dmap-meta em.o-remote { background: rgba(122, 96, 200, 0.12); color: #5b4aa6; font-weight: 600; }
@@ -1231,3 +1231,17 @@ button.link:hover { text-decoration: underline; }
 
 /* toolbar: a thin line between the view buttons and the window buttons */
 .toolbar .tb-sep { width: 1px; align-self: stretch; margin: 6px 2px; background: var(--hair); flex: none; }
+
+/* name tags with a pixel frame: square corners cut by one step, hard edges, a square pointer */
+.nametags.pixel .nametag { border: none; border-radius: 0; margin-top: -6px;
+  box-shadow: 0 -2px 0 0 var(--tag), 0 2px 0 0 var(--tag), -2px 0 0 0 var(--tag), 2px 0 0 0 var(--tag), 0 4px 0 0 rgba(58, 40, 50, 0.22); }
+.nametags.pixel .nametag::after { width: 4px; height: 4px; bottom: -6px; border: none; background: var(--tag); transform: translateX(-50%); }
+/* a bundle of crowded tags */
+.nametag.group { --tag: var(--frame); padding: 1px 8px; }
+.nametag.group span { font-weight: 700; }
+/* more sessions than desks; the one-time hint about clicking pets */
+.banner.more { background: #fff6e0; color: #9a5f12; border-color: rgba(217, 146, 46, 0.6); }
+.banner.hint { background: var(--glass); color: var(--ink); border-color: var(--hair); font-weight: 500; }
+/* a narrow room (beside the dashboard) keeps the status pills to a dot and a number */
+.topleft { container-type: inline-size; }
+@container (max-width: 340px) { .pill .pl { display: none; } .pill { padding: 0 10px; } }

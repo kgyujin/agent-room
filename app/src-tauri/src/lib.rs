@@ -60,8 +60,10 @@ pub struct Settings {
     pub font: String,
     /// "" = theme backdrop, a preset id, or "#rrggbb"
     pub backdrop: String,
-    /// pet name tags: "compact", "full" or "off"
+    /// pet name tags: "compact", "full", "hover" or "off"
     pub tag_style: String,
+    /// name tag outline: "soft" or "pixel"
+    pub tag_look: String,
     pub show_dock: bool,
     pub show_tabs: bool,
     /// how much idle pets move around: "calm", "normal" or "lively"
@@ -120,6 +122,7 @@ impl Default for Settings {
             font: "mixed".into(),
             backdrop: String::new(),
             tag_style: "compact".into(),
+            tag_look: "soft".into(),
             show_dock: true,
             show_tabs: false,
             pet_energy: "normal".into(),

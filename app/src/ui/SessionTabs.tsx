@@ -41,8 +41,8 @@ export function StatusPills({ sessions, now, onSelect }: { sessions: Snapshot[];
     <div className="pills">
       {pills.map((p) => (
         <button key={p.id} className={`pill p-${p.id} ${p.list.length ? '' : 'zero'}`} disabled={!p.list.length} onClick={() => p.list[0] && onSelect(p.list[0].key)}
-          title={p.list.map((s) => s.project ?? '프로젝트').join(', ') || undefined}>
-          <i />{p.label}<b>{p.list.length}</b>
+          aria-label={`${p.label} ${p.list.length}`} title={p.list.map((s) => s.project ?? '프로젝트').join(', ') || p.label}>
+          <i /><span className="pl">{p.label}</span><b>{p.list.length}</b>
         </button>
       ))}
     </div>

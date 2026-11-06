@@ -204,5 +204,5 @@ export function fmtTokens(n: number): string {
 export const ORIGIN_LABEL: Record<'desktop' | 'remote' | 'project', string> = {
   desktop: '데스크톱 앱',
   remote: '원격 제어',
-  project: '프로젝트에서 시작됨',
+  project: '프로젝트 스레드',
 };
