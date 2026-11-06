@@ -184,10 +184,16 @@ export default function App() {
   };
 
   // load timeline for the selected session when the panel needs it
+  const asking = useRef(new Set<string>());
   useEffect(() => {
-    if (!selected || !panelOpen || timelines[selected.key]) return;
-    backend.timeline(selected.key).then((t) => setTimelines((p) => ({ ...p, [selected.key]: t })));
-  }, [selected?.key, panelOpen, timelines]);
+    if (!panelOpen) return;
+    // the dashboard's activity log needs every session's log; the tabbed panel only the selected one
+    const keys = dashboard ? list.map((x) => x.key) : selected ? [selected.key] : [];
+    for (const k of keys.filter((k) => !timelines[k] && !asking.current.has(k))) {
+      asking.current.add(k);
+      backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
+    }
+  }, [selected?.key, panelOpen, dashboard, list, timelines]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {
@@ -601,6 +607,7 @@ export default function App() {
           onSelect={setPinned}
           showLimits={settings.showLimits}
           timeline={selected ? timelines[selected.key] ?? [] : []}
+          timelines={timelines}
           tab={detailTab}
           setTab={setDetailTab}
           now={now}
