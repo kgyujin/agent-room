@@ -136,6 +136,8 @@ export interface Settings {
   showCost?: boolean;
   costClaudePerM?: number;
   costCodexPerM?: number;
+  /** days of timeline kept on this computer, 0 = only in memory */
+  historyDays?: number;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }
@@ -156,3 +158,6 @@ export interface DayTokens { day: number; claude: number; codex: number }
 export interface UsageHistory { days: DayTokens[]; recentClaude: number; recentCodex: number; streakLongest: number; streakCurrent: number }
 
 export interface MemoryFile { label: string; path: string; content: string; truncated: boolean }
+
+/** a timeline entry kept on disk, with the session it came from */
+export interface HistLine { key: string; agent: string; project: string | null; entry: TimelineEntry }

@@ -13,6 +13,7 @@ pub mod limits;
 pub mod logs;
 pub mod usage;
 pub mod desktop;
+pub mod history;
 
 #[cfg(feature = "runtime")]
 pub mod runtime;

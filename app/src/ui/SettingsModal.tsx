@@ -127,6 +127,22 @@ export function SettingsModal(props: {
                     );
                   })}
                 </Group>
+                <Group title="기록">
+                  <Field label="타임라인 보관" hint="켜면 이 컴퓨터(~/.agent-room/history)에만 저장하고, 기간이 지난 날은 지워요. 끄면 저장된 기록도 지워요">
+                    <select value={s.historyDays ?? 0} onChange={(e) => set('historyDays', Number(e.target.value))}>
+                      <option value={0}>보관 안 함 (메모리에만)</option>
+                      <option value={7}>7일</option>
+                      <option value={30}>30일</option>
+                      <option value={90}>90일</option>
+                    </select>
+                  </Field>
+                  {(s.historyDays ?? 0) > 0 && (
+                    <div className="field sub">
+                      <span>저장된 기록</span>
+                      <button className="btn" disabled={!IN_TAURI} onClick={() => void backend.historyClear()}>모두 지우기</button>
+                    </div>
+                  )}
+                </Group>
                 <Group title="단축키">
                   <p className="pn-note">앱 창이 앞에 있을 때만 동작해요. 글자를 입력하는 칸에서는 쓰이지 않아요.</p>
                   <dl className="info keys">
