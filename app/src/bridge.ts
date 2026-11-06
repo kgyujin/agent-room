@@ -38,6 +38,8 @@ export interface Backend {
   setRoomOnly(on: boolean): Promise<void>;
   /** camera notch of the menu bar screen [width, height] in points; null without one */
   notchSize(): Promise<[number, number] | null>;
+  /** the local offset from UTC in minutes, for quiet hours */
+  setTzOffset(min: number): Promise<void>;
   codexLimits(): Promise<RateLimits | null>;
   claudeLimits(): Promise<RateLimits | null>;
   hooksStatus(): Promise<HookStatus[]>;
@@ -86,6 +88,7 @@ const tauriBackend: Backend = {
   trayAction: (action, key) => tauriInvoke('tray_action', { action, key: key ?? null }),
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
   notchSize: () => tauriInvoke('notch_size'),
+  setTzOffset: (min) => tauriInvoke('set_tz_offset', { min }),
   codexLimits: () => tauriInvoke('codex_limits'),
   claudeLimits: () => tauriInvoke('claude_limits'),
   setRoomOnly: (on) => tauriInvoke('set_room_only', { on }),
@@ -201,6 +204,7 @@ function previewBackend(): Backend {
     trayAction: async () => undefined,
     islandLayout: async () => undefined,
     notchSize: async () => null,
+    setTzOffset: async () => {},
     codexLimits: async () => null,
     claudeLimits: async () => null,
     setRoomOnly: async () => undefined,

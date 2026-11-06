@@ -56,6 +56,9 @@ export default function App() {
   const [pinned, setPinned] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   setTokenUnit(settings.tokenUnit); // read by fmtTokens while this render runs
+  // quiet hours need local time; this changes at a daylight saving switch, and the effect sends it again
+  const tzOff = -new Date().getTimezoneOffset();
+  useEffect(() => void backend.setTzOffset(tzOff), [tzOff]);
   const [mini, setMini] = useState(false);
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
