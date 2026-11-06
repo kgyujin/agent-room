@@ -305,6 +305,10 @@ pub(crate) fn mac_notch(mode: &str) -> Option<(f64, f64)> {
 /// room-only controls only showed after a click. Only the pointer position is read.
 /// Each window gets its own event name: a page's `listen` hears events sent to any window.
 /// "hover-island": true / false. "hover-main": the pointer in window (CSS px) or null outside.
+/// Set while the main window shows only the room: the hover watcher then reports the pointer on
+/// every tick, so the page always knows whether a click should pass through the clear part.
+static ROOM_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub(crate) fn watch_hover(app: AppHandle) {
     let _ = std::thread::Builder::new().name("agent-room-hover".into()).spawn(move || {
         let mut last_island: Option<bool> = None;
@@ -312,7 +316,8 @@ pub(crate) fn watch_hover(app: AppHandle) {
         #[cfg(target_os = "macos")]
         let mut last_screen: Option<usize> = None;
         loop {
-            std::thread::sleep(Duration::from_millis(120));
+            let room_only = ROOM_ONLY.load(std::sync::atomic::Ordering::Relaxed);
+            std::thread::sleep(Duration::from_millis(if room_only { 50 } else { 120 }));
             #[cfg(not(target_os = "macos"))]
             let Ok(c) = app.cursor_position() else { continue };
             let at = |label: &str| -> Option<(i32, i32)> {
@@ -354,7 +359,7 @@ pub(crate) fn watch_hover(app: AppHandle) {
                 }
             }
             let main = at("main");
-            if last_main != Some(main) {
+            if last_main != Some(main) || (room_only && main.is_some()) {
                 last_main = Some(main);
                 let _ = app.emit_to("main", "hover-main", main);
             }
@@ -366,6 +371,7 @@ pub(crate) fn watch_hover(app: AppHandle) {
 /// room around or switching apps never brings the app forward. Window mode puts it back.
 #[tauri::command]
 pub(crate) fn set_room_only(app: AppHandle, on: bool) {
+    ROOM_ONLY.store(on, std::sync::atomic::Ordering::Relaxed);
     #[cfg(target_os = "macos")]
     {
         let policy = if on { tauri::ActivationPolicy::Accessory } else { tauri::ActivationPolicy::Regular };

@@ -414,8 +414,8 @@ export default function App() {
   // room-only: the controls show while the pointer is over the room itself (or the buttons),
   // not over the clear part of the window
   const pointAt = useRef<(p: [number, number] | null) => void>(() => undefined);
-  // clicks on the clear part pass through to whatever is under the window (macOS only reports the
-  // pointer to us, so the window stops taking clicks until the pointer is back over something drawn)
+  // clicks on the clear part pass through to whatever is under the window. While they pass, the page
+  // gets no pointer events, so Rust reports the pointer on every tick in room-only mode
   const passing = useRef(false);
   const passThrough = (on: boolean) => {
     if (passing.current === on) return;
@@ -434,7 +434,8 @@ export default function App() {
     setHovered(onBar || onRoom);
     passThrough(!settingsOpen && !(onBar || onRoom || onUi));
   };
-  useEffect(() => { if (!mini || settingsOpen) passThrough(false); }, [mini, settingsOpen]);
+  // entering room-only, clicks pass through until the pointer is reported over the room or the buttons
+  useEffect(() => { passThrough(mini && !settingsOpen); }, [mini, settingsOpen]);
 
   // room-only: a window dragged partly off the screen slides back once it is let go
   useEffect(() => {
@@ -720,7 +721,8 @@ export default function App() {
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? panelW + 12 : 12 }}>
         {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
         {/* with little width left the pills keep the top bar; the panel's 사용량 tab still has the numbers */}
-        {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
+        {/* only while the panel or the split dashboard is open: with both closed the top bar stays bare */}
+        {panelOpen && !compact && !office && !mini && settings.showLimits && vw - panelW >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
         {!mini && <ToolBtn icon="monitor" label={L('대시보드 보기', 'Dashboard')} on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}

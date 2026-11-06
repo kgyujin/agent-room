@@ -302,6 +302,10 @@
 .lane-track .fail { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--box); }
 .lane-track::after { content: ''; position: absolute; right: 0; top: -2px; bottom: -2px; width: 2px; border-radius: 1px; background: var(--accent-strong); }
 .lane-axis .lane-track::after { display: none; }
+.lanes.past .lane-track::after { display: none; }
+.lanes.pannable .lane-track { cursor: grab; touch-action: pan-y; }
+.lanes.pannable .lane-axis .lane-track { cursor: default; }
+.lane-now { justify-self: start; border: 1px solid var(--line-soft); background: var(--box); color: var(--accent-ink); font: inherit; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; cursor: pointer; }
 .lane-legend { display: flex; gap: 14px; padding: 6px 0 0 122px; font-size: 11px; color: var(--ink-soft); }
 .lane-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .lane-legend .seg { display: inline-block; width: 14px; height: 8px; border-radius: 3px; }
