@@ -166,11 +166,28 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
     // the icon itself shows the state (see animate_tray); the text beside it is only the number of
     // agents waiting for the user, so the menu bar stays short
     let waiting = sessions.iter().filter(|s| s.connection == agent_room_core::session::Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error)).count();
-    let _ = tray.set_title((waiting > 0).then(|| waiting.to_string()).as_deref());
-    let _ = tray.set_tooltip(Some(summary.as_deref().unwrap_or(tr("Agent Room · 연결된 에이전트 없음", "Agent Room · no agents connected"))));
+    let title = (waiting > 0).then(|| waiting.to_string());
+    let tooltip = summary.unwrap_or_else(|| tr("Agent Room · 연결된 에이전트 없음", "Agent Room · no agents connected").into());
+    // hooks send several events a second while an agent works; the native menu is rebuilt only
+    // when something it shows changed (it was rebuilt on every event)
+    static SHOWN: Mutex<String> = Mutex::new(String::new());
+    let sig = format!("{title:?}|{tooltip}|{}|{}", is_en(), sessions.iter().take(8).map(menu_label).collect::<Vec<_>>().join("|"));
+    {
+        let mut shown = SHOWN.lock().unwrap();
+        if *shown == sig {
+            return;
+        }
+        *shown = sig;
+    }
+    let _ = tray.set_title(title.as_deref());
+    let _ = tray.set_tooltip(Some(tooltip.as_str()));
     if let Ok(menu) = build_menu(app, &sessions) {
         let _ = tray.set_menu(Some(menu));
     }
+}
+
+fn menu_label(s: &Snapshot) -> String {
+    format!("{}:{} · {} — {}", s.key, agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s))
 }
 
 pub(crate) fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<tauri::Wry>> {

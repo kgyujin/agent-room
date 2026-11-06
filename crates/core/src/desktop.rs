@@ -79,9 +79,14 @@ fn is_uuid(s: &str) -> bool {
     s.len() == 36 && s.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }
 
+/// Records already read, by path: (modified, size, what was read). A record is parsed again only
+/// when it changed; the app looks every 10 seconds and most records sit still.
+pub type ScanCache = std::collections::HashMap<std::path::PathBuf, (u64, u64, Option<DesktopSession>)>;
+
 /// Every record under `root` written within `within_ms` of `now`.
-pub fn scan(root: &Path, now: u64, within_ms: u64) -> Vec<DesktopSession> {
+pub fn scan(root: &Path, now: u64, within_ms: u64, cache: &mut ScanCache) -> Vec<DesktopSession> {
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     let dirs = |p: &Path| std::fs::read_dir(p).into_iter().flatten().flatten();
     for account in dirs(root) {
         for org in dirs(&account.path()) {
@@ -96,13 +101,21 @@ pub fn scan(root: &Path, now: u64, within_ms: u64) -> Vec<DesktopSession> {
                 if now.saturating_sub(modified) > within_ms || meta.len() > 4 << 20 {
                     continue;
                 }
-                let Ok(raw) = std::fs::read(f.path()) else { continue };
-                if let Some(s) = serde_json::from_slice::<Value>(&raw).ok().as_ref().and_then(parse) {
-                    out.push(s);
-                }
+                let path = f.path();
+                let parsed = match cache.get(&path) {
+                    Some((m, len, got)) if *m == modified && *len == meta.len() => got.clone(),
+                    _ => {
+                        let got = std::fs::read(&path).ok().and_then(|raw| serde_json::from_slice::<Value>(&raw).ok()).as_ref().and_then(parse);
+                        cache.insert(path.clone(), (modified, meta.len(), got.clone()));
+                        got
+                    }
+                };
+                seen.insert(path);
+                out.extend(parsed);
             }
         }
     }
+    cache.retain(|p, _| seen.contains(p));
     out
 }
 
@@ -112,6 +125,27 @@ mod tests {
     use serde_json::json;
     const A: &str = "35d41fe0-8614-4055-a454-95c4ead1713a";
     const B: &str = "45d41fe0-8614-4055-a454-95c4ead1713b";
+
+    #[test]
+    fn scan_reads_a_record_again_only_after_it_changed() {
+        let root = std::env::temp_dir().join(format!("ar-desktop-{}", std::process::id()));
+        let dir = root.join("acct").join("org");
+        std::fs::create_dir_all(&dir).unwrap();
+        let rec = dir.join("local_1.json");
+        std::fs::write(&rec, json!({"cliSessionId": A, "title": "first"}).to_string()).unwrap();
+        let now = crate::model::now_ms() + 1000;
+        let mut cache = ScanCache::new();
+        assert_eq!(scan(&root, now, 60_000, &mut cache)[0].title.as_deref(), Some("first"));
+        assert_eq!(cache.len(), 1);
+        // a longer record (another size) is read again
+        std::fs::write(&rec, json!({"cliSessionId": A, "title": "second one"}).to_string()).unwrap();
+        assert_eq!(scan(&root, now, 60_000, &mut cache)[0].title.as_deref(), Some("second one"));
+        // a record that is gone leaves the cache
+        std::fs::remove_file(&rec).unwrap();
+        assert!(scan(&root, now, 60_000, &mut cache).is_empty());
+        assert!(cache.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn origin_from_remote_control_markers() {

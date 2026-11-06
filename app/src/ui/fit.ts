@@ -1,17 +1,23 @@
 // Keeps a box from scrolling: drops items from its end, group by group, until the rest fits.
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 /**
- * After every render and on resize, hides (class `fit-off`) items of `ref` until it no longer
- * overflows. Groups are CSS selectors tried in order; inside a group the last item goes first,
+ * After a render that changed its content, and on resize, hides (class `fit-off`) items of `ref`
+ * until it no longer overflows. Groups are CSS selectors tried in order; inside a group the last item goes first,
  * taken in turn from each column (`.dmap-col`, `.dboard-col`) so no column empties while another
  * is full, the last column first on a tie. Returns how many items were hidden.
  */
 export function useFit(ref: RefObject<HTMLElement | null>, groups: string[]): number {
   const [cut, setCut] = useState(0);
+  // what the last fit saw: the number of elements, the length of the text and how many it hid. The
+  // page re-renders every second (clocks), and refitting each time forced dozens of layouts a second
+  // for nothing; a fit is redone only when one of these changed (or the box resized, below)
+  const seen = useRef('');
+  const fitRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const sig = () => `${el.getElementsByTagName('*').length}|${el.textContent?.length ?? 0}|${el.getElementsByClassName('fit-off').length}`;
     const fit = () => {
       el.querySelectorAll('.fit-off').forEach((x) => x.classList.remove('fit-off'));
       el.querySelectorAll<HTMLElement>('.fit-spread').forEach((x) => { x.classList.remove('fit-spread'); x.style.removeProperty('--fit-extra'); });
@@ -55,11 +61,17 @@ export function useFit(ref: RefObject<HTMLElement | null>, groups: string[]): nu
         }
       }
       setCut(n);
+      seen.current = sig();
     };
-    fit();
-    const ro = new ResizeObserver(fit);
+    fitRef.current = fit;
+    if (sig() !== seen.current) fit();
+  });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => fitRef.current());
     ro.observe(el);
     return () => ro.disconnect();
-  });
+  }, [ref]);
   return cut;
 }

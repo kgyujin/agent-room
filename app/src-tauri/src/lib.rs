@@ -234,7 +234,8 @@ fn follow_desktop(app: &AppHandle) {
     use agent_room_core::desktop;
     let Some(home) = std::env::var_os("HOME") else { return };
     let root = std::path::Path::new(&home).join("Library/Application Support/Claude/claude-code-sessions");
-    let found = desktop::scan(&root, now_ms(), 24 * 3_600_000);
+    static CACHE: Mutex<Option<desktop::ScanCache>> = Mutex::new(None);
+    let found = desktop::scan(&root, now_ms(), 24 * 3_600_000, CACHE.lock().unwrap().get_or_insert_with(Default::default));
     if found.is_empty() {
         return;
     }
@@ -281,12 +282,15 @@ fn follow_logs(app: &AppHandle) {
         let hooked = shared.hooked.lock().unwrap();
         let mut known = shared.log_only.lock().unwrap();
         let mut store = shared.store.lock().unwrap();
+        // every session's state once (each log is one session, so applying one log's events
+        // doesn't change another's); it was copied out again for every log file
+        let states: std::collections::HashMap<String, AgentState> = store.snapshots().into_iter().map(|s| (s.key, s.state)).collect();
         for f in found {
             let key = format!("{}:{}", f.agent.as_str(), f.session_id);
             if hooked.contains(&key) {
                 continue;
             }
-            let state = store.snapshots().into_iter().find(|s| s.key == key).map(|s| s.state);
+            let state = states.get(&key).copied();
             let last = known.get(&key).copied();
             let written = last.is_none_or(|l| f.modified > l);
             if !written {
@@ -307,8 +311,9 @@ fn follow_logs(app: &AppHandle) {
         }
         // quiet logs: the turn is over, and after a long while the session is gone
         // (the key stays in `known` after the session ends, so an unchanged old log never brings it back)
+        let snaps: std::collections::HashMap<String, Snapshot> = store.snapshots().into_iter().map(|s| (s.key.clone(), s)).collect();
         for (key, &m) in known.iter() {
-            let Some(snap) = store.snapshots().into_iter().find(|s| &s.key == key) else { continue };
+            let Some(snap) = snaps.get(key) else { continue };
             if snap.state == AgentState::Disconnected {
                 continue;
             }

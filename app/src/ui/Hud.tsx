@@ -54,6 +54,7 @@ function noteOf(s: Snapshot, now: number): { tone: 'wait' | 'bad' | 'muted'; tex
   if (s.waiting)
     return { tone: 'wait', text: `${s.waiting.kind === 'approval' ? L(`${s.waiting.tool ?? '도구'} 실행 승인을 기다려요`, `Waiting for you to approve ${s.waiting.tool ?? 'a tool'}`) : L('답변을 기다려요', 'Waiting for your answer')} · ${fmtAgo(now - s.waiting.since)}` };
   if (s.state === 'error' && s.error)
-    return { tone: 'bad', text: `${s.error.fatal ? L('작업이 오류로 중단됐어요', 'The work stopped with an error') : L(`${s.error.tool ?? '도구'} 실행 실패`, `${s.error.tool ?? 'Tool'} failed`)}${s.error.message ? ` · ${s.error.message}` : ''}` };
+    // a failed test run reads as one, as the overview card says ("테스트 실패 확인"), not as "Bash 실행 실패"
+    return { tone: 'bad', text: `${s.error.fatal ? L('작업이 오류로 중단됐어요', 'The work stopped with an error') : s.lastTest?.ok === false && s.lastTest.at === s.error.at ? L('테스트 실패', 'Tests failed') : L(`${s.error.tool ?? '도구'} 실행 실패`, `${s.error.tool ?? 'Tool'} failed`)}${s.error.message ? ` · ${s.error.message}` : ''}` };
   return null;
 }

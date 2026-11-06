@@ -158,6 +158,9 @@ export default function App() {
   // the split dashboard takes the panel's place (wider), leaving the room at least 480px on the left
   const dashSplit = dashView === 'split' && !mini && !office && vw >= SPLIT_MIN_VW;
   const dashPage = (dashView === 'full' || (dashView === 'split' && !dashSplit && !office)) && !mini;
+  // the room isn't drawn while the dashboard fills the window (it used to keep animating behind it)
+  const roomShownRef = useRef(!dashPage);
+  roomShownRef.current = !dashPage;
   const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
   const splitW = Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480));
   // beside the dashboard the room is never cropped; when a slightly narrower dashboard (at most
@@ -264,7 +267,7 @@ export default function App() {
       sceneRef.current?.resize();
     };
     window.addEventListener('resize', onResize);
-    const onVis = () => sceneRef.current?.setFps(document.hidden ? 0 : document.hasFocus() ? 12 : 6);
+    const onVis = () => sceneRef.current?.setFps(document.hidden || !roomShownRef.current ? 0 : document.hasFocus() ? 12 : 6);
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('focus', onVis);
     window.addEventListener('blur', onVis);
@@ -285,11 +288,14 @@ export default function App() {
       const w = await win();
       if (!w || !sceneRef.current) return;
       const [vis, min] = await Promise.all([w.isVisible(), w.isMinimized()]);
-      if (!vis || min) sceneRef.current.setFps(0);
+      if (!vis || min || !roomShownRef.current) sceneRef.current.setFps(0);
       else if (!document.hidden) sceneRef.current.setFps(document.hasFocus() ? 12 : 6);
     }, 1500);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => {
+    sceneRef.current?.setFps(dashPage || document.hidden ? 0 : document.hasFocus() ? 12 : 6);
+  }, [dashPage, ready]);
 
   // ended sessions leave the office; live ones each get a desk and a critter. A session gets its
   // critter only after a few seconds: a session that ends right away (a one-shot run an editor
@@ -697,7 +703,7 @@ export default function App() {
         {serverError && <div className="banner error">{L('이벤트 수신기를 시작하지 못했습니다', 'Could not start the event listener')}: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} onHover={hoverTo} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off' || dashPage} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} onHover={hoverTo} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && (
         <div className="topleft" ref={topRef} style={{ right: (panelOpen ? panelW : 0) + toolbarW + 24 }}>
