@@ -129,6 +129,13 @@ export interface Settings {
   tokenUnit?: 'si' | 'ko';
   /** dashboard cards turned off, by id (see DASH_CARDS) */
   dashHidden?: string[];
+  /** one notification with the day's numbers after this local hour */
+  dailySummary?: boolean;
+  dailySummaryHour?: number;
+  /** estimated API cost (USD per million tokens, blended); hidden by default, since plans are flat-rate */
+  showCost?: boolean;
+  costClaudePerM?: number;
+  costCodexPerM?: number;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

@@ -96,6 +96,13 @@ pub struct Settings {
     pub token_unit: String,
     /// dashboard cards the user turned off ("map", "activity", "usage", "board", "sessions", "picked")
     pub dash_hidden: Vec<String>,
+    /// a notification with the day's numbers once a day after `daily_summary_hour` (local)
+    pub daily_summary: bool,
+    pub daily_summary_hour: u32,
+    /// estimated API cost from these blended USD prices per million tokens (0 = not set)
+    pub show_cost: bool,
+    pub cost_claude_per_m: f64,
+    pub cost_codex_per_m: f64,
 }
 
 impl Default for Settings {
@@ -139,6 +146,11 @@ impl Default for Settings {
             claude_account_limits: true,
             token_unit: "si".into(),
             dash_hidden: Vec::new(),
+            daily_summary: false,
+            daily_summary_hour: 18,
+            show_cost: false,
+            cost_claude_per_m: 0.0,
+            cost_codex_per_m: 0.0,
         }
     }
 }
@@ -1672,6 +1684,27 @@ fn data_dir() -> String {
     agent_room_core::paths::data_dir().display().to_string()
 }
 
+/// Saves a day report the user previewed to `~/Downloads/<name>` (a plain file name, `.md` only)
+/// and returns where it went. Nothing else is written and nothing is sent anywhere.
+#[tauri::command]
+fn save_report(name: String, text: String) -> Result<String, String> {
+    let ok = name.ends_with(".md") && name.len() <= 80 && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && !name.starts_with('.');
+    if !ok {
+        return Err("파일 이름이 올바르지 않아요".into());
+    }
+    let dir = agent_room_core::paths::home().join("Downloads");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(name);
+    std::fs::write(&path, text).map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
+}
+
+/// A plain notification from the UI (the evening summary, which has its own setting).
+#[tauri::command]
+fn notify_text(app: AppHandle, title: String, body: String) {
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
@@ -1748,7 +1781,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files
+            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text
         ])
         .setup(|app| {
             let handle = app.handle().clone();

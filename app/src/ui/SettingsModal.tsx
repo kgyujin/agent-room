@@ -117,6 +117,25 @@ export function SettingsModal(props: {
                       <option value="ko">1.24만 · 3.4억</option>
                     </select>
                   </Field>
+                  <Toggle label="추정 비용 보이기" hint="API로 쓸 때만 의미가 있어요. 로컬 토큰 수 × 아래 단가로 계산한 추정치예요" v={s.showCost ?? false} on={(v) => set('showCost', v)} />
+                  {s.showCost && (['claude', 'codex'] as const).map((a) => {
+                    const k = a === 'claude' ? 'costClaudePerM' : 'costCodexPerM';
+                    return (
+                      <Field key={a} label={`${a === 'claude' ? 'Claude Code' : 'Codex'} 단가`} hint="100만 토큰당 달러 (입력·출력·캐시를 섞은 평균)" sub>
+                        <input type="number" min={0} step={0.1} className="num-in" value={s[k] ?? 0} onChange={(e) => set(k, Math.max(0, Number(e.target.value) || 0))} />
+                      </Field>
+                    );
+                  })}
+                </Group>
+                <Group title="단축키">
+                  <p className="pn-note">앱 창이 앞에 있을 때만 동작해요. 글자를 입력하는 칸에서는 쓰이지 않아요.</p>
+                  <dl className="info keys">
+                    <div><dt>D</dt><dd>대시보드 방과 같이 보기 · 닫기</dd></div>
+                    <div><dt>F</dt><dd>대시보드만 보기</dd></div>
+                    <div><dt>N</dt><dd>다음 내 차례 세션 열기</dd></div>
+                    <div><dt>/</dt><dd>대시보드에서 세션 찾기</dd></div>
+                    <div><dt>Esc</dt><dd>대시보드 닫기</dd></div>
+                  </dl>
                 </Group>
                 <Group title="업데이트">
                   <div className="field">
@@ -162,6 +181,14 @@ export function SettingsModal(props: {
                   </Field>
                 )}
                 <Toggle label="남은 사용량 10% 이하" v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
+                <Toggle label="하루 요약" hint="정한 시각이 지나면 하루에 한 번, 오늘 끝낸 요청·테스트·고친 파일 수를 알려 줘요" v={s.dailySummary ?? false} on={(v) => set('dailySummary', v)} />
+                {s.dailySummary && (
+                  <Field label="알릴 시각" sub>
+                    <select value={s.dailySummaryHour ?? 18} onChange={(e) => set('dailySummaryHour', Number(e.target.value))}>
+                      {[17, 18, 19, 20, 21, 22].map((hr) => <option key={hr} value={hr}>{hr}시</option>)}
+                    </select>
+                  </Field>
+                )}
                 <Toggle label="앱을 보고 있을 땐 알리지 않기" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               </Group>
             )}

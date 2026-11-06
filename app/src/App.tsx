@@ -6,6 +6,7 @@ import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
 import { trayFrames } from './game/trayFrames';
+import { daySummary } from './report';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
@@ -526,6 +527,38 @@ export default function App() {
     if (!IN_TAURI || sessions[key]?.isDemo) return;
     backend.focusAgent(key).catch((e) => setFlash(String(e)));
   };
+  // window shortcuts (only while Agent Room is in front, never while typing)
+  const keysRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  keysRef.current = (e) => {
+    const t = e.target as HTMLElement | null;
+    if (e.metaKey || e.ctrlKey || e.altKey || settingsOpen || mini || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'd') { setOffice(false); setDashView(dashSplit ? 'off' : vw >= PANEL_MIN_VW ? 'split' : 'full'); }
+    else if (k === 'f') { setOffice(false); setDashView(dashPage ? 'off' : 'full'); }
+    else if (k === 'escape' && (dashPage || dashSplit)) setDashView('off');
+    else if (k === 'n') { const next = list.find((x) => userTodo(x, now)); if (next) openApp(next.key); }
+    else if (k === '/' && (dashPage || dashSplit)) { (document.querySelector('.sess-q') as HTMLInputElement | null)?.focus(); }
+    else return;
+    e.preventDefault();
+  };
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => keysRef.current(e);
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
+  // the evening summary: once a day, after the chosen hour, with what the app counted today
+  useEffect(() => {
+    if (!settings.dailySummary || !IN_TAURI) return;
+    const d = new Date(now);
+    if (d.getHours() < (settings.dailySummaryHour ?? 18)) return;
+    const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    try { if (localStorage.getItem('summaryShown') === day) return; localStorage.setItem('summaryShown', day); } catch { return; }
+    // every session's timeline, not only the ones on screen
+    void Promise.all(list.map(async (x) => [x.key, await backend.timeline(x.key).catch(() => [])] as const)).then((all) => {
+      const t = daySummary(list, Object.fromEntries(all), null, Date.now());
+      void backend.notifyText('오늘 요약', `끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`);
+    });
+  }, [now, settings.dailySummary, settings.dailySummaryHour, list]);
   const openDetails = (key: string) => {
     setPinned(key);
     setDetailTab('session');
@@ -686,6 +719,7 @@ export default function App() {
           onSettings={() => setSettingsOpen('last')}
           accountLimits={settings.claudeAccountLimits ?? true}
           hidden={settings.dashHidden ?? []}
+          cost={settings.showCost ? { claude: settings.costClaudePerM ?? 0, codex: settings.costCodexPerM ?? 0 } : undefined}
           notice={dashPage ? ((demoRunning || demoShown) ? '데모 모드 · 실제 에이전트 아님' : !IN_TAURI ? '브라우저 미리보기' : null) : null}
           mac={IS_MAC && IN_TAURI}
         />
