@@ -25,6 +25,8 @@ static OWNS_SOCKET: AtomicBool = AtomicBool::new(false);
 /// When the popover last closed by losing focus; a click on the menu bar icon right after
 /// that is the same click that closed it, so it must not reopen it.
 static POPOVER_HIDDEN_AT: AtomicU64 = AtomicU64::new(0);
+/// the UI's local offset from UTC in minutes (it comes with every usage request), for quiet hours
+static TZ_OFFSET_MIN: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -109,6 +111,14 @@ pub struct Settings {
     /// for the answer; without one Claude Code asks in its own dialog)
     pub approve_in_app: bool,
     pub approve_wait_sec: u32,
+    /// no notifications between these local hours (from..to, may wrap past midnight)
+    pub quiet_hours: bool,
+    pub quiet_from: u32,
+    pub quiet_to: u32,
+    /// notify once more when a request has waited this many minutes (0 = never)
+    pub renotify_min: u32,
+    /// the island opens for a moment when a session starts waiting on the user
+    pub island_peek: bool,
 }
 
 impl Default for Settings {
@@ -160,6 +170,11 @@ impl Default for Settings {
             history_days: 0,
             approve_in_app: false,
             approve_wait_sec: 30,
+            quiet_hours: false,
+            quiet_from: 22,
+            quiet_to: 8,
+            renotify_min: 5,
+            island_peek: true,
         }
     }
 }
@@ -187,6 +202,8 @@ struct Shared {
     desktop_ids: Mutex<std::collections::HashMap<String, String>>,
     /// permission requests waiting for an answer in the app (opt-in): session key -> (deadline, reply)
     approvals: Mutex<std::collections::HashMap<String, (u64, std::sync::mpsc::Sender<Vec<u8>>)>>,
+    /// requests already notified a second time: (session key, waiting since)
+    renotified: Mutex<std::collections::HashSet<(String, u64)>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -371,8 +388,11 @@ unsafe impl objc2::encode::Encode for MacSize {
 /// One notification per usage window and reset period once 10% or less is left.
 fn notify_low_limits(app: &AppHandle, s: &Snapshot, l: &agent_room_core::model::RateLimits) {
     let shared = app.state::<Shared>();
-    if s.is_demo || !shared.settings.lock().unwrap().notify_limits {
-        return;
+    {
+        let st = shared.settings.lock().unwrap();
+        if s.is_demo || !st.notify_limits || quiet_now(&st) {
+            return;
+        }
     }
     let agent = agent_label(s);
     let low = agent_room_core::limits::newly_low(agent, l, 10.0, &mut shared.limit_warned.lock().unwrap());
@@ -387,9 +407,23 @@ fn notify_low_limits(app: &AppHandle, s: &Snapshot, l: &agent_room_core::model::
     }
 }
 
+/// inside the user's quiet hours (local time)
+fn quiet_now(st: &Settings) -> bool {
+    if !st.quiet_hours {
+        return false;
+    }
+    let mins = ((now_ms() / 60_000) as i64 + TZ_OFFSET_MIN.load(Ordering::Relaxed)).rem_euclid(1440);
+    let h = (mins / 60) as u32;
+    let (from, to) = (st.quiet_from % 24, st.quiet_to % 24);
+    if from <= to { h >= from && h < to } else { h >= from || h < to }
+}
+
 fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
     let shared = app.state::<Shared>();
     let st = shared.settings.lock().unwrap().clone();
+    if quiet_now(&st) {
+        return;
+    }
     let wanted = match n {
         Notice::Completed | Notice::Failed => st.notify_complete,
         Notice::NeedsApproval | Notice::NeedsInput => st.notify_approval,
@@ -591,6 +625,23 @@ fn answer_approval(app: AppHandle, key: String, allow: bool) -> Result<(), Strin
         Ok(())
     } else {
         Err("이 요청은 이미 끝났어요. 에이전트 창에서 답해 주세요".into())
+    }
+}
+
+/// One more notification for a request that has waited `renotify_min` minutes (once per request).
+fn renotify(app: &AppHandle) {
+    let shared = app.state::<Shared>();
+    let after = shared.settings.lock().unwrap().renotify_min as u64 * 60_000;
+    if after == 0 {
+        return;
+    }
+    let now = now_ms();
+    let waiting: Vec<Snapshot> = shared.store.lock().unwrap().snapshots().into_iter().filter(|s| !s.is_demo && s.waiting.as_ref().is_some_and(|w| now.saturating_sub(w.since) >= after)).collect();
+    for s in waiting {
+        let w = s.waiting.as_ref().unwrap();
+        if shared.renotified.lock().unwrap().insert((s.key.clone(), w.since)) {
+            notify(app, &s, if w.kind == "approval" { Notice::NeedsApproval } else { Notice::NeedsInput });
+        }
     }
 }
 
@@ -993,6 +1044,7 @@ fn run_for(cmd: &mut std::process::Command, stdin: Option<&[u8]>) -> Option<Vec<
 /// Tokens per local day for the last `days` days, recent rate and streaks, from local logs only.
 #[tauri::command]
 async fn usage_history(app: AppHandle, tz_offset_min: i64, days: i64) -> agent_room_core::usage::UsageHistory {
+    TZ_OFFSET_MIN.store(tz_offset_min.clamp(-840, 840), Ordering::Relaxed);
     let shared = app.state::<Shared>();
     let mut scan = shared.usage.lock().unwrap();
     scan.history(&agent_room_core::logs::LogDirs::from_env(), now_ms() as i64, tz_offset_min.clamp(-840, 840), days.clamp(1, 90))
@@ -1550,6 +1602,10 @@ fn tray_action(app: AppHandle, action: String, key: Option<String>) {
             show_main(&app);
             let _ = app.emit("set-mini", true);
         }
+        "dashboard" => {
+            show_main(&app);
+            let _ = app.emit("open-dashboard", ());
+        }
         "settings" => {
             show_main(&app);
             // the popover's "에이전트 연결하기" opens the settings on the agents tab
@@ -1777,6 +1833,9 @@ fn history_clear() {
 /// A plain notification from the UI (the evening summary, which has its own setting).
 #[tauri::command]
 fn notify_text(app: AppHandle, title: String, body: String) {
+    if quiet_now(&app.state::<Shared>().settings.lock().unwrap()) {
+        return;
+    }
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
@@ -1895,6 +1954,7 @@ pub fn run() {
                         sync_island(&h);
                         follow_logs(&h);
                         follow_desktop(&h);
+                        renotify(&h);
                         let expired: Vec<String> = shared.approvals.lock().unwrap().iter().filter(|(_, (until, _))| *until <= now_ms()).map(|(k, _)| k.clone()).collect();
                         for k in expired {
                             close_approval(&h, &k, None);

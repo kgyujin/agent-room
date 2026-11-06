@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { appVersion, autostartEnabled, backend, IN_TAURI, setAutostart, ZOOMS } from '../bridge';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { appVersion, autostartEnabled, backend, DEFAULT_SETTINGS, IN_TAURI, setAutostart, ZOOMS } from '../bridge';
 import { BUILTIN_CRITTERS, CRITTER_COLORS, DEFAULT_POOL } from '../game/skin';
 import type { Sfx, Sound } from '../game/audio';
 import type { CharacterFile, HookStatus, Settings } from '../types';
-import { Icon, type IconName } from './icons';
+import { AgentMark, Icon, type IconName } from './icons';
 import { DASH_CARDS } from './DashboardPage';
 import { BACKDROPS, UI_THEMES, backdropOf, uiTheme } from '../themes';
 
@@ -20,6 +20,18 @@ const PANES = [
   { id: 'dev', label: '고급', icon: 'gear' },
 ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
 export type SettingsPane = (typeof PANES)[number]['id'];
+
+/** settings each pane's "기본값으로" puts back (not the pet list, colours, sounds or kept history) */
+const PANE_KEYS: Partial<Record<SettingsPane, (keyof Settings)[]>> = {
+  general: ['autoUpdateCheck', 'claudeAccountLimits', 'font', 'showCost', 'costClaudePerM', 'costCodexPerM', 'showLimits', 'tokenUnit', 'uiTheme', 'uiZoom'],
+  agents: ['doneShownSec', 'staleMinutes'],
+  notify: ['approveInApp', 'approveWaitSec', 'dailySummary', 'dailySummaryHour', 'notifyApproval', 'notifyComplete', 'notifyLimits', 'notifyMinTurnSec', 'notifyOnlyWhenHidden', 'quietFrom', 'quietHours', 'quietTo', 'renotifyMin'],
+  sound: ['bgm', 'sfx'],
+  pets: ['petBubbles', 'petEnergy'],
+  look: ['alwaysOnTop', 'alwaysOnTopRoom', 'backdrop', 'dashHidden', 'idleTags', 'roomView', 'showDock', 'showTabs', 'tagLook', 'tagStyle', 'theme'],
+  bar: ['trayPet'],
+  island: ['island', 'islandHideIdle', 'islandOpen', 'islandPeek', 'islandScreen', 'islandUsage'],
+};
 
 /** the pane opened last, so the window comes back where the user left it */
 function lastPane(): SettingsPane {
@@ -61,14 +73,53 @@ export function SettingsModal(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const pane = PANES.find((p) => p.id === tab)!;
+  // search across every pane: all panes render, and rows (or whole groups) that don't match are hidden
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const show = (t: SettingsPane) => (query ? true : tab === t);
+  const body = useRef<HTMLDivElement>(null);
+  const [hits, setHits] = useState(0);
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    let n = 0;
+    el.querySelectorAll<HTMLElement>('.set-group').forEach((g) => {
+      const title = g.querySelector('h4')?.textContent?.toLowerCase() ?? '';
+      const whole = !!query && title.includes(query);
+      let any = false;
+      g.querySelectorAll<HTMLElement>('.set-rows > *').forEach((r) => {
+        const hit = !query || whole || (r.textContent ?? '').toLowerCase().includes(query);
+        r.style.display = hit ? '' : 'none';
+        if (hit) { any = true; n++; }
+      });
+      g.style.display = any || !query ? '' : 'none';
+    });
+    // notes between groups stay only when they hold the words themselves
+    el.querySelectorAll<HTMLElement>(':scope > :not(.set-group)').forEach((x) => {
+      x.style.display = !query || (x.textContent ?? '').toLowerCase().includes(query) ? '' : 'none';
+    });
+    setHits(n);
+  });
+  // "기본값으로": the pane's own settings go back to their defaults (pets, sounds and history stay)
+  const [resetAsk, setResetAsk] = useState(false);
+  useEffect(() => setResetAsk(false), [tab]);
+  const resetKeys = PANE_KEYS[tab] ?? [];
+  const reset = () => {
+    if (!resetAsk) return setResetAsk(true);
+    const next = { ...s } as Record<string, unknown>;
+    for (const k of resetKeys) next[k] = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[k];
+    onChange(next as unknown as Settings);
+    setResetAsk(false);
+  };
   return (
     <div className="modal-bg" onClick={props.onClose}>
       <div className="modal card settings" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="설정">
         <aside className="set-side">
           <b className="set-title">설정</b>
+          <input type="search" className="set-search" placeholder="설정 찾기" value={q} onChange={(e) => setQ(e.target.value)} aria-label="설정 찾기" />
           <nav aria-label="설정 영역">
             {PANES.map((p) => (
-              <button key={p.id} className={tab === p.id ? 'on' : ''} onClick={() => setTab(p.id)} aria-current={tab === p.id ? 'page' : undefined}>
+              <button key={p.id} className={(query ? p.label.toLowerCase().includes(query) : tab === p.id) ? 'on' : ''} onClick={() => { setTab(p.id); setQ(''); }} aria-current={tab === p.id ? 'page' : undefined}>
                 <Icon name={p.icon} size={14} />{p.label}
               </button>
             ))}
@@ -77,11 +128,12 @@ export function SettingsModal(props: {
         </aside>
         <section className="set-main">
           <header>
-            <h3>{pane.label}</h3>
+            <h3>{query ? `'${q.trim()}' 찾기 · ${hits}개` : pane.label}</h3>
+            {!query && resetKeys.length > 0 && <button className={`btn small set-reset ${resetAsk ? 'ask' : ''}`} onClick={reset}>{resetAsk ? '한 번 더 누르면 기본값으로' : '기본값으로'}</button>}
             <button className="tool" onClick={props.onClose} aria-label="닫기"><Icon name="close" /></button>
           </header>
-          <div className="modal-body">
-            {tab === 'general' && (
+          <div className="modal-body" ref={body}>
+            {show('general') && (
               <>
                 <Group title="시작">
                   <AutostartToggle />
@@ -162,7 +214,7 @@ export function SettingsModal(props: {
                 </Group>
               </>
             )}
-            {tab === 'agents' && (
+            {show('agents') && (
               <>
                 <Agents />
                 <Group title="상태 판단">
@@ -182,7 +234,7 @@ export function SettingsModal(props: {
                 </Group>
               </>
             )}
-            {tab === 'notify' && (
+            {show('notify') && (
               <Group>
                 <Toggle label="승인·입력 요청" hint="에이전트가 내 답을 기다릴 때" v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
                 <Toggle label="작업 완료·오류" v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
@@ -196,6 +248,14 @@ export function SettingsModal(props: {
                     </select>
                   </Field>
                 )}
+                <Field label="오래 기다리면 한 번 더" hint="승인·답변 요청이 이만큼 기다리면 다시 알려요">
+                  <select value={s.renotifyMin ?? 5} onChange={(e) => set('renotifyMin', Number(e.target.value))}>
+                    <option value={0}>다시 알리지 않기</option>
+                    <option value={5}>5분 뒤</option>
+                    <option value={10}>10분 뒤</option>
+                    <option value={30}>30분 뒤</option>
+                  </select>
+                </Field>
                 <Toggle label="남은 사용량 10% 이하" v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
                 <Toggle label="하루 요약" hint="정한 시각이 지나면 하루에 한 번, 오늘 끝낸 요청·테스트·고친 파일 수를 알려 줘요" v={s.dailySummary ?? false} on={(v) => set('dailySummary', v)} />
                 {s.dailySummary && (
@@ -217,10 +277,25 @@ export function SettingsModal(props: {
                     </select>
                   </Field>
                 )}
+                <Toggle label="방해 금지 시간" hint="이 시간에는 알림을 보내지 않아요. macOS 집중 모드가 켜져 있으면 macOS가 알림을 알아서 막아요" v={s.quietHours ?? false} on={(v) => set('quietHours', v)} />
+                {s.quietHours && (
+                  <Field label="시간" sub>
+                    <span className="row tight">
+                      <select value={s.quietFrom ?? 22} onChange={(e) => set('quietFrom', Number(e.target.value))}>
+                        {[...Array(24).keys()].map((h) => <option key={h} value={h}>{h}시</option>)}
+                      </select>
+                      부터
+                      <select value={s.quietTo ?? 8} onChange={(e) => set('quietTo', Number(e.target.value))}>
+                        {[...Array(24).keys()].map((h) => <option key={h} value={h}>{h}시</option>)}
+                      </select>
+                      까지
+                    </span>
+                  </Field>
+                )}
                 <Toggle label="앱을 보고 있을 땐 알리지 않기" v={s.notifyOnlyWhenHidden} on={(v) => set('notifyOnlyWhenHidden', v)} />
               </Group>
             )}
-            {tab === 'sound' && (
+            {show('sound') && (
               <>
                 <Group>
                   <Toggle label="효과음" v={s.sfx} on={(v) => set('sfx', v)} />
@@ -229,8 +304,8 @@ export function SettingsModal(props: {
                 <Sounds sound={props.sound} onChanged={props.onSoundsChanged} />
               </>
             )}
-            {tab === 'pets' && <Pets settings={s} onChange={onChange} names={props.characters} onAdded={props.onCharactersChanged} />}
-            {tab === 'look' && (
+            {show('pets') && <Pets settings={s} onChange={onChange} names={props.characters} onAdded={props.onCharactersChanged} />}
+            {show('look') && (
               <>
                 <Group title="창">
                   <Toggle label="항상 위에 표시" v={s.alwaysOnTop} on={(v) => set('alwaysOnTop', v)} />
@@ -274,6 +349,15 @@ export function SettingsModal(props: {
                     </select>
                   </Field>
                   {s.tagStyle !== 'off' && (
+                    <div className={`nametags tag-preview ${s.tagLook === 'pixel' ? 'pixel' : ''}`} aria-hidden>
+                      <span className="nametag t-work">
+                        <AgentMark agent="claude" />
+                        {s.tagStyle === 'full' ? <><b className="tag-project">web-app</b><span>App.tsx 고치는 중</span></> : <span>web-app</span>}
+                        <i className="dot tone-work" />
+                      </span>
+                    </div>
+                  )}
+                  {s.tagStyle !== 'off' && (
                     <Field label="이름표 모양" sub>
                       <select value={s.tagLook ?? 'soft'} onChange={(e) => set('tagLook', e.target.value as 'soft' | 'pixel')}>
                         <option value="soft">둥글게</option>
@@ -302,7 +386,7 @@ export function SettingsModal(props: {
                 </Group>
               </>
             )}
-            {tab === 'bar' && (
+            {show('bar') && (
               <Group title="메뉴바 아이콘">
                 <Field label="아이콘 펫" hint="일할 땐 걷고, 내 차례면 느낌표를 띄워요">
                   <select value={props.characters.includes(s.trayPet) || s.trayPet?.startsWith('builtin/') ? s.trayPet : 'builtin/shiba'} onChange={(e) => set('trayPet', e.target.value)}>
@@ -313,7 +397,7 @@ export function SettingsModal(props: {
                 <p className="muted small">펫 탭에서 바꾼 색과 추가한 PNG도 그대로 쓸 수 있어요. 아이콘을 누르면 현황과 사용량을 볼 수 있어요.</p>
               </Group>
             )}
-            {tab === 'island' && (
+            {show('island') && (
               <Group title="다이나믹 아일랜드">
                 <Toggle label="화면 맨 위에 상태 표시" v={s.island} on={(v) => set('island', v)} />
                 {s.island && (
@@ -331,13 +415,14 @@ export function SettingsModal(props: {
                         <option value="pointer">마우스가 있는 화면</option>
                       </select>
                     </Field>
+                    <Toggle label="내 차례가 생기면 잠깐 펼치기" hint="승인·답변을 기다리는 세션이 새로 생기면 3초 동안 펼쳐서 보여 줘요" sub v={s.islandPeek ?? true} on={(v) => set('islandPeek', v)} />
                     <Toggle label="일이 없을 땐 숨기기" sub v={s.islandHideIdle ?? false} on={(v) => set('islandHideIdle', v)} />
                     {s.showLimits && <Toggle label="접혔을 때 남은 사용량" sub v={s.islandUsage ?? true} on={(v) => set('islandUsage', v)} />}
                   </>
                 )}
               </Group>
             )}
-            {tab === 'dev' && <Dev {...props} />}
+            {show('dev') && <Dev {...props} />}
           </div>
         </section>
       </div>
