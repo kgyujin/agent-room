@@ -1,0 +1,188 @@
+/* calmer cards, readable type, first run, motion and contrast passes */
+/* ------------------------------------------------ clean pass: calmer cards, readable type, clear hierarchy */
+html.font-system { --font-display: var(--font-ui); }
+html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pixel); }
+:root { font-family: var(--font-body); }
+.hud-state, .ov-stat b, .pop-head b, .hud-title, .is-alert, .is-work, .is-ok { font-family: var(--font-display); }
+.small, .chip, .tag, .timeline time, .callout code, .callout .since, .files li, .tasks li, .hud-tool, .hud-grid, .timeline li, .info > div { font-size: 12.5px; }
+.tab { font-size: 12.5px; }
+
+.card, .panel, .toolbar, .tab, .banner, .banner.preview {
+  border: 1px solid color-mix(in srgb, var(--frame) 45%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent), 0 8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.panel { border-radius: 0; border-width: 0 0 0 1px; box-shadow: -6px 0 24px color-mix(in srgb, var(--ink) 10%, transparent); }
+.tab { border-radius: 999px; padding: 4px 10px 4px 5px; }
+.tab.on { background: var(--box); border-color: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-soft); }
+.toolbar { padding: 3px; gap: 2px; }
+.tool { width: 32px; height: 32px; }
+.panel header { padding: 10px 12px; }
+.panel nav button { font-size: 12.5px; }
+.hud { padding: 14px 16px; }
+.hud-state { font-size: 22px; }
+.hud-head { font-size: 12.5px; }
+.hud-grid { font-size: 12.5px; row-gap: 6px; }
+.callout { border: 1px solid var(--line-soft); }
+.callout.wait { border-color: color-mix(in srgb, var(--wait) 55%, transparent); }
+.bar { border: none; height: 6px; }
+.prog.big .bar { height: 8px; }
+.btn { border: 1px solid color-mix(in srgb, var(--frame) 60%, transparent); box-shadow: none; }
+.btn.primary { box-shadow: none; }
+
+/* overview: one hierarchy level per element */
+.ov h4 { font-size: 11.5px; letter-spacing: 0.02em; color: var(--ink-soft); }
+.ov-stat { border: 1px solid var(--line-soft); border-radius: 12px; padding: 8px 4px 7px; }
+.ov-stat b { font-size: 22px; }
+.ov-stat.tone-wait:not(.zero) { border-color: var(--wait); }
+.ov-todo button { border: 1px solid color-mix(in srgb, var(--wait) 70%, transparent); border-left-width: 4px; padding: 8px 10px; }
+.ov-row { border: 1px solid var(--line-soft); padding: 10px 12px; gap: 6px; }
+.ov-row:hover { border-color: color-mix(in srgb, var(--frame) 60%, transparent); }
+.ov-row.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.ov-row.t-wait, .ov-row.t-bad, .ov-row.t-work, .ov-row.t-ok { border-left-width: 4px; }
+.ov-proj { font-size: 13px; }
+.ov-state { font-size: 12px; }
+.ov-doing, .ov-meta, .ov-step { font-size: 12px; }
+
+/* name tags: small, legible chips */
+.nametag { border-width: 1.5px; font-size: 11.5px; box-shadow: 0 2px 6px color-mix(in srgb, var(--ink) 18%, transparent); }
+
+/* settings: own-colour swatch */
+.swatch.pick { position: relative; overflow: hidden; background: conic-gradient(#ff8f9c, #f2bf3c, #5cc3a3, #6f9df0, #b394ec, #ff8f9c); }
+.swatch.pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ------------------------------------------------ remaining plan usage */
+.ov-lim { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--box); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ov-lim-agent { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+.ov-lim-agent + .ov-lim-agent { border-top: 1px dashed var(--line-soft); padding-top: 8px; }
+.ov-lim-rows { display: flex; flex-direction: column; gap: 4px; }
+.ov-lim-row { display: grid; grid-template-columns: 36px minmax(36px, 1fr) 34px 74px; align-items: center; gap: 8px; font-size: 12px; }
+.ov-lim-name { color: var(--ink-soft); white-space: nowrap; min-width: 30px; }
+.ov-lim-bar { height: 7px; border-radius: 999px; background: var(--tint-2); overflow: hidden; }
+.ov-lim-bar i { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.ov-lim-row.mid .ov-lim-bar i { background: var(--wait); }
+.ov-lim-row.low .ov-lim-bar i { background: var(--bad, #d9534f); }
+.ov-lim-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.ov-lim-reset { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+
+/* ------------------------------------------------ first run */
+.dock .welcome { width: min(100%, 620px); padding: 16px 18px; display: block; position: relative; }
+.welcome .wl-close { position: absolute; top: 8px; right: 8px; }
+.wl-head { padding-right: 32px; }
+.wl-head { display: flex; flex-direction: column; gap: 4px; }
+.wl-head b { font-size: 16px; font-family: var(--font-display); }
+.wl-head .muted { font-size: 12.5px; line-height: 1.5; }
+.wl-steps { list-style: none; margin: 14px 0 6px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.wl-steps li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; }
+.wl-steps li > div { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.5; }
+.wl-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--tint-2); color: var(--ink-soft); }
+.wl-steps li.now .wl-n { background: var(--accent); color: #fff; }
+.wl-steps li.done .wl-n { background: var(--ok); color: #fff; }
+.wl-agents { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.wl-agent { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line-soft); border-radius: 10px; padding: 5px 8px; background: var(--box); }
+.wl-agent span { font-weight: 600; }
+.wl-agent small { flex-basis: 100%; font-size: 11px; }
+.wl-ok { color: var(--ok); font-size: 12px; }
+.wl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 3px 0 4px; vertical-align: 0; }
+.wl-dot.work { background: var(--work); } .wl-dot.wait { background: var(--wait); } .wl-dot.ok { background: var(--ok); }
+
+/* ------------------------------------------------ first-run polish: instant toolbar labels, no wrapped buttons */
+.tool { position: relative; }
+.tool[data-tip]:hover::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font: 600 11.5px/1 var(--font-ui); padding: 6px 8px; border-radius: 8px;
+  background: var(--ink, #3a2a2a); color: #fff; pointer-events: none; z-index: 10;
+}
+.tool[data-tip]:last-child:hover::after { left: auto; right: 0; transform: none; }
+.wl-agent { flex-wrap: wrap; }
+.wl-agent .btn, .wl-ok { white-space: nowrap; }
+.wl-agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+/* tags waiting on the user stand out: name shown, warm fill (waiting tags already bob) */
+.nametag.settled { opacity: 0.6; }
+.nametag.settled:hover, .nametag.settled.on { opacity: 1; }
+.nametag.urgent { background: #fff1d6; border-color: var(--wait); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wait) 35%, transparent); z-index: 1; }
+.nametag.urgent span { color: var(--ink); font-weight: 700; }
+.is-lim { display: flex; gap: 14px; padding: 6px 14px 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11.5px; color: #b9b3ad; }
+.is-lim span { display: inline-flex; align-items: center; gap: 6px; }
+.is-lim em { font-style: normal; font-variant-numeric: tabular-nums; }
+.is-lim em.mid { color: #f2b45a; } .is-lim em.low { color: #ff7a6b; }
+/* remaining session · weekly usage on the collapsed pill: Claude far left, Codex far right, in their colours */
+.is-pct { display: inline-flex; align-items: baseline; gap: 3px; flex: none; white-space: nowrap; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.is-pct i { font-style: normal; opacity: 0.55; }
+.is-pct-claude { color: var(--claude); margin-right: 6px; }
+.is-pct-codex { color: var(--codex); margin-left: 6px; }
+.is-lim em { display: inline-flex; align-items: center; gap: 4px; }
+.is-lim-bar { display: inline-block; width: 34px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.is-lim-bar i { display: block; height: 100%; background: #8fd6a0; border-radius: 999px; }
+.is-lim em.mid .is-lim-bar i { background: #f2b45a; } .is-lim em.low .is-lim-bar i { background: #ff7a6b; }
+/* session tabs that run under the toolbar fade out instead of being cut */
+.tabs { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+
+/* ------------------------------------------------ motion: short, purposeful, and off when the OS asks */
+.bar i, .ov-lim-bar i { transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.panel-body > * { animation: fade-up 0.18s ease-out; }
+.ov-todo li, .ov-list li { animation: fade-up 0.22s ease-out both; }
+.ov-stat b { display: inline-block; transition: transform 0.2s; }
+.modal { animation: pop-in 0.16s ease-out; }
+.modal-bg { animation: fade 0.16s ease-out; }
+.tool:active, .btn:active, .tab:active { transform: translateY(1px); }
+@keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* ------------------------------------------------ readable text: status words use darker tones than dots and bars (WCAG AA 4.5:1) */
+:root { --work-ink: #1d6e70; --wait-ink: #9e5f0b; --ok-ink: #2a7a40; --bad-ink: #b03a35; }
+.tone-work { color: var(--work-ink); }
+.tone-wait { color: var(--wait-ink); }
+.tone-ok { color: var(--ok-ink); }
+.tone-bad { color: var(--bad-ink); }
+.btn.primary, .wl-steps li.now .wl-n { color: color-mix(in srgb, var(--ink) 80%, #000); }
+/* readable small labels (AA) */
+:root { --muted-ink: #6f6369; --calm-ink: #7a6f75; }
+.tag.demo { color: #5f45a6; }
+.tag.st-none, .tone-muted { color: var(--muted-ink); }
+.tone-calm { color: var(--calm-ink); }
+.callout.bad, .callout.bad code { color: #9c2f2b; }
+.timeline li.bad span { color: var(--bad-ink); }
+.timeline li.ok span { color: var(--ok-ink); }
+.btn.danger { color: var(--bad-ink); border-color: var(--bad-ink); }
+
+/* open island: the top row names the counts instead of repeating the icons */
+.is-head { color: #b9b3ad; font-size: 11.5px; font-weight: 700; }
+.is-lim b { font-weight: 600; color: #8a8790; }
+/* settings keep one height while switching tabs, so the dialog does not jump */
+.modal { height: min(600px, calc(100vh - 40px)); }
+.modal-body { flex: 1; }
+.island.open .is-head, .island.open .is-right { animation: fade 0.22s 0.06s ease-out both; }
+
+/* island status icons sit inline with their words */
+.is-alert, .is-ok, .is-dim, .is-state, .is-time, .is-lim b { display: inline-flex; align-items: center; gap: 4px; }
+.is-alert svg, .is-work svg, .is-ok svg, .is-dim svg, .is-state svg, .is-time svg, .is-lim b svg { flex: none; }
+.is-time { width: auto; min-width: 50px; justify-content: flex-end; }
+
+/* jump to the app an agent works in */
+.hud-state .open-app { margin-left: auto; font-size: 11.5px; padding: 3px 9px; letter-spacing: 0; align-self: center; }
+.nametag .tag-project { font-weight: 700; color: var(--ink); max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.nametag span { max-width: 130px; }
+.ov-row.quiet { padding-top: 7px; padding-bottom: 7px; gap: 3px; }
+.ov-row.quiet .ov-proj { font-weight: 600; }
+.ov-doing { font-weight: 600; color: var(--ink); }
+.is-lim { flex-direction: column; gap: 4px; }
+.is-lim b, .is-lim em, .is-lim span { white-space: nowrap; }
+.is-lim > span { gap: 12px; }
+
+/* Korean wraps between words, never inside one ("캐릭/터") */
+body { word-break: keep-all; overflow-wrap: anywhere; }
+/* settings tabs stay on one line and scroll sideways in a narrow window */
+.modal nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.modal nav::-webkit-scrollbar { display: none; }
+.modal nav button { white-space: nowrap; flex: none; }
+/* selects grow to fit their longest choice instead of cutting it off */
+.field select { width: auto; min-width: 150px; max-width: 64%; }
+
+/* first step in a small window (the welcome card needs a wide one) */
+.first-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; white-space: nowrap; }
+.pop-body .pad .btn { margin-top: 10px; }
