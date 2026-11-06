@@ -1,5 +1,5 @@
-// The full-window dashboard (any window size): a sidebar of sections in the manner of a command
-// centre: overview, agent map, task board, activity, usage, instruction files and one session.
+// The full-window dashboard (any window size): everything on one page, so it reads at a glance:
+// counts, the agent map, recent activity, every task list, usage, sessions and the instruction files.
 // Everything shown comes from hook events, the agents' local usage logs and their local
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
 import { useEffect, useMemo, useState } from 'react';
@@ -8,19 +8,9 @@ import type { MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types
 import { AGENT_NAME, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards } from './Activity';
-import { Overview, userTodo } from './Overview';
+import { userTodo } from './Overview';
 import { fmtTokens, UsageBoard, useUsageHistory } from './Usage';
-import { SessionInfo, Tasks, Timeline } from './DetailPanel';
-
-type Section = 'home' | 'map' | 'board' | 'activity' | 'usage' | 'memory' | 'session';
-const NAV: [Section, string, Parameters<typeof Icon>[0]['name']][] = [
-  ['home', '개요', 'monitor'],
-  ['map', '에이전트 지도', 'link'],
-  ['board', '작업 보드', 'check'],
-  ['activity', '활동 기록', 'clock'],
-  ['usage', '사용량', 'bolt'],
-  ['memory', '지침 파일', 'book'],
-];
+import { Tasks, Timeline } from './DetailPanel';
 
 export function DashboardPage(props: {
   sessions: Snapshot[];
@@ -30,85 +20,42 @@ export function DashboardPage(props: {
   onSelect: (k: string) => void;
   /** brings the session's own terminal, editor or app to the front */
   onOpen: (k: string) => void;
-  onForget?: () => void;
   onRoom: () => void;
   onSettings: () => void;
   mac: boolean;
 }) {
   const { sessions, now, selected } = props;
-  const [sec, setSec] = useState<Section>(() => { try { return (localStorage.getItem('dashSection') as Section) || 'home'; } catch { return 'home'; } });
-  useEffect(() => { try { localStorage.setItem('dashSection', sec === 'session' ? 'home' : sec); } catch { /* storage unavailable */ } }, [sec]);
   const h = useUsageHistory(30);
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const todo = live.filter((x) => userTodo(x, now)).length;
-  // picking a session anywhere opens its page
-  const pick = (k: string) => { props.onSelect(k); setSec('session'); };
+  const pick = props.onSelect;
   const canOpen = (s: Snapshot) => IN_TAURI && !s.isDemo;
-  const title = sec === 'session' ? selected?.project ?? '세션' : NAV.find((n) => n[0] === sec)?.[1];
+  const card = (cls: string, title: React.ReactNode, body: React.ReactNode) => (
+    <section className={`dash-card ${cls}`}><h4 className="dash-h">{title}</h4><div className="dp-scroll">{body}</div></section>
+  );
   return (
     <div className={`dpage ${props.mac ? 'mac' : ''}`}>
       {props.mac && <div className="dp-drag" data-tauri-drag-region />}
-      <aside className="dp-side">
-        <div className="dp-brand"><b>Agent Room</b><small>대시보드</small></div>
-        <nav>
-          {NAV.map(([id, label, icon]) => (
-            <button key={id} className={sec === id ? 'on' : ''} onClick={() => setSec(id)}>
-              <Icon name={icon} /><span>{label}</span>
-              {id === 'home' && todo > 0 && <em className="dp-badge wait">{todo}</em>}
-              {id === 'map' && <em className="dp-badge">{live.length}</em>}
-            </button>
-          ))}
-          {selected && (
-            <button className={`dp-sess ${sec === 'session' ? 'on' : ''}`} onClick={() => setSec('session')}>
-              <AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /><span>{selected.project ?? '세션'}</span>
-            </button>
-          )}
-        </nav>
-        <div className="dp-foot">
-          <button onClick={props.onRoom}><Icon name="iso" /><span>방으로 돌아가기</span></button>
-          <button onClick={props.onSettings}><Icon name="gear" /><span>설정</span></button>
-        </div>
-      </aside>
-      <main className="dp-main">
-        <header className="dp-head">
-          <h2>{title}</h2>
-          <p>세션 {live.length}개 · 내 차례 {todo}건 · 이벤트가 오는 즉시 갱신</p>
-          {sec === 'session' && selected && canOpen(selected) && (
-            <button className="btn primary dp-open" onClick={() => props.onOpen(selected.key)}>세션 열기</button>
-          )}
-        </header>
-        <div className="dp-body">
-          {sec === 'home' && (
-            <>
-              <StatCards sessions={sessions} now={now} h={h} />
-              <div className="dash-grid">
-                <section className="dash-card"><h4 className="dash-h">현황</h4><Overview sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} showLimits={false} /></section>
-                <section className="dash-card"><h4 className="dash-h">최근 활동</h4><ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact /></section>
-              </div>
-              <section className="dash-card dash-wide"><h4 className="dash-h">세션 <span className="pn-count">{sessions.length}</span></h4><SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} /></section>
-            </>
-          )}
-          {sec === 'map' && <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />}
-          {sec === 'board' && <TaskBoard sessions={live} now={now} onPick={pick} />}
-          {sec === 'activity' && <section className="dash-card"><ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} tall /></section>}
-          {sec === 'usage' && (
-            <>
-              <div className="dash-grid">
-                <section className="dash-card"><h4 className="dash-h">최근 30일 달력</h4><UsageCalendar h={h} /></section>
-                <section className="dash-card"><h4 className="dash-h">에이전트별 비중</h4><UsageShare h={h} /></section>
-              </div>
-              <section className="dash-card"><div className="pad"><UsageBoard sessions={sessions} now={now} /></div></section>
-            </>
-          )}
-          {sec === 'memory' && <MemoryBrowser />}
-          {sec === 'session' && (selected ? (
-            <div className="dash-grid">
-              <section className="dash-card"><h4 className="dash-h">작업</h4><Tasks s={selected} /><h4 className="dash-h">정보</h4><SessionInfo s={selected} now={now} onForget={props.onForget} /></section>
-              <section className="dash-card"><h4 className="dash-h">타임라인</h4><Timeline entries={props.timelines[selected.key] ?? []} /></section>
-            </div>
-          ) : <p className="muted pad">선택한 세션이 없어요.</p>)}
-        </div>
-      </main>
+      <header className="dp-head">
+        <h2>대시보드</h2>
+        <p>세션 {live.length}개 · 내 차례 {todo}건 · 이벤트가 오는 즉시 갱신</p>
+        <button className="btn" onClick={props.onRoom}><Icon name="iso" />방으로</button>
+        <button className="btn" onClick={props.onSettings} aria-label="설정" title="설정"><Icon name="gear" /></button>
+      </header>
+      <div className="dp-body dp-one">
+        <div className="g-full"><StatCards sessions={sessions} now={now} h={h} /></div>
+        {card('g-map', <>에이전트 지도 <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />)}
+        {card('g-act', '최근 활동', <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />)}
+        {card('g-board', '작업 보드', <TaskBoard sessions={live} now={now} onPick={pick} />)}
+        {card('g-use', '최근 30일', <div className="dp-use"><UsageCalendar h={h} /><UsageShare h={h} /></div>)}
+        {card('g-sess', <>세션 <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />)}
+        {card('g-pick', <>
+          {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {selected.project ?? '세션'}</> : '선택한 세션'}
+          {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>세션 열기</button>}
+        </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">세션을 누르면 작업과 타임라인이 여기에 나와요.</p>)}
+        <section className="dash-card g-full"><div className="pad"><UsageBoard sessions={sessions} now={now} /></div></section>
+        <section className="dash-card g-full"><h4 className="dash-h">지침 파일</h4><MemoryBrowser /></section>
+      </div>
     </div>
   );
 }
@@ -251,7 +198,7 @@ function MemoryBrowser() {
   const f = shown[Math.min(pick, shown.length - 1)];
   return (
     <div className="dmem">
-      <section className="dash-card dmem-list">
+      <section className="dmem-list">
         <input type="search" placeholder="파일·내용 검색" value={q} onChange={(e) => { setQ(e.target.value); setPick(0); }} />
         {shown.map((x, i) => (
           <button key={x.path} className={x === f ? 'on' : ''} onClick={() => setPick(i)} title={x.path}>
@@ -259,10 +206,10 @@ function MemoryBrowser() {
           </button>
         ))}
       </section>
-      <section className="dash-card dmem-view">
+      <section className="dmem-view">
         {f ? (
           <>
-            <h4 className="dash-h">{f.path}{f.truncated && ' (앞부분 200KB만)'}</h4>
+            <h4 className="dmem-path">{f.path}{f.truncated && ' (앞부분 200KB만)'}</h4>
             <pre>{f.content}</pre>
             <p className="pn-note pad">읽기 전용이에요. 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.</p>
           </>
