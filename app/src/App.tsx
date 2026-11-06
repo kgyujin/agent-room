@@ -114,9 +114,11 @@ export default function App() {
   const [welcomeClosed, setWelcomeClosed] = useState(() => { try { return localStorage.getItem('welcomeClosed') === '1'; } catch { return false; } });
   const closeWelcome = () => { setWelcomeClosed(true); try { localStorage.setItem('welcomeClosed', '1'); } catch { /* storage unavailable */ } };
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
-  // dashboard view: the whole window shows the dashboard page instead of the room (any window size)
-  const [dashPage, setDashPage] = useState(() => { try { return localStorage.getItem('dashView') === '1'; } catch { return false; } });
-  useEffect(() => { try { localStorage.setItem('dashView', dashPage ? '1' : '0'); } catch { /* storage unavailable */ } }, [dashPage]);
+  // dashboard views: beside the room ('split') or filling the window ('full'), any window size
+  const [dashView, setDashView] = useState<'off' | 'split' | 'full'>(() => {
+    try { const v = localStorage.getItem('dashView'); return v === '1' || v === 'full' ? 'full' : v === 'split' ? 'split' : 'off'; } catch { return 'off'; }
+  });
+  useEffect(() => { try { localStorage.setItem('dashView', dashView); } catch { /* storage unavailable */ } }, [dashView]);
   // open: the pane to show ('last' = the one used last time)
   const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
   const [detailTab, setDetailTab] = useState<Tab>('overview');
@@ -137,9 +139,12 @@ export default function App() {
   const compact = mini || vw < 560;
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
-  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW;
-  const dashboard = panelOpen && vw >= DASH_MIN_VW;
-  const panelW = dashboard ? Math.min(900, Math.round(vw * 0.5)) : PANEL_W;
+  // the split dashboard takes the panel's place (wider), leaving the room at least 480px on the left
+  const dashSplit = dashView === 'split' && !mini && !office && vw >= PANEL_MIN_VW;
+  const dashPage = (dashView === 'full' || (dashView === 'split' && !dashSplit && !office)) && !mini;
+  const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
+  const dashboard = !dashSplit && panelOpen && vw >= DASH_MIN_VW;
+  const panelW = dashSplit ? Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480)) : dashboard ? Math.min(900, Math.round(vw * 0.5)) : PANEL_W;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -190,7 +195,7 @@ export default function App() {
   // load timeline for the selected session when the panel needs it
   const asking = useRef(new Set<string>());
   useEffect(() => {
-    const page = dashPage && !mini;
+    const page = dashPage || dashSplit;
     if (!panelOpen && !page) return;
     // the dashboards' activity log needs every session's log; the tabbed panel only the selected one
     const keys = dashboard || page ? list.map((x) => x.key) : selected ? [selected.key] : [];
@@ -198,7 +203,7 @@ export default function App() {
       asking.current.add(k);
       backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
     }
-  }, [selected?.key, panelOpen, dashboard, dashPage, mini, list, timelines]);
+  }, [selected?.key, panelOpen, dashboard, dashPage, dashSplit, mini, list, timelines]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {
@@ -548,7 +553,7 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} ${dashPage && !mini ? 'dash-open' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} ${dashPage ? 'dash-open' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
       onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble}
         title={furnTip ?? undefined} onMouseMove={(e) => {
@@ -603,7 +608,7 @@ export default function App() {
         </div>
       )}
 
-      {panelOpen && (
+      {panelOpen && !dashSplit && (
         <DetailPanel
           width={panelW}
           dashboard={dashboard}
@@ -627,10 +632,11 @@ export default function App() {
         {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
-        {!mini && <ToolBtn icon="monitor" label="대시보드로 보기" onClick={() => setDashPage(true)} />}
+        {!mini && <ToolBtn icon="monitor" label="대시보드 보기" on={dashSplit} onClick={() => setDashView(dashSplit ? 'off' : 'split')} />}
         {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
+          else if (dashSplit) setDashView('off');
           else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
         }} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
@@ -641,7 +647,7 @@ export default function App() {
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
       </div>
 
-      {dashPage && !mini && (
+      {(dashPage || dashSplit) && (
         <DashboardPage
           sessions={list}
           timelines={timelines}
@@ -649,7 +655,9 @@ export default function App() {
           now={now}
           onSelect={setPinned}
           onOpen={openApp}
-          onRoom={() => setDashPage(false)}
+          split={dashSplit ? panelW : undefined}
+          onToggleSplit={vw >= PANEL_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
+          onRoom={() => setDashView('off')}
           onSettings={() => setSettingsOpen('last')}
           mac={IS_MAC && IN_TAURI}
         />
