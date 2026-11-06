@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from './types';
-import { fmtAgo, fmtDuration, fmtUntil, paceNote, sessionNames, windowLabel } from './labels';
+import { fmtAgo, fmtTokens, setTokenUnit, fmtDuration, fmtUntil, paceNote, sessionNames, shortName, windowLabel } from './labels';
 
 const snap = (key: string, project: string, cwd: string) => ({ key, project, cwd }) as unknown as Snapshot;
 
@@ -45,5 +45,27 @@ describe('sessionNames', () => {
   it('falls back to the id tail in the same folder', () => {
     const n = sessionNames([snap('c:x-0001', 'web', '/a/web'), snap('c:x-0002', 'web', '/a/web')]);
     expect(n['c:x-0001']).toBe('web · 0001');
+  });
+});
+
+describe('shortName', () => {
+  it('keeps short names and tells shared prefixes apart', () => {
+    expect(shortName('web', 8)).toBe('web');
+    expect(shortName('agent-room-api', 8)).toBe('agen…api');
+    expect(shortName('agent-room-ui', 8)).not.toBe(shortName('agent-room-api', 8));
+    expect([...shortName('한글프로젝트이름입니다', 8)].length).toBe(8);
+  });
+});
+
+describe('fmtTokens', () => {
+  it('uses K/M/B by default and 만/억 when set', () => {
+    setTokenUnit('si');
+    expect(fmtTokens(12_400)).toBe('12.4K');
+    expect(fmtTokens(340_000_000)).toBe('340M');
+    setTokenUnit('ko');
+    expect(fmtTokens(12_400)).toBe('1.24만');
+    expect(fmtTokens(340_000_000)).toBe('3.4억');
+    expect(fmtTokens(9_800)).toBe('9,800');
+    setTokenUnit('si');
   });
 });
