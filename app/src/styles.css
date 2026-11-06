@@ -1073,13 +1073,15 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .nametag.settled { opacity: 0.72; }
 
 /* ------------------------------------------------ full-window dashboard page */
-.dpage { position: absolute; inset: 0; z-index: 8; display: grid; grid-template-columns: 200px 1fr; background: var(--bg, #fbf3ea); color: var(--ink); }
+.dpage { position: absolute; inset: 0; z-index: 8; display: grid; grid-template-columns: 200px 1fr; grid-template-rows: minmax(0, 1fr); background: var(--bg, #fbf3ea); color: var(--ink); }
 .dp-side { display: flex; flex-direction: column; gap: 12px; padding: 14px 10px; background: rgba(255, 250, 243, 0.96); border-right: 1px solid var(--hair); min-height: 0; }
 .dpage.mac .dp-side { padding-top: 40px; }
-.dp-brand { display: flex; flex-direction: column; padding: 0 8px; }
+.dp-brand { flex-shrink: 0; display: flex; flex-direction: column; padding: 0 8px; }
 .dp-brand b { font-size: 15px; font-weight: 800; }
 .dp-brand small { font-size: 11px; color: var(--ink-soft); }
-.dp-side nav { display: flex; flex-direction: column; gap: 2px; }
+.dp-side nav { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.dp-drag { position: absolute; top: 0; left: 0; right: 0; height: 28px; z-index: 1; }
+.app.dash-open .banners { z-index: 9; }
 .dp-side button { display: flex; align-items: center; gap: 8px; border: none; background: transparent; padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--ink-soft); text-align: left; }
 .dp-side button span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-side button:hover { background: rgba(122, 86, 70, 0.07); color: var(--ink); }
@@ -1087,10 +1089,10 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .dp-side .dp-sess { margin-top: 8px; border-top: 1px dashed var(--hair); border-radius: 0 0 9px 9px; padding-top: 10px; }
 .dp-badge { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 8px; background: rgba(122, 86, 70, 0.1); color: var(--ink-soft); }
 .dp-badge.wait { background: var(--wait); color: #fff; }
-.dp-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--hair); padding-top: 8px; }
+.dp-foot { margin-top: auto; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--hair); padding-top: 8px; }
 .dp-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .dp-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--hair); }
-.dpage.mac .dp-head { padding-top: 14px; }
+.dpage.mac .dp-head { padding-top: 32px; }
 .dp-head h2 { margin: 0; font-size: 20px; font-weight: 800; }
 .dp-head p { margin: 0; font-size: 12px; color: var(--ink-soft); flex: 1; }
 .dp-open { align-self: center; }

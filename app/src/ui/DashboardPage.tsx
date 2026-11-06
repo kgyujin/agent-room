@@ -47,6 +47,7 @@ export function DashboardPage(props: {
   const title = sec === 'session' ? selected?.project ?? '세션' : NAV.find((n) => n[0] === sec)?.[1];
   return (
     <div className={`dpage ${props.mac ? 'mac' : ''}`}>
+      {props.mac && <div className="dp-drag" data-tauri-drag-region />}
       <aside className="dp-side">
         <div className="dp-brand"><b>Agent Room</b><small>대시보드</small></div>
         <nav>
