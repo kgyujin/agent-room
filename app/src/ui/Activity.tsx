@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import type { Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, sessionNames, stateLabel, stateTone, timelineText } from '../labels';
-import { AgentMark } from './icons';
+import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 import { isActive, userTodo } from './Overview';
 import { fmtTokens } from './Usage';
@@ -20,6 +20,8 @@ function trend(cur: number, prev: number): { text: string; up: boolean } | null 
 
 const sum = (d: UsageHistory['days']) => d.reduce((a, x) => a + x.claude + x.codex, 0);
 
+const STAT_ICON = { todo: 'bell', work: 'bolt', done: 'check', today: 'note', week: 'clock' } as const;
+
 export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; cost?: { claude: number; codex: number } }) {
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const days = h?.days ?? [];
@@ -29,7 +31,7 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
   const prevWeek = sum(days.slice(-14, -7));
   const last = days[days.length - 1];
   const usd = last ? estCost(last, cost) : null;
-  const cards: { id: string; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend> }[] = [
+  const cards: { id: 'todo' | 'work' | 'done' | 'today' | 'week'; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend> }[] = [
     { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인·답변 기다림', 'Waiting for you') },
     { id: 'work', label: L('작업 중', 'Working'), value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: L(`열린 세션 ${live.length}개`, `${live.length} open sessions`) },
     { id: 'done', label: L('완료한 요청', 'Requests done'), value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: L(`수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개`, `${sessions.reduce((a, x) => a + x.filesEdited.length, 0)} files edited`) },
@@ -40,6 +42,7 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
     <div className="dash-stats">
       {cards.map((c) => (
         <div key={c.id} className={`dash-stat st-${c.id}`}>
+          <i className="ds-ic"><Icon name={STAT_ICON[c.id]} size={14} /></i>
           <small>{c.label}</small>
           <b>{c.value}{c.tr && <em className={c.tr.up ? 'up' : 'down'}>{c.tr.text}</em>}</b>
           {c.sub && <span>{c.sub}</span>}

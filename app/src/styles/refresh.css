@@ -191,9 +191,9 @@
 .dmap-agent small { padding: 1px 8px; border-radius: 999px; background: var(--fill); font-weight: 700; }
 .dmap-proj { border-left: 0; margin-left: 0; padding-left: 0; }
 .dmap-pname { padding: 2px 4px 0; }
-.dmap-node { --tone: var(--calm); background: color-mix(in srgb, var(--tone) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone) 28%, transparent); border-left-width: 1px; border-radius: 14px; padding: 9px 12px; }
-.dmap-node.t-work, .dmap-node.t-wait, .dmap-node.t-bad, .dmap-node.t-ok { border-left-color: color-mix(in srgb, var(--tone) 28%, transparent); }
-.dmap-node:hover, .dmap-node.on { box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--tone) 60%, transparent); }
+.dmap-node { background: color-mix(in srgb, var(--tone, var(--calm)) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone, var(--calm)) 28%, transparent); border-left-width: 1px; border-radius: 14px; padding: 9px 12px; }
+.dmap-node.t-work, .dmap-node.t-wait, .dmap-node.t-bad, .dmap-node.t-ok { border-left-color: color-mix(in srgb, var(--tone, var(--calm)) 28%, transparent); }
+.dmap-node:hover, .dmap-node.on { box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--tone, var(--calm)) 60%, transparent); }
 .dmap-node.on { border-color: var(--tone); }
 .dmap-top .dot { flex: none; }
 .dmap-top b { color: var(--ink); }
@@ -204,18 +204,39 @@
 .dp-one .dboard-col { padding: 0; }
 .dboard-col h4 { margin: 0 2px 2px; font-size: 12px; }
 .dboard-col h4 span { padding: 0 7px; border-radius: 999px; background: var(--fill); font-size: 11px; }
-.dboard-col { --tone: var(--calm); }
 .dboard-col.c-todo { --tone: var(--wait); } .dboard-col.c-in_progress { --tone: var(--work); } .dboard-col.c-completed { --tone: var(--ok); }
-.dboard-card { background: color-mix(in srgb, var(--tone) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone) 24%, transparent); border-radius: 12px; box-shadow: none; padding: 9px 11px; }
+.dboard-card { background: color-mix(in srgb, var(--tone, var(--calm)) 7%, var(--box)); border: 1px solid color-mix(in srgb, var(--tone, var(--calm)) 24%, transparent); border-radius: 12px; box-shadow: none; padding: 9px 11px; }
 .dboard-card .tag { background: var(--box); border: 1px solid var(--edge); }
-.dboard-card:hover { box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--tone) 55%, transparent); }
+.dboard-card:hover { box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--tone, var(--calm)) 55%, transparent); }
 
 /* side panel rows: the same tinted cards as the map */
-.ov .ov-row { --tone: var(--calm); }
-.ov .ov-row.t-work, .ov .ov-row.t-wait, .ov .ov-row.t-ok, .ov .ov-row.t-bad { background: color-mix(in srgb, var(--tone) 5%, var(--box)); border-color: color-mix(in srgb, var(--tone) 22%, transparent); }
+.ov .ov-row.t-work, .ov .ov-row.t-wait, .ov .ov-row.t-ok, .ov .ov-row.t-bad { background: color-mix(in srgb, var(--tone, var(--calm)) 5%, var(--box)); border-color: color-mix(in srgb, var(--tone, var(--calm)) 22%, transparent); }
 /* card contents line up with the card title (16px in) */
 .dp-one .dmap { padding: 2px 16px 16px; }
 .dp-one .dboard { padding: 2px 16px 16px; gap: 10px 12px; }
 .dp-one .lc-grid { padding: 0 16px; }
 .dp-one .dshare { padding: 12px 18px; }
 .dmap-node { border-radius: 10px; }
+
+/* stat cards: a round tinted icon chip in the corner */
+.dash-stat { position: relative; }
+.dash-stat .ds-ic { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--tone, var(--accent-strong)) 13%, var(--box)); color: var(--tone, var(--accent-strong)); }
+.dash-stat.st-todo { --tone: var(--wait); } .dash-stat.st-work { --tone: var(--work); } .dash-stat.st-done { --tone: var(--ok); }
+.dash-stat > small { padding-right: 34px; }
+@container (max-width: 118px) { .dash-stat .ds-ic { display: none; } .dash-stat > small { padding-right: 0; } }
+
+/* side panel: the page tone behind white cards, rows tinted by state instead of a coloured left bar */
+.panel { background: var(--page); }
+.panel > header { background: var(--page); border-bottom-color: transparent; }
+.ov .ov-row::before { display: none; }
+.ov .ov-row { border-radius: 14px; padding: 11px 13px; }
+.ov .ov-row.t-wait { background: color-mix(in srgb, var(--wait) 8%, var(--box)); border-color: color-mix(in srgb, var(--wait) 35%, transparent); }
+.ov .ov-row.on { border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ov-top > .agent-mark { box-sizing: content-box; padding: 4px; border-radius: 50%; background: var(--fill); flex: none; }
+.ov-doing, .ov .ov-meta { padding-left: 31px; }
+.ov .ov-step { margin-left: 31px; }
+.ov h4 { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+
+/* the session table and its filters sit inside the card's padding */
+.dp-one .g-sess .dash-chips { padding: 0 16px 8px; margin: 0; }
+.dp-one .g-sess .dash-table { width: calc(100% - 16px); margin: 0 8px 8px; }
