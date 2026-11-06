@@ -23,8 +23,6 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
-/** from this window width (a full screen) the panel turns into a dashboard showing every section at once */
-const DASH_MIN_VW = 1280;
 /** room-only window width limits for resizing it with the scroll wheel (CSS px) */
 const ROOM_ONLY_MIN_W = 300;
 const ROOM_ONLY_MAX_W = 1200;
@@ -143,8 +141,7 @@ export default function App() {
   const dashSplit = dashView === 'split' && !mini && !office && vw >= PANEL_MIN_VW;
   const dashPage = (dashView === 'full' || (dashView === 'split' && !dashSplit && !office)) && !mini;
   const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
-  const dashboard = !dashSplit && panelOpen && vw >= DASH_MIN_VW;
-  const panelW = dashSplit ? Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480)) : dashboard ? Math.min(900, Math.round(vw * 0.5)) : PANEL_W;
+  const panelW = dashSplit ? Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480)) : PANEL_W;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -198,12 +195,12 @@ export default function App() {
     const page = dashPage || dashSplit;
     if (!panelOpen && !page) return;
     // the dashboards' activity log needs every session's log; the tabbed panel only the selected one
-    const keys = dashboard || page ? list.map((x) => x.key) : selected ? [selected.key] : [];
+    const keys = page ? list.map((x) => x.key) : selected ? [selected.key] : [];
     for (const k of keys.filter((k) => !timelines[k] && !asking.current.has(k))) {
       asking.current.add(k);
       backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
     }
-  }, [selected?.key, panelOpen, dashboard, dashPage, dashSplit, mini, list, timelines]);
+  }, [selected?.key, panelOpen, dashPage, dashSplit, mini, list, timelines]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {
@@ -611,13 +608,11 @@ export default function App() {
       {panelOpen && !dashSplit && (
         <DetailPanel
           width={panelW}
-          dashboard={dashboard}
           s={selected}
           sessions={list}
           onSelect={setPinned}
           showLimits={settings.showLimits}
           timeline={selected ? timelines[selected.key] ?? [] : []}
-          timelines={timelines}
           tab={detailTab}
           setTab={setDetailTab}
           now={now}

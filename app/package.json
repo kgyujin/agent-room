@@ -11,7 +11,9 @@
     "art": "python3 ../tools/art/gen_art.py",
     "tauri": "tauri",
     "app:dev": "node scripts/build-hook.mjs && tauri dev",
-    "app:build": "node scripts/build-hook.mjs --release && tauri build"
+    "app:build": "node scripts/build-hook.mjs --release && tauri build",
+    "test": "vitest run",
+    "ui-check": "node scripts/ui-check.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
@@ -28,7 +30,9 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "playwright": "^1.63.0",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^2.1.9"
   }
 }
