@@ -110,12 +110,18 @@ fn publish(app: &AppHandle, u: Update) {
         notify_low_limits(app, &u.snapshot, l);
     }
     refresh_tray(app);
-    sync_island(app);
+    // hook events come several a second: the island is moved only when it comes into view (the tick
+    // thread places it every 10 s anyway, for displays plugged in or out)
+    sync_island_placed(app, false);
 }
 
 /// With "일이 없을 땐 숨기기" on, the island shows only while an agent works, waits on the user,
 /// or has just finished (for as long as "완료" is shown). The window is hidden, not destroyed.
 fn sync_island(app: &AppHandle) {
+    sync_island_placed(app, true);
+}
+
+fn sync_island_placed(app: &AppHandle, place: bool) {
     let shared = app.state::<Shared>();
     let st = shared.settings.lock().unwrap().clone();
     let Some(w) = app.get_webview_window("island") else { return };
@@ -134,11 +140,12 @@ fn sync_island(app: &AppHandle) {
         })
     };
     let show = !st.island_hide_idle || busy();
-    if show {
+    let visible = w.is_visible().unwrap_or(true);
+    if show && (place || !visible) {
         // also after a display was plugged in or out, or its resolution changed
         place_island(app, &w, ISLAND_WIN.0, ISLAND_WIN.1);
     }
-    if show != w.is_visible().unwrap_or(true) {
+    if show != visible {
         let _ = if show { w.show() } else { w.hide() };
     }
 }

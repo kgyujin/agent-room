@@ -317,7 +317,8 @@ function UsageShare({ h }: { h: UsageHistory | null }) {
   const days = h.days.slice(-14);
   const max = Math.max(1, ...days.map((d) => d.claude + d.codex));
   const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
-  const dayLabel = (d: number) => new Date(d * 86_400_000).toLocaleDateString(L('ko-KR', 'en-US'), { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
+  const fmt = new Intl.DateTimeFormat(L('ko-KR', 'en-US'), { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
+  const dayLabel = (d: number) => fmt.format(d * 86_400_000);
   return (
     <div className="dshare pad">
       <div className="ubars" role="img" aria-label={L('최근 14일 토큰', 'Tokens, last 14 days')}>
