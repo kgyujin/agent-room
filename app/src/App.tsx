@@ -649,7 +649,6 @@ export default function App() {
           now={now}
           onSelect={setPinned}
           onOpen={openApp}
-          onForget={selected && (selected.connection === 'ended' || selected.connection === 'lost') ? () => backend.removeSession(selected.key) : undefined}
           onRoom={() => setDashPage(false)}
           onSettings={() => setSettingsOpen('last')}
           mac={IS_MAC && IN_TAURI}
@@ -706,7 +705,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
       const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current, shortRef.current);
+      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H)) p.y -= TAG_H;
@@ -748,18 +747,18 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         return (
           <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {/* which pet is which: the project by default; what it does joins it when picked or with full tags
-                (the ring under the pet and the dot already show the state) */}
-            {full || selected === a.key ? (
+            {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
+                the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}
+            {full ? (
               <>
                 <b className="tag-project">{tagName(s)}</b>
                 {doing && <span>{doing}</span>}
               </>
             ) : (
-              <span>{tagName(s)}</span>
+              <span>{tagName(s, selected === a.key ? 14 : 8)}</span>
             )}
             <i className={`dot tone-${tone}`} />
-            {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
+            {prog && full && <small>{prog.done}/{prog.total}</small>}
           </button>
         );
       })}
@@ -768,20 +767,21 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 }
 
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
-const TAG_H = 26;
+const TAG_H = 22;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag, cut to keep tags small */
-const tagName = (s: Snapshot) => {
+const tagName = (s: Snapshot, max = 14) => {
   const n = s.project ?? AGENT_NAME[s.agent];
-  return n.length > 14 ? n.slice(0, 13) + '…' : n;
+  return n.length > max ? n.slice(0, max - 1) + '…' : n;
 };
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
-function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean): number {
-  if (!s) return 40;
-  const text = withProject ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s);
-  let w = 40;
-  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 12 : 7.2;
+function tagWidth(s: Snapshot | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
+  if (!s) return 34;
+  const text = mode === 'full' ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s, mode === 'sel' ? 14 : 8);
+  const big = mode !== 'min';
+  let w = big ? 40 : 34;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? (big ? 12 : 11) : big ? 7.2 : 6.4;
   return Math.min(w, 260);
 }
 
