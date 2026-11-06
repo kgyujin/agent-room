@@ -70,7 +70,8 @@ export function Island() {
   const lastDay = usage?.days[usage.days.length - 1];
   const today = lastDay ? lastDay.claude + lastDay.codex : 0;
 
-  const openSize: [number, number] = [Math.max(420, notchW + 230), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (showLimits ? USAGE_H : 0)];
+  // never narrower than the collapsed pill: hover is hit-tested against the current size
+  const openSize: [number, number] = [Math.max(420, notchW + 230, COLLAPSED[0]), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (showLimits ? USAGE_H : 0)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
