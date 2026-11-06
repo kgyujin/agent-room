@@ -92,7 +92,7 @@ function Dashboard(props: Parameters<typeof DetailPanel>[0]) {
           </section>
           <section className="dash-card">
             <h4 className="dash-h">사용량</h4>
-            <div className="pad">{props.showLimits ? <UsageBoard sessions={sessions} now={now} /> : <p className="muted small">한도 표시가 꺼져 있어요.</p>}</div>
+            <div className="pad"><UsageBoard sessions={sessions} now={now} /></div>
           </section>
         </div>
         {s && (
