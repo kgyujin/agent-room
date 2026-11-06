@@ -22,21 +22,41 @@ export function startOfDay(now: number): number {
   return d.getTime();
 }
 
-export function daySummary(sessions: Snapshot[], timelines: Record<string, TimelineEntry[]>, h: UsageHistory | null, now: number): DaySummary {
+/** today's timeline entries per session, kept apart from the timelines (which keep only the last
+ *  300 entries) and from the session list (which drops ended sessions), so the day's counts never shrink */
+export interface DayLog {
+  from: number;
+  byKey: Record<string, { project: string | null; agent: Snapshot['agent']; entries: TimelineEntry[] }>;
+}
+
+/** adds each entry once (by id; a fetched timeline can come after newer live entries) and starts over at local midnight */
+export function addToDay(d: DayLog | null, s: Snapshot, entries: TimelineEntry[], now: number): DayLog {
+  const from = startOfDay(now);
+  const base = d && d.from === from ? d : { from, byKey: {} };
+  if (s.isDemo) return base;
+  const cur = base.byKey[s.key]?.entries ?? [];
+  const have = new Set(cur.map((e) => e.id));
+  const add = entries.filter((e) => e.at >= from && !have.has(e.id));
+  if (!add.length) return base;
+  const merged = [...cur, ...add].sort((x, y) => x.id - y.id);
+  return { from, byKey: { ...base.byKey, [s.key]: { project: s.project, agent: s.agent, entries: merged } } };
+}
+
+export function daySummary(day: DayLog | null, h: UsageHistory | null, now: number): DaySummary {
   const from = startOfDay(now);
   const out: DaySummary = { from, sessions: [], turns: 0, testsOk: 0, testsFail: 0, asks: 0, failures: 0, files: 0, tokens: null };
-  for (const s of sessions) {
-    if (s.isDemo) continue;
-    const today = (timelines[s.key] ?? []).filter((e) => e.at >= from);
-    if (!today.length && s.lastEventAt < from) continue;
+  for (const s of day && day.from === from ? Object.values(day.byKey) : []) {
+    const today = s.entries;
     const turns = today.filter((e) => e.kind === 'turn_complete').length;
     out.turns += turns;
     out.testsOk += today.filter((e) => e.kind === 'test' && e.ok === true).length;
     out.testsFail += today.filter((e) => e.kind === 'test' && e.ok === false).length;
     out.asks += today.filter((e) => e.kind === 'approval' || e.kind === 'input').length;
     out.failures += today.filter((e) => e.kind === 'turn_failed').length;
-    out.files += s.filesEdited.length;
-    out.sessions.push({ project: s.project ?? '프로젝트 미확인', agent: AGENT_NAME[s.agent], turns, files: s.filesEdited });
+    // only files edited today, not everything the session touched since it started
+    const files = [...new Set(today.filter((e) => e.kind === 'tool' && e.activity === 'edit' && e.detail).map((e) => e.detail!))];
+    out.files += files.length;
+    out.sessions.push({ project: s.project ?? '프로젝트 미확인', agent: AGENT_NAME[s.agent], turns, files });
   }
   // the usage history's last day is today in the local time zone
   const last = h?.days[h.days.length - 1];

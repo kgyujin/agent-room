@@ -13,7 +13,7 @@ import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
 import { ApproveButtons } from './Approve';
-import { dayMarkdown, daySummary, estCost, fmtUsd, reportName } from '../report';
+import { dayMarkdown, daySummary, estCost, fmtUsd, reportName, type DayLog } from '../report';
 
 /** the cards below the counts, in grid order; settings can turn any of them off */
 export const DASH_CARDS = [
@@ -28,6 +28,7 @@ export const DASH_CARDS = [
 export function DashboardPage(props: {
   sessions: Snapshot[];
   timelines: Record<string, TimelineEntry[]>;
+  day: DayLog | null;
   selected: Snapshot | null;
   now: number;
   onSelect: (k: string) => void;
@@ -121,7 +122,7 @@ export function DashboardPage(props: {
         <div className="dp-over">
           <section className="dash-card">
             <h4 className="dash-h">오늘 요약<button className="link dp-open" onClick={() => setTodayOpen(false)}>닫기</button></h4>
-            <div className="dp-scroll"><TodayReport sessions={sessions} timelines={props.timelines} h={h} now={now} cost={props.cost} /></div>
+            <div className="dp-scroll"><TodayReport day={props.day} h={h} now={now} cost={props.cost} /></div>
           </section>
         </div>
       )}
@@ -250,9 +251,9 @@ function UsageShare({ h }: { h: UsageHistory | null }) {
 }
 
 /** today's numbers, and the same as a Markdown report to look at before it is saved */
-function TodayReport({ sessions, timelines, h, now, cost }: { sessions: Snapshot[]; timelines: Record<string, TimelineEntry[]>; h: UsageHistory | null; now: number; cost?: { claude: number; codex: number } }) {
+function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistory | null; now: number; cost?: { claude: number; codex: number } }) {
   const [saved, setSaved] = useState<string | null>(null);
-  const d = daySummary(sessions, timelines, h, now);
+  const d = daySummary(day, h, now);
   const usd = d.tokens ? estCost(d.tokens, cost) : null;
   const md = dayMarkdown(d, fmtTokens, usd);
   const nums: [string, string][] = [

@@ -519,10 +519,13 @@ fn show_main(app: &AppHandle) {
 
 fn handle_envelope(app: &AppHandle, env: Envelope) -> Option<std::sync::mpsc::Receiver<Vec<u8>>> {
     let shared = app.state::<Shared>();
-    let asks = env.agent == "claude" && env.event.get("hook_event_name").and_then(|v| v.as_str()) == Some("PermissionRequest");
+    let hook_event = env.event.get("hook_event_name").and_then(|v| v.as_str());
+    let asks = env.agent == "claude" && hook_event == Some("PermissionRequest");
     let session = env.event.get("session_id").and_then(|v| v.as_str()).map(|id| format!("claude:{id}"));
-    // anything else from a session with an open request means it moved on: the request is over
-    if let Some(key) = session.as_ref().filter(|_| env.agent == "claude" && !asks) {
+    // the turn ended or a new prompt came in: an open request is over. Other events (the status
+    // line, a parallel tool, a subagent) don't answer it, so the request stays open for them
+    let ends = matches!(hook_event, Some("Stop" | "StopFailure" | "SessionEnd" | "UserPromptSubmit"));
+    if let Some(key) = session.as_ref().filter(|_| env.agent == "claude" && ends) {
         close_approval(app, key, None);
     }
     let pid = env.ppid.and_then(|p| shared.procs.lock().unwrap().resolve_agent_pid(p));

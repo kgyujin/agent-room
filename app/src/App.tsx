@@ -6,7 +6,7 @@ import { Sound } from './game/audio';
 import { Scene, type Anchor, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
 import { trayFrames } from './game/trayFrames';
-import { daySummary } from './report';
+import { addToDay, daySummary, type DayLog } from './report';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
@@ -48,6 +48,8 @@ export default function App() {
   const soundRef = useRef(new Sound());
   const [sessions, setSessions] = useState<Record<string, Snapshot>>({});
   const [timelines, setTimelines] = useState<Record<string, TimelineEntry[]>>({});
+  // today's entries of every session, for the day summary (see DayLog)
+  const [day, setDay] = useState<DayLog | null>(null);
   const [detected, setDetected] = useState<Overview['detected']>({ claude: 0, codex: 0 });
   const [serverError, setServerError] = useState<string | null>(null);
   const [demoRunning, setDemoRunning] = useState(false);
@@ -151,6 +153,8 @@ export default function App() {
     (async () => {
       const [ov, st] = await Promise.all([backend.overview(), backend.getSettings()]);
       setSessions(Object.fromEntries(ov.sessions.map((s) => [s.key, s])));
+      // what the sessions already did today, before this window started listening
+      for (const s of ov.sessions) void backend.timeline(s.key).then((tl) => setDay((d) => addToDay(d, s, tl, Date.now())), () => {});
       setDetected(ov.detected);
       setServerError(ov.serverError);
       setDemoRunning(ov.demoRunning);
@@ -166,6 +170,7 @@ export default function App() {
             return next;
           });
           if (u.appended.length) {
+            setDay((d) => addToDay(d, u.snapshot, u.appended, Date.now()));
             setTimelines((prev) => (prev[u.snapshot.key] ? { ...prev, [u.snapshot.key]: [...prev[u.snapshot.key], ...u.appended].slice(-300) } : prev));
           }
           if (u.snapshot.isDemo && u.removed) setDemoRunning(false);
@@ -551,14 +556,11 @@ export default function App() {
     if (!settings.dailySummary || !IN_TAURI) return;
     const d = new Date(now);
     if (d.getHours() < (settings.dailySummaryHour ?? 18)) return;
-    const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-    try { if (localStorage.getItem('summaryShown') === day) return; localStorage.setItem('summaryShown', day); } catch { return; }
-    // every session's timeline, not only the ones on screen
-    void Promise.all(list.map(async (x) => [x.key, await backend.timeline(x.key).catch(() => [])] as const)).then((all) => {
-      const t = daySummary(list, Object.fromEntries(all), null, Date.now());
-      void backend.notifyText('오늘 요약', `끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`);
-    });
-  }, [now, settings.dailySummary, settings.dailySummaryHour, list]);
+    const ymd = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    try { if (localStorage.getItem('summaryShown') === ymd) return; localStorage.setItem('summaryShown', ymd); } catch { return; }
+    const t = daySummary(day, null, Date.now());
+    void backend.notifyText('오늘 요약', `끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`);
+  }, [now, settings.dailySummary, settings.dailySummaryHour, day]);
   const openDetails = (key: string) => {
     setPinned(key);
     setDetailTab('session');
@@ -709,6 +711,7 @@ export default function App() {
         <DashboardPage
           sessions={list}
           timelines={timelines}
+          day={day}
           selected={selected}
           now={now}
           onSelect={setPinned}
