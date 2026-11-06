@@ -502,6 +502,14 @@ export default function App() {
 
   const [furnTip, setFurnTip] = useState<string | null>(null);
   const [hoverPet, setHoverPet] = useState<string | null>(null);
+  // a pointed pet keeps its 'hover' tag a moment after the pointer leaves it, so the pointer can
+  // cross the gap above the pet and onto the tag (which keeps it while the pointer is on it)
+  const hoverOff = useRef(0);
+  const hoverTo = (k: string | null) => {
+    window.clearTimeout(hoverOff.current);
+    if (k) setHoverPet(k);
+    else hoverOff.current = window.setTimeout(() => setHoverPet(null), 400);
+  };
   // the click rules (once: open the session, twice: details) are told once, when the first pet shows up
   const [petHintSeen, setPetHintSeen] = useState(() => { try { return localStorage.getItem('petHintSeen') === '1'; } catch { return true; } });
   const seePetHint = () => { setPetHintSeen(true); try { localStorage.setItem('petHintSeen', '1'); } catch { /* storage unavailable */ } };
@@ -559,7 +567,7 @@ export default function App() {
     <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} ${dashPage ? 'dash-open' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
       onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble}
-        title={furnTip ?? undefined} onMouseLeave={() => setHoverPet(null)} onMouseMove={(e) => {
+        title={furnTip ?? undefined} onMouseLeave={() => hoverTo(null)} onMouseMove={(e) => {
           // what each piece of furniture is for, as a tooltip
           const r = e.currentTarget.getBoundingClientRect();
           const [x, y] = [e.clientX - r.left, e.clientY - r.top];
@@ -568,7 +576,7 @@ export default function App() {
           const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 세션 열기' : '눌러서 이 세션 열기 · 두 번 누르면 자세히') : n ? furnTipOf(n, list, now) : null;
           if (tip !== furnTip) setFurnTip(tip);
           const hp = pet && sessions[pet] ? pet : null;
-          if (hp !== hoverPet) setHoverPet(hp);
+          if (hp !== hoverPet) hoverTo(hp);
         }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
@@ -603,7 +611,7 @@ export default function App() {
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} onHover={hoverTo} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && (
         <div className="topleft" style={{ right: (panelOpen ? panelW : 0) + toolbarW + 24 }}>
@@ -713,11 +721,14 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hover, pixel, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; hover: string | null; pixel: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
+function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hover, onHover, pixel, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; hover: string | null; onHover: (k: string | null) => void; pixel: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   // 'hover' tags: null = every tag; otherwise only the pointed pet's (plus the picked and waiting ones)
   const hoverRef = useRef(hover);
   hoverRef.current = hover;
+  // hidden resting tags are left out before tags are bundled, so a bundle only counts tags it can show
+  const hideRef = useRef({ idleTags, doneSec });
+  hideRef.current = { idleTags, doneSec };
   // a bundle of crowded tags that was opened: its keys, until the timer closes it again
   const [opened, setOpened] = useState<string[]>([]);
   const openedRef = useRef(opened);
@@ -744,7 +755,13 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hove
     const loop = () => {
       const keep = (p: Anchor) => p.key === selRef.current || needsYou(sessRef.current[p.key]);
       const hv = hoverRef.current;
-      let a = (scene.current?.anchors() ?? []).filter((p) => keep(p) || (!fewRef.current && (hv === null || p.key === hv)));
+      const hiddenRest = (p: Anchor) => {
+        const s = sessRef.current[p.key];
+        if (!s || hideRef.current.idleTags !== 'hide' || p.key === selRef.current) return false;
+        const settled = s.state === 'completed' && !justDone(s, Date.now(), hideRef.current.doneSec);
+        return settled || (s.state === 'idle' && s.connection === 'live');
+      };
+      let a = (scene.current?.anchors() ?? []).filter((p) => !hiddenRest(p) && (keep(p) || (!fewRef.current && (hv === null || p.key === hv))));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
       const w = (p: Anchor) => (p.key.startsWith(GROUP) ? 46 : tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current));
@@ -810,7 +827,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hove
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
                 the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}
