@@ -1118,6 +1118,10 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
   .dpage:not(.split) .dp-one .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 620px) { .dpage:not(.split) .dp-one { grid-template-columns: 1fr; } }
+@media (max-height: 560px) {
+  .dpage.split .dp-one { grid-template-rows: none; grid-auto-rows: auto; overflow-y: auto; }
+  .dpage.split .dp-one > .dash-card { height: 260px; }
+}
 .dp-over { position: absolute; inset: 0; z-index: 3; background: rgba(58, 40, 50, 0.22); display: flex; padding: 48px 24px 24px; }
 .dp-over > .dash-card { flex: 1; display: flex; flex-direction: column; min-height: 0; margin: 0; }
 .dp-over .dash-h { display: flex; align-items: center; }
