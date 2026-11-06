@@ -372,7 +372,6 @@
 /* very narrow board: tighter cards, counts give way to the column names */
 @container (max-width: 340px) {
   .dp-one .dboard-col { padding: 4px; }
-  .dp-one .dboard-card .tag { font-size: 0; gap: 0; padding: 2px 4px; align-self: flex-start; width: auto; }
   .dp-one .dboard-card { padding: 7px; }
   .dp-one .dboard-card p { font-size: 11.5px; }
   .dp-one .dboard-col h4 span { display: none; }
@@ -516,3 +515,13 @@
 .dash-log li .more code.full { display: block; white-space: pre-wrap; word-break: break-all; background: color-mix(in srgb, var(--ink) 5%, transparent); padding: 4px 8px; border-radius: 6px; user-select: text; -webkit-user-select: text; }
 .dash-log li .more-act { display: flex; gap: 6px; }
 .dash-log li .more-act .btn { padding: 3px 10px; font-size: 12px; }
+
+/* narrow board columns: the session under a task is plain small text, not a padded chip that left room for one letter ("d…") */
+@container (max-width: 560px) {
+  .dp-one .dboard-card .tag { background: none; border: 0; padding: 0; gap: 3px; font-size: 10.5px; overflow: hidden; }
+  .dp-one .dboard-card .tag .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* the column name matters more than its count ("진…" said nothing) */
+  .dp-one .dboard-col h4 span { display: none; }
+  .dp-one .dboard-col h4 em { overflow: visible; text-overflow: clip; white-space: normal; word-break: keep-all; }
+}
+@container (max-width: 400px) { .dp-one .dmap-agent small { display: none; } .dp-one .dmap-agent b { overflow: visible; text-overflow: clip; } }
