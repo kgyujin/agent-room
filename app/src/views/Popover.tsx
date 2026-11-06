@@ -34,7 +34,8 @@ export function Popover() {
     ['rest', L('쉬는 중', 'Resting'), rest],
   ];
   const box = useRef<HTMLDivElement>(null);
-  const more = useFit(box, ['.pp-g-rest .pp-rowwrap', '.pp-g-work .pp-rowwrap', '.pp-g-todo .pp-rowwrap']);
+  // the user's turn never drops: those rows are why the popover was opened
+  const more = useFit(box, ['.pp-g-rest .pp-rowwrap', '.pp-g-work .pp-rowwrap']);
   const names = sessionNames(live);
   return (
     <div className="pop">
@@ -122,10 +123,10 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
 function Row({ s, name, now, onClick }: { s: Snapshot; name: string; now: number; onClick: (inRoom: boolean) => void }) {
   const todo = userTodo(s, now);
   const tone = stateTone(s);
-  // "코드 수정 중 · Room.tsx": the state in bold, then the file or command it is on (or the session title)
+  // "코드 작성 중 · Room.tsx": the state in bold, then the file or command it is on (or the session title)
   const doing = doingLabel(s);
   const cut = doing?.indexOf(' · ') ?? -1;
-  const what = doing ? (cut < 0 ? doing : doing.slice(0, cut)) : stateLabel(s);
+  const what = stateLabel(s); // the same words as the dashboard and the room
   const detail = (doing && cut >= 0 ? doing.slice(cut + 3) : null) ?? s.title;
   return (
     <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n${L('⌥ 클릭: 방에서 보기', '⌥-click: see it in the room')}`}>
