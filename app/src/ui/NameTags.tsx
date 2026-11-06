@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Anchor, Scene } from '../game/scene';
 import type { Settings, Snapshot } from '../types';
-import { AGENT_NAME, doingLabel, justDone, shortName, stateTone } from '../labels';
+import { AGENT_NAME, doingLabel, justDone, stateTone } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 import { userTodo } from './Overview';
@@ -125,7 +125,7 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
                 {doing && <span>{doing}</span>}
               </>
             ) : (
-              <span>{tagName(s, selected === a.key ? 14 : 8)}</span>
+              <span>{tagName(s, selected === a.key ? 20 : 12)}</span>
             )}
             <i className={`dot tone-${tone}`} />
             {prog && full && <small>{prog.done}/{prog.total}</small>}
@@ -141,16 +141,19 @@ const TAG_H = 22;
 /** key prefix of a bundle of crowded tags */
 const GROUP = 'group:';
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
-/** project name on a tag, cut to keep tags small */
-const tagName = (s: Snapshot, max = 14) => shortName(s.project ?? AGENT_NAME[s.agent], max);
+/** project name on a tag; a long one keeps its start and ends in "…" (a cut in the middle, "api-…ver", was hard to read) */
+const tagName = (s: Snapshot, max = 16) => {
+  const ch = [...(s.project ?? AGENT_NAME[s.agent])];
+  return ch.length <= max ? ch.join('') : ch.slice(0, max - 1).join('') + '…';
+};
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
 function tagWidth(s: Snapshot | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
   if (!s) return 34;
-  const text = mode === 'full' ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s, mode === 'sel' ? 14 : 8);
+  const text = mode === 'full' ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s, mode === 'sel' ? 20 : 12);
   const big = mode !== 'min';
-  let w = big ? 40 : 34;
-  for (const ch of text) w += ch.charCodeAt(0) > 255 ? (big ? 12 : 11) : big ? 7.2 : 6.4;
+  let w = big ? 44 : 40;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? (big ? 13 : 12.5) : big ? 8 : 7.4;
   return Math.min(w, 260);
 }
 
