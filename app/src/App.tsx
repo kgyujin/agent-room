@@ -16,7 +16,7 @@ import { Welcome } from './ui/Welcome';
 import { UsageStrip, useAccountLimits, userTodo } from './ui/Overview';
 import { AgentMark, Icon } from './ui/icons';
 import { progressOf } from './ui/Hud';
-import { AGENT_NAME, doingLabel, justDone, setTokenUnit, shortName, stateTone } from './labels';
+import { AGENT_NAME, doingLabel, fmtAgo, justDone, setTokenUnit, shortName, stateTone } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
@@ -270,10 +270,11 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? panelW : 0;
+    sc.cover = dashSplit;
     sc.insetBottom = dockRoom ? dockRoom + 24 : tabsBelow ? 36 : 0;
     sc.insetTop = mini ? 0 : bannersRoom ? bannersRoom + 66 : 56;
     sc.resize();
-  }, [panelOpen, panelW, ready, mini, dockRoom, bannersRoom, tabsBelow]);
+  }, [panelOpen, panelW, ready, mini, dockRoom, bannersRoom, tabsBelow, dashSplit]);
 
   // custom characters (local PNGs) + recoloured built-ins; reloaded when settings open or colours change
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
@@ -500,6 +501,10 @@ export default function App() {
   };
 
   const [furnTip, setFurnTip] = useState<string | null>(null);
+  const [hoverPet, setHoverPet] = useState<string | null>(null);
+  // the click rules (once: open the session, twice: details) are told once, when the first pet shows up
+  const [petHintSeen, setPetHintSeen] = useState(() => { try { return localStorage.getItem('petHintSeen') === '1'; } catch { return true; } });
+  const seePetHint = () => { setPetHintSeen(true); try { localStorage.setItem('petHintSeen', '1'); } catch { /* storage unavailable */ } };
   // a short note at the top (e.g. when an agent's app window can't be found)
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
@@ -554,14 +559,16 @@ export default function App() {
     <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} ${dashPage ? 'dash-open' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
       onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble}
-        title={furnTip ?? undefined} onMouseMove={(e) => {
+        title={furnTip ?? undefined} onMouseLeave={() => setHoverPet(null)} onMouseMove={(e) => {
           // what each piece of furniture is for, as a tooltip
           const r = e.currentTarget.getBoundingClientRect();
           const [x, y] = [e.clientX - r.left, e.clientY - r.top];
           const pet = sceneRef.current?.hitActor(x, y);
           const n = pet ? null : sceneRef.current?.furnitureAt(x, y) ?? null;
-          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 세션 열기' : '눌러서 이 세션 열기 · 두 번 누르면 자세히') : n ? FURN_TIPS[n.replace(/\d+$/, '')] ?? null : null;
+          const tip = pet && sessions[pet] ? (mini ? '두 번 눌러서 이 세션 열기' : '눌러서 이 세션 열기 · 두 번 누르면 자세히') : n ? furnTipOf(n, list, now) : null;
           if (tip !== furnTip) setFurnTip(tip);
+          const hp = pet && sessions[pet] ? pet : null;
+          if (hp !== hoverPet) setHoverPet(hp);
         }} />
       {/* macOS overlay title bar: drag strip behind the traffic lights (double-click zooms) */}
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
@@ -580,11 +587,23 @@ export default function App() {
             <button onClick={() => setUpdDialog({ k: 'available', u: update })}>업데이트</button>
           </div>
         )}
+        {!compact && !office && !dashPage && list.length > (sceneRef.current?.capacity ?? 6) && (
+          <div className="banner more">
+            방에는 책상 수만큼 {sceneRef.current?.capacity ?? 6}마리만 있어요 · {list.length - (sceneRef.current?.capacity ?? 6)}개 세션 더
+            <button onClick={() => { setOffice(false); setDashView(vw >= PANEL_MIN_VW ? 'split' : 'full'); }}>모두 보기</button>
+          </div>
+        )}
+        {!petHintSeen && !compact && !office && !dashPage && list.some((x) => !x.isDemo) && (
+          <div className="banner hint">
+            펫을 한 번 누르면 그 세션이 열리고, 두 번 누르면 자세히 볼 수 있어요
+            <button onClick={seePetHint}>알겠어요</button>
+          </div>
+        )}
         {flash && <div className="banner error">{flash}</div>}
         {serverError && <div className="banner error">이벤트 수신기를 시작하지 못했습니다: {serverError}</div>}
       </div>
 
-      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
+      <NameTags scene={sceneRef} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={openApp} hidden={settings.tagStyle === 'off'} full={settings.tagStyle === 'full'} hover={settings.tagStyle === 'hover' ? hoverPet ?? '' : null} pixel={settings.tagLook === 'pixel'} few={compact && !mini} short={compact || settings.tagStyle !== 'full'} doneSec={settings.doneShownSec ?? 60} idleTags={settings.idleTags ?? 'dim'} />
 
       {!mini && !office && (
         <div className="topleft" style={{ right: (panelOpen ? panelW : 0) + toolbarW + 24 }}>
@@ -694,8 +713,20 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 }
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
+function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hover, pixel, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; hover: string | null; pixel: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
   const [anchors, setAnchors] = useState<Anchor[]>([]);
+  // 'hover' tags: null = every tag; otherwise only the pointed pet's (plus the picked and waiting ones)
+  const hoverRef = useRef(hover);
+  hoverRef.current = hover;
+  // a bundle of crowded tags that was opened: its keys, until the timer closes it again
+  const [opened, setOpened] = useState<string[]>([]);
+  const openedRef = useRef(opened);
+  openedRef.current = opened;
+  useEffect(() => {
+    if (!opened.length) return;
+    const id = window.setTimeout(() => setOpened([]), 15_000);
+    return () => window.clearTimeout(id);
+  }, [opened]);
   const fullRef = useRef(full);
   fullRef.current = full;
   const selRef = useRef(selected);
@@ -711,10 +742,27 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
   useEffect(() => {
     let last = '';
     const loop = () => {
-      const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
+      const keep = (p: Anchor) => p.key === selRef.current || needsYou(sessRef.current[p.key]);
+      const hv = hoverRef.current;
+      let a = (scene.current?.anchors() ?? []).filter((p) => keep(p) || (!fewRef.current && (hv === null || p.key === hv)));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current);
+      const w = (p: Anchor) => (p.key.startsWith(GROUP) ? 46 : tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current));
+      // three or more tags crowded together become one bundle tag ("펫 3"), opened by a click;
+      // the picked and waiting pets always keep their own tag
+      const near = (p: Anchor, q: Anchor) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H * 1.5;
+      const loose = a.filter((p) => !keep(p) && !openedRef.current.includes(p.key));
+      const groups: Anchor[][] = [];
+      for (const p of loose) {
+        const hit = groups.filter((g) => g.some((q) => near(p, q)));
+        const merged = [p, ...hit.flat()];
+        for (const g of hit) groups.splice(groups.indexOf(g), 1);
+        groups.push(merged);
+      }
+      for (const g of groups.filter((g) => g.length >= 3)) {
+        a = a.filter((p) => !g.includes(p));
+        a.push({ key: GROUP + g.map((p) => p.key).sort().join(','), agent: '', x: g.reduce((t, p) => t + p.x, 0) / g.length, y: Math.min(...g.map((p) => p.y)) });
+      }
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H)) p.y -= TAG_H;
@@ -740,8 +788,16 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
   }, [scene]);
   if (hidden) return null;
   return (
-    <div className="nametags">
+    <div className={`nametags ${pixel ? 'pixel' : ''}`}>
       {anchors.map((a) => {
+        if (a.key.startsWith(GROUP)) {
+          const keys = a.key.slice(GROUP.length).split(',');
+          return (
+            <button key={a.key} className="nametag group" style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => setOpened(keys)} title={keys.map((k) => sessions[k]?.project ?? '').join('\n') + '\n눌러서 펼치기'}>
+              <span>펫 {keys.length}</span>
+            </button>
+          );
+        }
         const s = sessions[a.key];
         if (!s) return null;
         const prog = progressOf(s);
@@ -777,6 +833,8 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
 const TAG_H = 22;
+/** key prefix of a bundle of crowded tags */
+const GROUP = 'group:';
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag, cut to keep tags small */
 const tagName = (s: Snapshot, max = 14) => shortName(s.project ?? AGENT_NAME[s.agent], max);
@@ -803,6 +861,14 @@ const FURN_TIPS: Record<string, string> = {
   coffee: '커피 카트 · 쉬는 동안 들러요',
   table: '찻상',
 };
+
+/** what a piece of furniture is for; the test rig also says the last result it shows */
+function furnTipOf(name: string, list: Snapshot[], now: number): string | null {
+  const base = FURN_TIPS[name.replace(/\d+$/, '')] ?? null;
+  if (name !== 'rig') return base;
+  const t = list.map((s) => s.lastTest).filter((x) => x && x.ok !== null).sort((a, b) => b!.at - a!.at)[0];
+  return t ? `${base}\n마지막 결과: ${t.ok ? '통과' : '실패'} · ${fmtAgo(now - t.at)}` : base;
+}
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
 

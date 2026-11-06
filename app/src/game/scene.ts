@@ -60,6 +60,8 @@ export class Scene {
   energy: Energy = 'normal';
   /** draw the little icons over the pets' heads (setting) */
   bubbles = true;
+  /** beside the dashboard: one scale step bigger when that only crops a little of the room's sides */
+  cover = false;
   /** every loaded skin by name ('builtin/shiba', user PNG names) */
   skins: Record<string, Skin> = {};
   /** pets new critters may get (the user's checked list) */
@@ -116,6 +118,11 @@ export class Scene {
       this.applyBehavior(m);
     }
     this.resize();
+  }
+
+  /** how many sessions get a pet (one per desk); the rest are only in the lists */
+  get capacity() {
+    return this.desks;
   }
 
   get view() {
@@ -238,7 +245,8 @@ export class Scene {
     const margin = this.roomOnly ? 2 : 4;
     const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / (room.w + margin), availH / (room.h + margin))));
     // the room fits the area the side panel leaves free (it keeps its size when that still fits)
-    const fit = fitIn(availW);
+    // beside the dashboard up to about an eighth of the room's width may go under the panel
+    const fit = this.cover ? Math.max(fitIn(availW), fitIn(availW * 1.15)) : fitIn(availW);
     // zooming out never goes below 1, zooming in stops at 4 steps past the fitted size;
     // the floating room always fits its window (the window-mode zoom is kept for later)
     this.zoom = Math.max(1 - fit, Math.min(4, this.zoom));
@@ -482,7 +490,7 @@ export class Scene {
         A.placed(g, f.name, ox, oy);
         const d = /^desk(\d+)$/.exec(f.name);
         if (d) A.placed(g, this.screenFrame(Number(d[1]), atDesk[Number(d[1])] ?? null), ox, oy);
-        if (f.name === 'rig') A.placed(g, this.rigFrame(rigUser), ox, oy);
+        if (f.name === 'rig') A.placed(g, rigUser ? this.rigFrame(rigUser) : this.restingRig(), ox, oy);
       },
     }));
     for (const m of this.mates) {
@@ -579,6 +587,16 @@ export class Scene {
       }
     })();
     return `scr${desk}_${name}`;
+  }
+
+  /** with nobody at the bench the rig keeps the newest test result of the last 10 minutes, steady */
+  private restingRig(): string {
+    let t: { ok: boolean | null; at: number } | null = null;
+    for (const m of this.mates) {
+      const x = m.session?.lastTest;
+      if (x && x.ok !== null && Date.now() - x.at < 600_000 && (!t || x.at > t.at)) t = x;
+    }
+    return t ? (t.ok ? 'rig_pass' : 'rig_fail') : 'rig_idle';
   }
 
   private rigFrame(b: Behavior | null): string {
