@@ -181,6 +181,30 @@ pub(crate) struct MacRect(f64, f64, f64, f64);
 #[derive(Clone, Copy)]
 pub(crate) struct MacPoint(f64, f64);
 
+/// Where the pointer is, read off the main thread (CoreGraphics, global display coordinates).
+#[cfg(target_os = "macos")]
+fn mac_pointer() -> Option<(f64, f64)> {
+    use std::ffi::c_void;
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreate(source: *const c_void) -> *const c_void;
+        fn CGEventGetLocation(event: *const c_void) -> MacPoint;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(cf: *const c_void);
+    }
+    unsafe {
+        let e = CGEventCreate(std::ptr::null());
+        if e.is_null() {
+            return None;
+        }
+        let p = CGEventGetLocation(e);
+        CFRelease(e);
+        Some((p.0, p.1))
+    }
+}
+
 #[cfg(target_os = "macos")]
 unsafe impl objc2::encode::Encode for MacPoint {
     const ENCODING: objc2::encode::Encoding = objc2::encode::Encoding::Struct("CGPoint", &[objc2::encode::Encoding::Double, objc2::encode::Encoding::Double]);
@@ -315,11 +339,26 @@ pub(crate) fn watch_hover(app: AppHandle) {
         let mut last_main: Option<Option<(i32, i32)>> = None;
         #[cfg(target_os = "macos")]
         let mut last_screen: Option<usize> = None;
+        let mut last_pointer: Option<(f64, f64)> = None;
+        let mut still = 0u32;
         loop {
             let room_only = ROOM_ONLY.load(std::sync::atomic::Ordering::Relaxed);
             std::thread::sleep(Duration::from_millis(if room_only { 50 } else { 120 }));
             #[cfg(not(target_os = "macos"))]
             let Ok(c) = app.cursor_position() else { continue };
+            #[cfg(not(target_os = "macos"))]
+            let pointer = Some((c.x, c.y));
+            #[cfg(target_os = "macos")]
+            let pointer = mac_pointer();
+            // the windows are only looked at (on the main thread) when the pointer moved, and every
+            // 20th tick in case a window moved or opened under a still pointer. Checking them on every
+            // tick kept the main thread and the page busy while nobody touched the mouse
+            still += 1;
+            if pointer == last_pointer && still < 20 {
+                continue;
+            }
+            last_pointer = pointer;
+            still = 0;
             let at = |label: &str| -> Option<(i32, i32)> {
                 let w = app.get_webview_window(label)?;
                 if !w.is_visible().unwrap_or(false) {
