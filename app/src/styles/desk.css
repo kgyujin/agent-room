@@ -1,0 +1,12 @@
+/* desktop pets: a see-through strip along the bottom of the screen */
+html.view-desk, html.view-desk body, html.view-desk #root { background: transparent; overflow: hidden; }
+.desk { position: fixed; inset: 0; user-select: none; -webkit-user-select: none; cursor: default; }
+/* pets stand on the strip's bottom edge; Desk.tsx moves them with transforms */
+.desk-pet { position: absolute; left: 0; bottom: 0; image-rendering: pixelated; pointer-events: none; }
+/* the wrapper is moved (Desk.tsx); the tag inside keeps the room tags' look */
+.desk-tag { position: absolute; left: 0; top: 100%; pointer-events: none; transition: opacity 0.15s; }
+.desk-tag.off { opacity: 0; }
+.desk .nametag { position: relative; transform: none; pointer-events: none; }
+.desk .nametag.t-wait { animation: deskwait 1.2s ease-in-out infinite; }
+@keyframes deskwait { 50% { transform: translateY(-2px); } }
+.desk .nametag span { max-width: 160px; }
