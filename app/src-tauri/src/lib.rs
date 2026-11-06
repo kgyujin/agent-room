@@ -271,11 +271,9 @@ fn follow_logs(app: &AppHandle) {
     let ev = |agent: AgentKind, id: &str, ts: u64, cwd: Option<String>, kind: EvKind| NormEvent {
         agent, session_id: id.to_string(), ts, cwd, model: None, transcript_path: None, permission_mode: None, kind,
     };
-    // Codex sessions seen only in their log (the desktop app, VS Code) read their remaining usage from it
+    // sessions seen only in their log (the desktop app, VS Code) read their name from it, and Codex its remaining usage
     let with_log = |mut e: NormEvent, f: &logs::LogSession| {
-        if f.agent == AgentKind::Codex {
-            e.transcript_path = Some(f.path.clone());
-        }
+        e.transcript_path = Some(f.path.clone());
         e
     };
     let mut out = Vec::new();
