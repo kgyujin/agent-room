@@ -528,3 +528,26 @@
 /* an empty cell says so in its middle instead of a line stuck to the top left of a blank box */
 .dp-one .dp-scroll:has(> p.muted:only-child) { display: grid; place-items: center; }
 .dp-one .dp-scroll > p.muted:only-child { max-width: 30ch; text-align: center; margin: 0; line-height: 1.6; }
+
+/* audit 2026-11: the usage card's day labels and agent legend never shrink under the bars (they were
+   squeezed and cut off); the bars give way first, and when even short bars don't fit the block goes */
+.dp-one .g-use .ubars-x, .dp-one .g-use .dshare ul { flex-shrink: 0; }
+.dp-one .g-use .ubars { min-height: 16px; }
+.dp-one .g-use .dshare { padding-bottom: 10px; }
+/* a sessions cell about 400px wide ran its last column ("Last active") off the edge: progress goes first */
+@container (max-width: 440px) { .dp-one .dash-table tr > :nth-child(3) { display: none; } }
+/* a board cell under ~420px gave each of its 4 columns' tasks ~42px: words broke mid-word ("Approv e",
+   "progre ss"). Tighter gaps, padding and type there leave room for whole words */
+@container (max-width: 420px) {
+  .dp-one .dboard { gap: 4px; padding: 2px 10px 12px; }
+  .dp-one .dboard-card { padding: 6px 5px; }
+  .dp-one .dboard-card p { font-size: 11px; }
+  .dp-one .dboard-col h4 { font-size: 11px; }
+  .dp-one .dboard-col h4 em { overflow-wrap: normal; }
+}
+.dp-one .dboard-card p { overflow-wrap: normal; }
+/* the agent name may spill only while it still fits its box; in a cell under ~300px it ends in "…" again
+   ("Claude Code" ran past the chip's border) */
+@container (max-width: 300px) { .dp-one .dmap-agent b { overflow: hidden; text-overflow: ellipsis; } }
+/* today view: the "by project" heading lines up with the cards under it (it took the overlay title's side padding) */
+.dp-over .dtoday .dash-h { padding: 6px 0 0; }
