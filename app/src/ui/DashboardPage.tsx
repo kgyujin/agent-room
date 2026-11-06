@@ -92,7 +92,7 @@ export function DashboardPage(props: {
   const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
     map: () => ['g-map', <>{L('에이전트 지도', 'Agent map')} <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
     activity: () => ['g-act', L('최근 활동', 'Recent activity'), <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
-    usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
+    usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards ring sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
     board: () => ['g-board', L('작업 보드', 'Task board'), <TaskBoard sessions={live} now={now} onPick={pick} />],
     sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
     picked: () => ['g-pick', <>
@@ -180,6 +180,15 @@ export function DashboardPage(props: {
   );
 }
 
+/** the second line of a map card: what is asked of the user, else the file or command it is on, else the session title
+ *  (a bare state like "승인 필요" would only repeat the label above it) */
+function mapLine(s: Snapshot, now: number): string | null {
+  const todo = userTodo(s, now);
+  if (todo) return todo.text;
+  const d = doingLabel(s);
+  return d && d.includes(' · ') ? d : s.title ?? null;
+}
+
 /** me → each agent → its projects → their sessions (with sub-agent counts), like an org chart */
 function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snapshot[]; now: number; selected: string | null; onPick: (k: string) => void; onOpen: (k: string) => void }) {
   const names = sessionNames(sessions);
@@ -202,7 +211,7 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                   {list.filter((s) => (s.project ?? L('프로젝트 미확인', 'Unknown project')) === p).map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
-                      {(doingLabel(s) ?? s.title) && <div className="dmap-doing">{doingLabel(s) ?? s.title}</div>}
+                      {mapLine(s, now) && <div className="dmap-doing">{mapLine(s, now)}</div>}
                       <div className="dmap-meta">
                         {userTodo(s, now) && <em className="wait">{userTodo(s, now)!.text}</em>}
                         {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}

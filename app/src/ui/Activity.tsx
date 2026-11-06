@@ -100,7 +100,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect }: { sessi
           const p = progressOf(s);
           return (
             <tr key={s.key} className={`${selected === s.key ? 'on' : ''} tone-row-${stateTone(s)}`} onClick={() => onSelect(s.key)}>
-              <td className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={s.cwd ?? undefined}>{names[s.key]}</b></td>
+              <td><span className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={s.cwd ?? undefined}>{names[s.key]}</b></span></td>
               <td><span className={`st-badge tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
               <td className="num opt2">{fmtDuration(now - s.startedAt)}</td>

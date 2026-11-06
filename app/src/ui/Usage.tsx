@@ -91,10 +91,10 @@ function TokenChart({ h }: { h: UsageHistory | null }) {
 }
 
 /** one card per agent: each limit window with what is left and when it resets */
-export function LimitCards({ sessions, now, dark, accountLimits, onSettings }: { sessions: Snapshot[]; now: number; dark?: boolean; accountLimits?: boolean; onSettings?: () => void }) {
+export function LimitCards({ sessions, now, dark, ring, accountLimits, onSettings }: { sessions: Snapshot[]; now: number; dark?: boolean; /** each window as a ring gauge (the dashboard) */ ring?: boolean; accountLimits?: boolean; onSettings?: () => void }) {
   return (
-    <div className={`lc-grid ${dark ? 'dark' : ''}`}>
-      {AGENTS.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} why={noLimitsWhy(a, sessions, accountLimits)} onSettings={onSettings} />)}
+    <div className={`lc-grid ${dark ? 'dark' : ''} ${ring ? 'rings' : ''}`}>
+      {AGENTS.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} ring={ring} why={noLimitsWhy(a, sessions, accountLimits)} onSettings={onSettings} />)}
     </div>
   );
 }
@@ -107,7 +107,20 @@ function noLimitsWhy(agent: 'claude' | 'codex', sessions: Snapshot[], accountLim
   return { text: agent === 'claude' ? L('다음 응답부터 보여요. Pro·Max 요금제만 한도가 있어요.', 'Shows from the next reply. Only Pro and Max plans have limits.') : L('다음 응답부터 보여요.', 'Shows from the next reply.') };
 }
 
-function LimitCard({ agent, l, now, why, onSettings }: { agent: 'claude' | 'codex'; l: RateLimits | null; now: number; why: { text: string; fix?: boolean }; onSettings?: () => void }) {
+/** what is left of one window as a ring with the percentage inside */
+function Ring({ left }: { left: number }) {
+  const r = 24;
+  const len = 2 * Math.PI * r;
+  return (
+    <svg className="lc-ring" viewBox="0 0 60 60" aria-hidden>
+      <circle cx="30" cy="30" r={r} className="trk" />
+      <circle cx="30" cy="30" r={r} className="val" strokeDasharray={`${(left / 100) * len} ${len}`} transform="rotate(-90 30 30)" />
+      <text x="30" y="34.5" textAnchor="middle">{left}%</text>
+    </svg>
+  );
+}
+
+function LimitCard({ agent, l, now, ring, why, onSettings }: { agent: 'claude' | 'codex'; l: RateLimits | null; now: number; ring?: boolean; why: { text: string; fix?: boolean }; onSettings?: () => void }) {
   return (
     <div className="lc">
       <div className="lc-head">
@@ -119,6 +132,14 @@ function LimitCard({ agent, l, now, why, onSettings }: { agent: 'claude' | 'code
         l.windows.map((w) => {
           const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
           const reset = w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '';
+          if (ring)
+            return (
+              <div key={w.minutes} className={`lc-row lc-r ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={paceNote(w, l.at) ?? undefined}>
+                <Ring left={left} />
+                <span className="lc-name">{windowLabel(w.minutes)}</span>
+                {w.resetsAt && w.resetsAt > now && <small className="lc-reset">{fmtUntil(w.resetsAt - now)}</small>}
+              </div>
+            );
           return (
             <div key={w.minutes} className={`lc-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`}>
               <span className="lc-name">{w.minutes <= 300 ? `${L('세션', 'Session')} · ${windowLabel(w.minutes)}` : windowLabel(w.minutes)}</span>
