@@ -82,7 +82,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect, filter = 
   const names = sessionNames(all);
   const kind = (s: Snapshot): SessFilter => (userTodo(s, now) ? 'todo' : isActive(s) ? 'work' : 'rest');
   const query = q.trim().toLowerCase();
-  const sessions = all.filter((s) => (f === 'all' || kind(s) === f) && (!query || `${names[s.key]} ${s.project ?? ''} ${s.cwd ?? ''} ${AGENT_NAME[s.agent]} ${s.title ?? ''}`.toLowerCase().includes(query)));
+  const sessions = all.filter((s) => (f === 'all' || kind(s) === f) && (!query || `${names[s.key]} ${s.project ?? ''} ${s.cwd ?? ''} ${AGENT_NAME[s.agent]} ${s.title ?? ''} ${s.chatTitle ?? ''}`.toLowerCase().includes(query)));
   return (
     <>
     {all.length > 3 && (
@@ -103,7 +103,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect, filter = 
           const p = progressOf(s);
           return (
             <tr key={s.key} className={`${selected === s.key ? 'on' : ''} tone-row-${stateTone(s)}`} onClick={() => onSelect(s.key)}>
-              <td><span className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={s.cwd ?? undefined}>{names[s.key]}</b></span></td>
+              <td><span className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={`${names[s.key]}${s.cwd ? `\n${s.cwd}` : ''}`}>{names[s.key]}</b></span></td>
               <td><span className={`st-badge tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
               <td className="num opt2">{fmtDuration(now - s.startedAt)}</td>
@@ -164,16 +164,27 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
             const id = `${s.key}-${e.id}`;
             return (
               <li key={id} className={`${bad ? 'bad' : e.ok === true || e.kind === 'turn_complete' ? 'ok' : ''} k-${e.kind} ${open === id ? 'open' : ''}`}>
-                <div className="row" onClick={() => (compact ? onSelect(s.key) : setOpen(open === id ? null : id))}>
+                <div className="row" role="button" aria-expanded={open === id} onClick={() => setOpen(open === id ? null : id)}>
                   <i />
                   <time>{fmtClock(e.at)}</time>
-                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} /><span className="nm">{names[s.key]}</span></span>
+                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} /><span className="nm" title={names[s.key]}>{names[s.key]}</span></span>
                   <span className="txt" title={timelineText(e)}>{timelineText(e)}</span>
                 </div>
                 {open === id && (
                   <div className="more">
-                    <pre>{JSON.stringify(isEn() ? { time: new Date(e.at).toLocaleString('en-GB'), kind: e.kind, activity: e.activity, tool: e.tool, detail: e.detail, ok: e.ok, session: s.project, agent: s.agent, path: s.cwd } : { 시각: new Date(e.at).toLocaleString('ko-KR'), 종류: e.kind, 활동: e.activity, 도구: e.tool, 내용: e.detail, 결과: e.ok, 세션: s.project, 에이전트: s.agent, 경로: s.cwd }, null, 2)}</pre>
-                    <button className="link" onClick={() => onSelect(s.key)}>{L('이 세션 보기', 'Show this session')}</button>
+                    <dl>
+                      <dt>{L('시각', 'Time')}</dt><dd>{new Date(e.at).toLocaleString(isEn() ? 'en-GB' : 'ko-KR')}</dd>
+                      <dt>{L('세션', 'Session')}</dt><dd>{names[s.key]}{s.project && names[s.key] !== s.project && <small> · {s.project}</small>}</dd>
+                      <dt>{L('한 일', 'Event')}</dt><dd>{timelineText(e).split(' — ')[0]}</dd>
+                      {e.tool && <><dt>{L('도구', 'Tool')}</dt><dd><code>{e.tool}</code></dd></>}
+                      {e.detail && <><dt>{L('내용', 'Detail')}</dt><dd><code className="full">{e.detail}</code></dd></>}
+                      {e.ok !== null && <><dt>{L('결과', 'Result')}</dt><dd className={e.ok ? 'ok' : 'bad'}>{e.ok ? L('성공', 'Passed') : L('실패', 'Failed')}</dd></>}
+                      {s.cwd && <><dt>{L('경로', 'Path')}</dt><dd><code className="full">{s.cwd}</code></dd></>}
+                    </dl>
+                    <div className="more-act">
+                      <button className="btn" onClick={() => onSelect(s.key)}>{L('이 세션 보기', 'Show this session')}</button>
+                      {e.detail && <button className="btn" onClick={() => void navigator.clipboard.writeText(e.detail!).catch(() => undefined)}>{L('내용 복사', 'Copy detail')}</button>}
+                    </div>
                   </div>
                 )}
               </li>

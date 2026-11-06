@@ -94,6 +94,8 @@ pub struct Snapshot {
     pub origin: Option<String>,
     /// the desktop app's title for the session
     pub title: Option<String>,
+    /// the session's name from its own transcript (given name, summary, or first ask); see `title`
+    pub chat_title: Option<String>,
     /// a permission request the user can answer in Agent Room until this time (opt-in)
     pub approve_until: Option<u64>,
 }
@@ -139,6 +141,8 @@ struct Session {
     transcript: Option<String>,
     usage: CodexLogReader,
     last_usage_poll: u64,
+    chat: crate::title::ChatTitleReader,
+    last_title_poll: u64,
     ended_at: Option<u64>,
 }
 
@@ -245,6 +249,7 @@ impl SessionStore {
                 subagents: 0,
                 origin: None,
                 title: None,
+                chat_title: None,
                 approve_until: None,
             },
             timeline: VecDeque::new(),
@@ -253,6 +258,8 @@ impl SessionStore {
             transcript: None,
             usage: CodexLogReader::default(),
             last_usage_poll: 0,
+            chat: Default::default(),
+            last_title_poll: 0,
             ended_at: None,
         });
         let before = sess.snap.clone();
@@ -470,6 +477,17 @@ impl SessionStore {
         }
         while sess.timeline.len() > TIMELINE_MAX {
             sess.timeline.pop_front();
+        }
+
+        // a readable session name from the transcript, read again as the conversation moves on (throttled)
+        if let Some(path) = sess.transcript.clone() {
+            // any event while there is no name yet (a session seen mid-way), else at a new ask or the end of a turn
+            let due = (sess.snap.chat_title.is_none() || matches!(ev.kind, EvKind::SessionStart { .. } | EvKind::PromptSubmitted | EvKind::TurnComplete))
+                && (sess.last_title_poll == 0 || ev.ts.saturating_sub(sess.last_title_poll) > 3000);
+            if due {
+                sess.last_title_poll = ev.ts;
+                sess.snap.chat_title = sess.chat.poll(&path);
+            }
         }
 
         // Codex: remaining usage from its own rollout log (throttled)

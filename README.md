@@ -113,6 +113,7 @@ xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 - "오늘 요약" 보고서는 미리보기를 확인한 뒤 누를 때만 `~/Downloads`에 저장합니다.
 - `~/.agent-room`은 본인만 열 수 있고(0700), 백업과 상태줄 사본은 본인만 읽을 수 있습니다(0600). 에이전트 설정의 `env`에 API 키가 있을 수 있어서입니다. 소켓도 본인 전용입니다.
 - Hook이 없는 세션은 `~/.claude/projects`, `~/.codex/sessions`의 로그 파일 이름과 수정 시각, 파일 앞부분의 `cwd` 값만 봅니다. 대화 내용은 해석하거나 저장하지 않습니다.
+- 세션 이름을 정하려고 그 세션의 대화 로그(Claude Code 트랜스크립트, Codex rollout)에서 세 가지 중 하나만 읽습니다. `/rename`으로 붙인 이름, Claude Code가 쓴 요약, 아니면 첫 요청의 첫 줄입니다. 48자로 자르고 `*_TOKEN=` 같은 값은 가립니다. 이 이름은 메모리에만 두고 화면에 보여 줄 뿐, 디스크에 저장하거나 밖으로 보내지 않습니다. 나머지 대화 내용은 읽어도 쓰지 않고 버립니다.
 - Claude 데스크톱 앱이 남기는 세션 기록(`~/Library/Application Support/Claude/claude-code-sessions/**/local_*.json`)에서 하루 안에 바뀐 것만 열어, CLI 세션 id, 제목, 보관 여부, 원격 제어 표시만 읽습니다. 그래서 데스크톱 앱, 원격 제어, claude.ai 프로젝트에서 시작한 세션을 구분해 보여 줍니다. 앱의 키 파일(`remote-control-state.json`, `~/.claude/sessions/*.key`)은 열지 않습니다. 클라우드에서만 도는 세션은 이 컴퓨터에 흔적이 없어 보이지 않습니다.
 - 대시보드의 "지침 파일"은 전역과 지금 보이는 세션 폴더의 `CLAUDE.md`, `AGENTS.md`를 읽기 전용으로 보여 줄 뿐 어디에도 보내지 않습니다.
 - 남은 사용량은 에이전트가 이미 내놓는 숫자만 읽습니다. Claude는 상태줄 입력의 `rate_limits`, Codex는 rollout 로그의 `rate_limits`입니다.

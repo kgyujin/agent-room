@@ -152,25 +152,26 @@ export function paceNote(w: { minutes: number; usedPct: number; resetsAt: number
   return toFull < w.resetsAt - at ? L(`이 속도면 ${fmtUntil(toFull)} 소진`, `runs out ${fmtUntil(toFull)} at this pace`) : null;
 }
 
+/** the session's own name: the desktop app's title, else the one from its transcript (given name, summary, first ask) */
+export const chatName = (s: Snapshot): string | null => s.title ?? s.chatTitle ?? null;
+
 /**
- * Names that tell sessions apart when their folders share a name: "web-app · wt-2" (the parent
- * folder), or the session's short id when they run in the same folder. Others keep the folder name.
+ * One name per session, used everywhere (tags over the pets, tabs, lists): its chat name when it has
+ * one, else its folder. Folder twins are told apart by the parent folder ("web-app · wt-2");
+ * otherwise twins get a number in the order they started ("web · 2").
  */
 export function sessionNames(list: Snapshot[]): Record<string, string> {
-  const base = (s: Snapshot) => s.project ?? L('프로젝트', 'project');
+  const base = (s: Snapshot) => chatName(s) ?? s.project ?? L('프로젝트', 'project');
   const parent = (s: Snapshot) => (s.cwd ?? '').split('/').filter(Boolean).slice(-2, -1)[0] ?? null;
   const out: Record<string, string> = {};
   for (const s of list) {
     const twins = list.filter((o) => base(o) === base(s));
     if (twins.length < 2) { out[s.key] = base(s); continue; }
     const p = parent(s);
-    const own = p !== null && twins.filter((o) => parent(o) === p).length === 1;
+    const own = !chatName(s) && p !== null && twins.filter((o) => parent(o) === p).length === 1;
     if (own) { out[s.key] = `${base(s)} · ${p}`; continue; }
-    // ids can share a prefix (time-ordered ids do), so take the shortest tail no twin shares
-    const id = (o: Snapshot) => o.key.split(':').pop()!;
-    let n = 4;
-    while (n < id(s).length && twins.some((o) => o !== s && id(o).slice(-n) === id(s).slice(-n))) n++;
-    out[s.key] = `${base(s)} · ${id(s).slice(-n)}`;
+    const order = [...twins].sort((x, y) => (x.startedAt ?? 0) - (y.startedAt ?? 0) || x.key.localeCompare(y.key));
+    out[s.key] = `${base(s)} · ${order.indexOf(s) + 1}`;
   }
   return out;
 }

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Anchor, Scene } from '../game/scene';
 import type { Settings, Snapshot } from '../types';
-import { AGENT_NAME, doingLabel, justDone, stateTone } from '../labels';
+import { AGENT_NAME, doingLabel, justDone, sessionNames, stateTone } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 import { userTodo } from './Overview';
@@ -52,7 +52,8 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
       let a = (scene.current?.anchors() ?? []).filter((p) => !hiddenRest(p) && (keep(p) || (!fewRef.current && (hv === null || p.key === hv))));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => (p.key.startsWith(GROUP) ? 46 : tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current));
+      const nm = sessionNames(Object.values(sessRef.current));
+      const w = (p: Anchor) => (p.key.startsWith(GROUP) ? 46 : tagWidth(sessRef.current[p.key], nm[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current));
       // three or more tags crowded together become one bundle tag ("펫 3"), opened by a click;
       // the picked and waiting pets always keep their own tag
       const near = (p: Anchor, q: Anchor) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H * 1.5;
@@ -92,13 +93,14 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
     return () => window.clearInterval(id);
   }, [scene]);
   if (hidden) return null;
+  const names = sessionNames(Object.values(sessions));
   return (
     <div className={`nametags ${pixel ? 'pixel' : ''}`}>
       {anchors.map((a) => {
         if (a.key.startsWith(GROUP)) {
           const keys = a.key.slice(GROUP.length).split(',');
           return (
-            <button key={a.key} className="nametag group" style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => setOpened(keys)} title={keys.map((k) => sessions[k]?.project ?? '').join('\n') + '\n' + L('눌러서 펼치기', 'Click to expand')}>
+            <button key={a.key} className="nametag group" style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => setOpened(keys)} title={keys.map((k) => names[k] ?? '').join('\n') + '\n' + L('눌러서 펼치기', 'Click to expand')}>
               <span>{L('펫', 'Pets')} {keys.length}</span>
             </button>
           );
@@ -115,17 +117,17 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${names[a.key]}\n${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
                 the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}
             {full ? (
               <>
-                <b className="tag-project">{tagName(s)}</b>
+                <b className="tag-project">{tagName(names[a.key])}</b>
                 {doing && <span>{doing}</span>}
               </>
             ) : (
-              <span>{tagName(s, selected === a.key ? 20 : 12)}</span>
+              <span>{tagName(names[a.key], selected === a.key ? 20 : 12)}</span>
             )}
             <i className={`dot tone-${tone}`} />
             {prog && full && <small>{prog.done}/{prog.total}</small>}
@@ -142,15 +144,15 @@ const TAG_H = 22;
 const GROUP = 'group:';
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag; a long one keeps its start and ends in "…" (a cut in the middle, "api-…ver", was hard to read) */
-const tagName = (s: Snapshot, max = 16) => {
-  const ch = [...(s.project ?? AGENT_NAME[s.agent])];
+const tagName = (name: string, max = 16) => {
+  const ch = [...name];
   return ch.length <= max ? ch.join('') : ch.slice(0, max - 1).join('') + '…';
 };
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
-function tagWidth(s: Snapshot | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
-  if (!s) return 34;
-  const text = mode === 'full' ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s, mode === 'sel' ? 20 : 12);
+function tagWidth(s: Snapshot | undefined, name: string | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
+  if (!s || !name) return 34;
+  const text = mode === 'full' ? `${tagName(name)} ${tagLabel(s, short) ?? ''}` : tagName(name, mode === 'sel' ? 20 : 12);
   const big = mode !== 'min';
   let w = big ? 44 : 40;
   for (const ch of text) w += ch.charCodeAt(0) > 255 ? (big ? 13 : 12.5) : big ? 8 : 7.4;

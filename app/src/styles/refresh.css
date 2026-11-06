@@ -493,3 +493,26 @@
 .nametag.on { font-size: 13.5px; line-height: 18px; }
 .nametag .dot { width: 8px; height: 8px; }
 .nametag.urgent { background: #fff6e6; }
+
+/* stat cards: the icon sits in the label's row, so a long value and its change badge never run under it */
+.dash-stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-content: start; }
+.dash-stat .ds-ic { position: static; grid-column: 2; grid-row: 1; width: 24px; height: 24px; }
+.dash-stat > small { grid-column: 1; grid-row: 1; align-self: center; padding-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-stat > b, .dash-stat > span { grid-column: 1 / -1; min-width: 0; }
+.dash-stat > b { overflow: hidden; }
+
+/* activity log: a row opens in place to show everything the line had to cut */
+.dash-log .row { cursor: pointer; }
+.dash-log li.open { background: color-mix(in srgb, var(--accent) 6%, var(--box)); }
+.dash-log li.open .row .txt { white-space: normal; overflow: visible; }
+.dash-log li .more { padding: 4px 0 8px 16px; display: flex; flex-direction: column; gap: 8px; cursor: default; }
+.dash-log li .more dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: 12px; }
+.dash-log li .more dt { color: var(--ink-soft); font-weight: 600; }
+.dash-log li .more dd { margin: 0; min-width: 0; }
+.dash-log li .more dd small { color: var(--ink-soft); }
+.dash-log li .more dd.ok { color: var(--ok-ink, var(--ok)); font-weight: 700; }
+.dash-log li .more dd.bad { color: var(--bad); font-weight: 700; }
+.dash-log li .more code { font-size: 11.5px; }
+.dash-log li .more code.full { display: block; white-space: pre-wrap; word-break: break-all; background: color-mix(in srgb, var(--ink) 5%, transparent); padding: 4px 8px; border-radius: 6px; user-select: text; -webkit-user-select: text; }
+.dash-log li .more-act { display: flex; gap: 6px; }
+.dash-log li .more-act .btn { padding: 3px 10px; font-size: 12px; }

@@ -180,16 +180,16 @@ function previewBackend(): Backend {
   // 'multi': several agents at once (browser design preview only)
   // Codex sessions in the preview report a tighter limit so both rows differ
   const cx: Snapshot['limits'] = { windows: [{ minutes: 300, usedPct: 84, resetsAt: Date.now() + 47 * 60_000 }, { minutes: 10080, usedPct: 51, resetsAt: Date.now() + 2.1 * 86_400_000 }], at: Date.now() };
-  const multi = (): Snapshot[] => [
-    { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app' },
+  const multi = (): Snapshot[] => ([
+    { ...previewSnapshot('editing'), key: 'p:claude1', agent: 'claude', isDemo: false, project: 'web-app', chatTitle: L('로그인 화면 다듬기', 'Polish the login screen') },
     { ...previewSnapshot('running'), key: 'p:codex1', agent: 'codex', limits: cx, isDemo: false, project: 'api-server' },
     { ...previewSnapshot('waiting'), key: 'p:claude2', agent: 'claude', isDemo: false, project: 'docs' },
     { ...previewSnapshot('testing'), key: 'p:claude3', agent: 'claude', isDemo: false, project: 'infra' },
     { ...previewSnapshot('completed'), key: 'p:codex2', agent: 'codex', limits: cx, isDemo: false, project: 'mobile' },
-    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', limits: cx, isDemo: false, project: 'data-pipeline', plan: [] },
+    { ...previewSnapshot('reading'), key: 'p:codex3', agent: 'codex', limits: cx, isDemo: false, project: 'web-app', chatTitle: L('결제 API 연결', 'Hook up the payment API'), plan: [] },
     // ?more=N: sessions past the six desks
     ...[...Array(Number(params.get('more') ?? 0)).keys()].map((i) => ({ ...previewSnapshot('idle'), key: `p:more${i}`, agent: 'claude' as const, isDemo: false, project: `extra-${i + 1}` })),
-  ];
+  ] as Snapshot[]).map((s) => ({ ...s, title: null })); // only the demo session plays a desktop-app session with a title
   // ?settings={"tagLook":"pixel"}: start the preview with some settings changed
   let settings: Settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day', ...(JSON.parse(params.get('settings') ?? '{}') as Partial<Settings>) };
   setLang(settings.language); // the preview's made-up sessions below are written in it
