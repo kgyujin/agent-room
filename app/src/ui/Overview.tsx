@@ -7,6 +7,7 @@ import type { LimitWindow, RateLimits, Snapshot } from '../types';
 import { doingLabel, fmtAgo, fmtDuration, fmtUntil, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
+import { L } from '../i18n';
 
 const ACTIVE = ['starting', 'planning', 'reading', 'editing', 'running', 'testing', 'waiting', 'error'];
 
@@ -17,10 +18,10 @@ export function userTodo(s: Snapshot, now: number): { text: string; since: numbe
   if (s.connection !== 'live') return null;
   if (s.waiting)
     return {
-      text: s.waiting.kind === 'approval' ? `${s.waiting.tool ?? '도구'} 실행 승인` : '답변 입력',
+      text: s.waiting.kind === 'approval' ? L(`${s.waiting.tool ?? '도구'} 실행 승인`, `Approve ${s.waiting.tool ?? 'a tool'}`) : L('답변 입력', 'Answer'),
       since: s.waiting.since,
     };
-  if (s.state === 'error') return { text: s.lastTest?.ok === false ? '테스트 실패 확인' : '오류 확인', since: s.error?.at ?? now };
+  if (s.state === 'error') return { text: s.lastTest?.ok === false ? L('테스트 실패 확인', 'Check the failed tests') : L('오류 확인', 'Check the error'), since: s.error?.at ?? now };
   return null;
 }
 
@@ -48,15 +49,15 @@ export function Overview({ sessions, now, selected, onSelect, showLimits = true,
   const done = live.filter((s) => !isActive(s) && s.state === 'completed' && s.connection === 'live');
   const quiet = live.filter((s) => !todo.includes(s) && !work.includes(s) && !done.includes(s));
   const groups = [
-    { id: 'todo', label: '내 차례', list: todo, empty: '기다리는 에이전트가 없어요' },
-    { id: 'work', label: '작업 중', list: work },
-    { id: 'done', label: '완료', list: done },
-    { id: 'quiet', label: '쉬는 중', list: quiet },
+    { id: 'todo', label: L('내 차례', 'Your turn'), list: todo, empty: L('기다리는 에이전트가 없어요', 'No agent is waiting for you') },
+    { id: 'work', label: L('작업 중', 'Working'), list: work },
+    { id: 'done', label: L('완료', 'Done'), list: done },
+    { id: 'quiet', label: L('쉬는 중', 'Resting'), list: quiet },
   ];
   return (
     <div className="ov">
       {showLimits && limitsFirst && <Limits sessions={sessions} now={now} />}
-      {!live.length && <p className="muted small ov-none">지금 일하는 에이전트가 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.</p>}
+      {!live.length && <p className="muted small ov-none">{L('지금 일하는 에이전트가 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.', 'No agent is working right now. Claude Code or Codex shows up here when it starts.')}</p>}
       {live.length > 0 && groups.map((g) => (g.list.length || g.empty) && (
         <section key={g.id} className={`ov-group g-${g.id} ${g.list.length ? '' : 'empty'}`}>
           <h4><i className="ov-dot" />{g.label}<span className="pn-count">{g.list.length || ''}</span></h4>
@@ -124,7 +125,7 @@ export function latestLimits(sessions: Snapshot[], agent: Snapshot['agent']): Ra
 
 /** "12분 전 기준" when the numbers are not fresh, so an old report is not read as current */
 export function limitsAge(l: RateLimits, now: number): string | null {
-  return now - l.at > 15 * 60_000 ? `${fmtAgo(now - l.at)} 기준` : null;
+  return now - l.at > 15 * 60_000 ? L(`${fmtAgo(now - l.at)} 기준`, `as of ${fmtAgo(now - l.at)}`) : null;
 }
 
 /** every agent's remaining usage in one small card (main window, top right) */
@@ -132,14 +133,14 @@ export function UsageStrip({ sessions, now, onOpen }: { sessions: Snapshot[]; no
   const rows = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
   if (!rows.length) return null;
   return (
-    <button className="usage-strip" onClick={onOpen} disabled={!onOpen} title="남은 사용량 · 눌러서 사용량 자세히 보기">
+    <button className="usage-strip" onClick={onOpen} disabled={!onOpen} title={L('남은 사용량 · 눌러서 사용량 자세히 보기', 'Usage left · click for details')}>
       {rows.map(([a, l]) => (
         <div key={a} className="us-agent">
           <AgentMark agent={a} size={14} />
           {l!.windows.map((w) => {
             const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
             return (
-              <span key={w.minutes} className={`us-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : undefined}>
+              <span key={w.minutes} className={`us-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : undefined}>
                 <em>{windowLabel(w.minutes)}</em>
                 <span className="ov-lim-bar"><i style={{ width: `${left}%` }} /></span>
                 <b>{left}%</b>
@@ -158,7 +159,7 @@ export function Limits({ sessions, now }: { sessions: Snapshot[]; now: number })
   const rows = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
   return (
     <>
-      <h4>남은 사용량</h4>
+      <h4>{L('남은 사용량', 'Usage left')}</h4>
       {rows.length ? (
         <div className="ov-lim">
           {rows.map(([a, l]) => (
@@ -172,7 +173,7 @@ export function Limits({ sessions, now }: { sessions: Snapshot[]; now: number })
           ))}
         </div>
       ) : (
-        <p className="muted small ov-none">에이전트가 다음 응답을 받으면 5시간·주간 남은 양이 보여요. (Claude는 Pro·Max 요금제만)</p>
+        <p className="muted small ov-none">{L('에이전트가 다음 응답을 받으면 5시간·주간 남은 양이 보여요. (Claude는 Pro·Max 요금제만)', 'The 5-hour and weekly usage left shows after the next reply. (Claude: Pro and Max plans only)')}</p>
       )}
     </>
   );
@@ -180,10 +181,10 @@ export function Limits({ sessions, now }: { sessions: Snapshot[]; now: number })
 
 export function LimitBar({ w, now }: { w: LimitWindow; now: number }) {
   const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
-  const reset = w.resetsAt && w.resetsAt > now ? `${fmtUntil(w.resetsAt - now)} 초기화` : '';
-  const resetShort = w.resetsAt && w.resetsAt > now ? `↻ ${fmtUntil(w.resetsAt - now).replace(' 후', '')}` : '';
+  const reset = w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '';
+  const resetShort = w.resetsAt && w.resetsAt > now ? `↻ ${fmtUntil(w.resetsAt - now).replace(' 후', '').replace('in ', '')}` : '';
   return (
-    <div className={`ov-lim-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={`사용 ${Math.round(w.usedPct)}%${reset ? ` · ${reset}` : ''}`}>
+    <div className={`ov-lim-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={`${L('사용', 'Used')} ${Math.round(w.usedPct)}%${reset ? ` · ${reset}` : ''}`}>
       <span className="ov-lim-name">{windowLabel(w.minutes)}</span>
       <span className="ov-lim-bar"><i style={{ width: `${left}%` }} /></span>
       <b>{left}%</b>
@@ -240,18 +241,18 @@ function AgentRow({ s, name, now, on, onClick, todo, slim }: { s: Snapshot; name
             </>
           ) : <span className="ov-fill" />}
           {t !== null && <span className="ov-time"><Icon name="clock" />{fmtDuration(t)}</span>}
-          {eta !== null && <span className="ov-eta" title="끝난 단계의 평균 시간으로 계산한 추정치예요">약 {Math.max(1, Math.round(eta / 60000))}분 남음</span>}
+          {eta !== null && <span className="ov-eta" title={L('끝난 단계의 평균 시간으로 계산한 추정치예요', 'Estimated from the average time of the finished steps')}>{L(`약 ${Math.max(1, Math.round(eta / 60000))}분 남음`, `about ${Math.max(1, Math.round(eta / 60000))} min left`)}</span>}
         </div>
       ) : (
         <div className="ov-meta quiet">
-          {t !== null && <span>소요 {fmtDuration(t)}</span>}
-          <span>마지막 활동 {fmtAgo(now - s.lastEventAt)}</span>
+          {t !== null && <span>{L('소요', 'Took')} {fmtDuration(t)}</span>}
+          <span>{L('마지막 활동', 'Last active')} {fmtAgo(now - s.lastEventAt)}</span>
         </div>
       )}
       {busy && (step || s.subagents > 0) && (
         <div className="ov-step">
           {step && <><Icon name="play" /><span>{step.text}</span></>}
-          {s.subagents > 0 && <em>하위 에이전트 {s.subagents}</em>}
+          {s.subagents > 0 && <em>{L('하위 에이전트', 'Subagents')} {s.subagents}</em>}
         </div>
       )}
     </button>

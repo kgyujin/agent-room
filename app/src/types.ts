@@ -151,6 +151,8 @@ export interface Settings {
   renotifyMin?: number;
   /** the island opens for a moment when a session starts waiting on the user */
   islandPeek?: boolean;
+  /** UI language; 'auto' follows the system */
+  language?: 'auto' | 'ko' | 'en';
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

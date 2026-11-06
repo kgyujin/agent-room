@@ -9,6 +9,7 @@ import { progressOf } from './Hud';
 import { isActive, userTodo } from './Overview';
 import { fmtTokens } from './Usage';
 import { estCost, fmtUsd } from '../report';
+import { isEn, L } from '../i18n';
 
 /** "+27%" against the previous period; null when there is nothing to compare with */
 function trend(cur: number, prev: number): { text: string; up: boolean } | null {
@@ -29,11 +30,11 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
   const last = days[days.length - 1];
   const usd = last ? estCost(last, cost) : null;
   const cards: { id: string; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend> }[] = [
-    { id: 'todo', label: '내 차례', value: String(live.filter((x) => userTodo(x, now)).length), sub: '승인·답변 기다림' },
-    { id: 'work', label: '작업 중', value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: `열린 세션 ${live.length}개` },
-    { id: 'done', label: '완료한 요청', value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: `수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개` },
-    { id: 'today', label: '오늘 토큰', value: h ? fmtTokens(today) : '—', sub: h ? `어제 ${fmtTokens(yday)}${usd !== null ? ` · 추정 ${fmtUsd(usd)}` : ''}` : '불러오는 중', tr: trend(today, yday) },
-    { id: 'week', label: '최근 7일 토큰', value: h ? fmtTokens(week) : '—', sub: h ? `그 전 7일 ${fmtTokens(prevWeek)}` : '불러오는 중', tr: trend(week, prevWeek) },
+    { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인·답변 기다림', 'Waiting for you') },
+    { id: 'work', label: L('작업 중', 'Working'), value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: L(`열린 세션 ${live.length}개`, `${live.length} open sessions`) },
+    { id: 'done', label: L('완료한 요청', 'Requests done'), value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: L(`수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개`, `${sessions.reduce((a, x) => a + x.filesEdited.length, 0)} files edited`) },
+    { id: 'today', label: L('오늘 토큰', 'Tokens today'), value: h ? fmtTokens(today) : '—', sub: h ? `${L('어제', 'Yesterday')} ${fmtTokens(yday)}${usd !== null ? ` · ${L('추정', 'est.')} ${fmtUsd(usd)}` : ''}` : L('불러오는 중', 'Loading'), tr: trend(today, yday) },
+    { id: 'week', label: L('최근 7일 토큰', 'Tokens, last 7 days'), value: h ? fmtTokens(week) : '—', sub: h ? `${L('그 전 7일', 'The 7 before')} ${fmtTokens(prevWeek)}` : L('불러오는 중', 'Loading'), tr: trend(week, prevWeek) },
   ];
   return (
     <div className="dash-stats">
@@ -50,12 +51,12 @@ export function StatCards({ sessions, now, h, cost }: { sessions: Snapshot[]; no
 
 /** every session in one table, the one needing the user first */
 type SessFilter = 'all' | 'todo' | 'work' | 'rest';
-const SESS_FILTERS: [SessFilter, string][] = [['all', '전체'], ['todo', '내 차례'], ['work', '작업 중'], ['rest', '쉬는 중']];
+const SESS_FILTERS = (): [SessFilter, string][] => [['all', L('전체', 'All')], ['todo', L('내 차례', 'Your turn')], ['work', L('작업 중', 'Working')], ['rest', L('쉬는 중', 'Resting')]];
 
 export function SessionTable({ sessions: all, now, selected, onSelect }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void }) {
   const [f, setF] = useState<SessFilter>('all');
   const [q, setQ] = useState('');
-  if (!all.length) return <p className="muted small pad">아직 세션이 없어요.</p>;
+  if (!all.length) return <p className="muted small pad">{L('아직 세션이 없어요.', 'No sessions yet.')}</p>;
   const names = sessionNames(all);
   const kind = (s: Snapshot): SessFilter => (userTodo(s, now) ? 'todo' : isActive(s) ? 'work' : 'rest');
   const query = q.trim().toLowerCase();
@@ -64,16 +65,16 @@ export function SessionTable({ sessions: all, now, selected, onSelect }: { sessi
     <>
     {all.length > 3 && (
       <div className="dash-chips">
-        {SESS_FILTERS.map(([id, label]) => (
+        {SESS_FILTERS().map(([id, label]) => (
           <button key={id} className={f === id ? 'on' : ''} onClick={() => setF(id)}>{label}<span>{id === 'all' ? all.length : all.filter((s) => kind(s) === id).length}</span></button>
         ))}
-        <input type="search" className="sess-q" placeholder="프로젝트·경로·에이전트" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" className="sess-q" placeholder={L('프로젝트·경로·에이전트', 'Project, path, agent')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
     )}
-    {!sessions.length && <p className="muted small pad">맞는 세션이 없어요.</p>}
+    {!sessions.length && <p className="muted small pad">{L('맞는 세션이 없어요.', 'No matching sessions.')}</p>}
     {sessions.length > 0 && <table className="dash-table">
       <thead>
-        <tr><th>세션</th><th>상태</th><th>진행</th><th className="num">경과</th><th className="num opt">요청</th><th className="num opt">파일</th><th className="num">마지막 활동</th></tr>
+        <tr><th>{L('세션', 'Session')}</th><th>{L('상태', 'State')}</th><th>{L('진행', 'Progress')}</th><th className="num">{L('경과', 'Elapsed')}</th><th className="num opt">{L('요청', 'Requests')}</th><th className="num opt">{L('파일', 'Files')}</th><th className="num">{L('마지막 활동', 'Last active')}</th></tr>
       </thead>
       <tbody>
         {sessions.map((s) => {
@@ -97,13 +98,13 @@ export function SessionTable({ sessions: all, now, selected, onSelect }: { sessi
 }
 
 type Filter = 'all' | 'bad' | 'todo' | 'edit' | 'test' | 'done';
-const FILTERS: [Filter, string, (e: TimelineEntry) => boolean][] = [
-  ['all', '전체', () => true],
-  ['bad', '오류', (e) => e.ok === false || e.kind === 'tool_fail' || e.kind === 'turn_failed'],
-  ['todo', '승인·질문', (e) => e.kind === 'approval' || e.kind === 'input'],
-  ['edit', '편집', (e) => e.kind === 'tool' && e.activity === 'edit'],
-  ['test', '테스트', (e) => e.kind === 'test'],
-  ['done', '완료', (e) => e.kind === 'turn_complete'],
+const FILTERS = (): [Filter, string, (e: TimelineEntry) => boolean][] => [
+  ['all', L('전체', 'All'), () => true],
+  ['bad', L('오류', 'Errors'), (e) => e.ok === false || e.kind === 'tool_fail' || e.kind === 'turn_failed'],
+  ['todo', L('승인·질문', 'Asks'), (e) => e.kind === 'approval' || e.kind === 'input'],
+  ['edit', L('편집', 'Edits'), (e) => e.kind === 'tool' && e.activity === 'edit'],
+  ['test', L('테스트', 'Tests'), (e) => e.kind === 'test'],
+  ['done', L('완료', 'Done'), (e) => e.kind === 'turn_complete'],
 ];
 
 /** one log across all sessions, newest first; a row opens to show everything the event carried */
@@ -116,28 +117,28 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
   const names = sessionNames(sessions);
   const liveRows = useMemo(() => sessions.flatMap((s) => (timelines[s.key] ?? []).map((e) => ({ e, s }))).sort((a, b) => b.e.at - a.e.at), [sessions, timelines]);
   const all = frozen ?? liveRows;
-  const test = FILTERS.find((f) => f[0] === filter)![2];
+  const test = FILTERS().find((f) => f[0] === filter)![2];
   const needle = q.trim().toLowerCase();
   const shown = all.filter(({ e, s }) => test(e) && (!needle || `${timelineText(e)} ${names[s.key] ?? ''}`.toLowerCase().includes(needle))).slice(0, compact ? 12 : 300);
   return (
     <div className={`dash-log ${tall ? 'tall' : ''}`}>
       {!compact && (
         <div className="dash-chips">
-          {FILTERS.map(([id, label, f]) => (
+          {FILTERS().map(([id, label, f]) => (
             <button key={id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>
               {label}<span>{all.filter(({ e }) => f(e)).length}</span>
             </button>
           ))}
-          <input type="search" placeholder="기록 검색" value={q} onChange={(ev) => setQ(ev.target.value)} />
-          <button className={`live ${frozen ? '' : 'on'}`} onClick={() => setFrozen(frozen ? null : liveRows)} title={frozen ? '다시 실시간으로' : '목록 멈추기'}>
-            <i />{frozen ? '멈춤' : '실시간'}
+          <input type="search" placeholder={L('기록 검색', 'Search the log')} value={q} onChange={(ev) => setQ(ev.target.value)} />
+          <button className={`live ${frozen ? '' : 'on'}`} onClick={() => setFrozen(frozen ? null : liveRows)} title={frozen ? L('다시 실시간으로', 'Back to live') : L('목록 멈추기', 'Pause the list')}>
+            <i />{frozen ? L('멈춤', 'Paused') : L('실시간', 'Live')}
           </button>
         </div>
       )}
       {shown.length ? (
         <ol>
           {shown.map(({ e, s }) => {
-            const bad = FILTERS[1][2](e);
+            const bad = FILTERS()[1][2](e);
             const id = `${s.key}-${e.id}`;
             return (
               <li key={id} className={`${bad ? 'bad' : e.ok === true || e.kind === 'turn_complete' ? 'ok' : ''} k-${e.kind} ${open === id ? 'open' : ''}`}>
@@ -149,8 +150,8 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
                 </div>
                 {open === id && (
                   <div className="more">
-                    <pre>{JSON.stringify({ 시각: new Date(e.at).toLocaleString('ko-KR'), 종류: e.kind, 활동: e.activity, 도구: e.tool, 내용: e.detail, 결과: e.ok, 세션: s.project, 에이전트: s.agent, 경로: s.cwd }, null, 2)}</pre>
-                    <button className="link" onClick={() => onSelect(s.key)}>이 세션 보기</button>
+                    <pre>{JSON.stringify(isEn() ? { time: new Date(e.at).toLocaleString('en-GB'), kind: e.kind, activity: e.activity, tool: e.tool, detail: e.detail, ok: e.ok, session: s.project, agent: s.agent, path: s.cwd } : { 시각: new Date(e.at).toLocaleString('ko-KR'), 종류: e.kind, 활동: e.activity, 도구: e.tool, 내용: e.detail, 결과: e.ok, 세션: s.project, 에이전트: s.agent, 경로: s.cwd }, null, 2)}</pre>
+                    <button className="link" onClick={() => onSelect(s.key)}>{L('이 세션 보기', 'Show this session')}</button>
                   </div>
                 )}
               </li>
@@ -158,7 +159,7 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
           })}
         </ol>
       ) : (
-        <p className="muted small pad">{all.length ? '조건에 맞는 기록이 없어요.' : '아직 기록된 활동이 없어요. 앱이 실행된 뒤 받은 이벤트만 보여요.'}</p>
+        <p className="muted small pad">{all.length ? L('조건에 맞는 기록이 없어요.', 'Nothing matches.') : L('아직 기록된 활동이 없어요. 앱이 실행된 뒤 받은 이벤트만 보여요.', 'No activity yet. Only events received while the app runs show here.')}</p>
       )}
     </div>
   );

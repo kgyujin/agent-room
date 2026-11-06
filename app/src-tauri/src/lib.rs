@@ -38,6 +38,18 @@ static OWNS_SOCKET: AtomicBool = AtomicBool::new(false);
 /// When the popover last closed by losing focus; a click on the menu bar icon right after
 /// that is the same click that closed it, so it must not reopen it.
 static POPOVER_HIDDEN_AT: AtomicU64 = AtomicU64::new(0);
+/// the UI language is English (set by the UI from its settings); menus and notifications follow it
+static LANG_EN: AtomicBool = AtomicBool::new(false);
+
+/// the Korean or English text, whichever the UI shows
+fn tr(ko: &'static str, en: &'static str) -> &'static str {
+    if LANG_EN.load(Ordering::Relaxed) { en } else { ko }
+}
+
+fn is_en() -> bool {
+    LANG_EN.load(Ordering::Relaxed)
+}
+
 /// the UI's local offset from UTC in minutes (it comes with every usage request), for quiet hours
 static TZ_OFFSET_MIN: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
 
@@ -212,7 +224,7 @@ fn answer_approval(app: AppHandle, key: String, allow: bool) -> Result<(), Strin
     if close_approval(&app, &key, Some(allow)) {
         Ok(())
     } else {
-        Err("이 요청은 이미 끝났어요. 에이전트 창에서 답해 주세요".into())
+        Err(tr("이 요청은 이미 끝났어요. 에이전트 창에서 답해 주세요", "This request has already ended. Answer it in the agent's window").into())
     }
 }
 
@@ -371,8 +383,8 @@ fn memory_files(state: tauri::State<Shared>) -> Vec<MemoryFile> {
     };
     if let Some(home) = std::env::var_os("HOME") {
         let home = std::path::Path::new(&home);
-        add("전역 · Claude Code".into(), home.join(".claude/CLAUDE.md"));
-        add("전역 · Codex".into(), home.join(".codex/AGENTS.md"));
+        add(tr("전역 · Claude Code", "Global · Claude Code").into(), home.join(".claude/CLAUDE.md"));
+        add(tr("전역 · Codex", "Global · Codex").into(), home.join(".codex/AGENTS.md"));
     }
     let mut cwds: Vec<String> = state.store.lock().unwrap().snapshots().into_iter().filter_map(|s| s.cwd).collect();
     cwds.sort();
@@ -426,7 +438,7 @@ fn focus_agent(app: AppHandle, key: String) -> Result<(), String> {
         shared.desktop_ids.lock().unwrap().insert(key.clone(), found.clone());
         Some(found)
     });
-    let host = host.ok_or(if pid.is_some() { "이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)" } else { "이 세션의 에이전트 프로세스를 찾지 못했어요" })?;
+    let host = host.ok_or(if pid.is_some() { tr("이 에이전트가 실행 중인 앱을 찾지 못했어요 (tmux 같은 곳에서 실행 중일 수 있어요)", "Couldn't find the app this agent runs in (it may run inside something like tmux)") } else { tr("이 세션의 에이전트 프로세스를 찾지 못했어요", "Couldn't find this session's agent process") })?;
     open_session(&host, &key, pid, cwd.as_deref(), desktop.as_deref())
 }
 
@@ -514,7 +526,18 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
         Reach::Link(url) => ok(Command::new("/usr/bin/open").arg("-a").arg(host).arg(&url)) || ok(Command::new("/usr/bin/open").arg(url)),
         Reach::App => false,
     };
-    if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
+    if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err(tr("앱 창을 열지 못했어요", "Couldn't open the app window").into()) }
+}
+
+#[tauri::command]
+fn set_ui_lang(app: AppHandle, en: bool) {
+    if LANG_EN.swap(en, Ordering::Relaxed) != en {
+        refresh_tray(&app);
+        #[cfg(target_os = "macos")]
+        if let Ok(m) = app_menu(&app) {
+            let _ = app.set_menu(m);
+        }
+    }
 }
 
 /// The UI's offset from UTC, sent by the main window (always open) so quiet hours keep local
@@ -538,7 +561,7 @@ fn double_click_ms() -> u32 {
 
 #[cfg(not(target_os = "macos"))]
 fn open_session(_: &std::path::Path, _: &str, _: Option<u32>, _: Option<&str>, _: Option<&str>) -> Result<(), String> {
-    Err("앱 창 열기는 아직 macOS에서만 돼요".into())
+    Err(tr("앱 창 열기는 아직 macOS에서만 돼요", "Opening the app window works only on macOS for now").into())
 }
 
 #[tauri::command]
@@ -557,7 +580,7 @@ fn hooks_install(agent: String) -> Result<HookStatus, String> {
     let t = Target::parse(&agent).ok_or("unknown agent")?;
     let src = bundled_hook_bin();
     if src.is_none() && !agent_room_core::paths::installed_hook_bin().exists() {
-        return Err("앱 번들에서 agent-room-hook 을 찾지 못했습니다.".into());
+        return Err(tr("앱 번들에서 agent-room-hook 을 찾지 못했습니다.", "agent-room-hook was not found in the app bundle.").into());
     }
     install::install(t, src.as_deref())
 }
@@ -657,36 +680,36 @@ fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     use tauri::menu::{PredefinedMenuItem as P, Submenu};
     let sep = || P::separator(app);
     let main = Submenu::with_items(app, "Agent Room", true, &[
-        &P::about(app, Some("Agent Room에 관하여"), None)?,
-        &MenuItem::with_id(app, "app-update", "업데이트 확인…", true, None::<&str>)?,
+        &P::about(app, Some(tr("Agent Room에 관하여", "About Agent Room")), None)?,
+        &MenuItem::with_id(app, "app-update", tr("업데이트 확인…", "Check for Updates…"), true, None::<&str>)?,
         &sep()?,
-        &MenuItem::with_id(app, "app-settings", "설정…", true, Some("CmdOrCtrl+,"))?,
+        &MenuItem::with_id(app, "app-settings", tr("설정…", "Settings…"), true, Some("CmdOrCtrl+,"))?,
         &sep()?,
-        &P::hide(app, Some("Agent Room 가리기"))?,
-        &P::hide_others(app, Some("기타 가리기"))?,
-        &P::show_all(app, Some("모두 보기"))?,
+        &P::hide(app, Some(tr("Agent Room 가리기", "Hide Agent Room")))?,
+        &P::hide_others(app, Some(tr("기타 가리기", "Hide Others")))?,
+        &P::show_all(app, Some(tr("모두 보기", "Show All")))?,
         &sep()?,
-        &P::quit(app, Some("Agent Room 종료"))?,
+        &P::quit(app, Some(tr("Agent Room 종료", "Quit Agent Room")))?,
     ])?;
-    let edit = Submenu::with_items(app, "편집", true, &[
-        &P::undo(app, Some("실행 취소"))?,
-        &P::redo(app, Some("실행 복귀"))?,
+    let edit = Submenu::with_items(app, tr("편집", "Edit"), true, &[
+        &P::undo(app, Some(tr("실행 취소", "Undo")))?,
+        &P::redo(app, Some(tr("실행 복귀", "Redo")))?,
         &sep()?,
-        &P::cut(app, Some("오려두기"))?,
-        &P::copy(app, Some("복사하기"))?,
-        &P::paste(app, Some("붙여넣기"))?,
-        &P::select_all(app, Some("모두 선택"))?,
+        &P::cut(app, Some(tr("오려두기", "Cut")))?,
+        &P::copy(app, Some(tr("복사하기", "Copy")))?,
+        &P::paste(app, Some(tr("붙여넣기", "Paste")))?,
+        &P::select_all(app, Some(tr("모두 선택", "Select All")))?,
     ])?;
-    let window = Submenu::with_items(app, "윈도우", true, &[
-        &P::minimize(app, Some("최소화"))?,
-        &P::maximize(app, Some("확대/축소"))?,
+    let window = Submenu::with_items(app, tr("윈도우", "Window"), true, &[
+        &P::minimize(app, Some(tr("최소화", "Minimize")))?,
+        &P::maximize(app, Some(tr("확대/축소", "Zoom")))?,
         &sep()?,
-        &P::close_window(app, Some("윈도우 닫기"))?,
+        &P::close_window(app, Some(tr("윈도우 닫기", "Close Window")))?,
     ])?;
-    let view = Submenu::with_items(app, "보기", true, &[
-        &MenuItem::with_id(app, "zoom-in", "확대", true, Some("CmdOrCtrl+="))?,
-        &MenuItem::with_id(app, "zoom-out", "축소", true, Some("CmdOrCtrl+-"))?,
-        &MenuItem::with_id(app, "zoom-reset", "실제 크기", true, Some("CmdOrCtrl+0"))?,
+    let view = Submenu::with_items(app, tr("보기", "View"), true, &[
+        &MenuItem::with_id(app, "zoom-in", tr("확대", "Zoom In"), true, Some("CmdOrCtrl+="))?,
+        &MenuItem::with_id(app, "zoom-out", tr("축소", "Zoom Out"), true, Some("CmdOrCtrl+-"))?,
+        &MenuItem::with_id(app, "zoom-reset", tr("실제 크기", "Actual Size"), true, Some("CmdOrCtrl+0"))?,
     ])?;
     Menu::with_items(app, &[&main, &edit, &view, &window])
 }
@@ -719,7 +742,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, set_tz_offset, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear, answer_approval
+            tray_action, set_tz_offset, set_ui_lang, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear, answer_approval
         ])
         .setup(|app| {
             let handle = app.handle().clone();

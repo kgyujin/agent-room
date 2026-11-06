@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { backend } from '../bridge';
 import type { Snapshot } from '../types';
+import { L } from '../i18n';
 
 export function canApprove(s: Snapshot, now: number): boolean {
   return !!s.approveUntil && s.approveUntil > now && !s.isDemo;
@@ -18,12 +19,12 @@ export function ApproveButtons({ s, now, compact }: { s: Snapshot; now: number; 
     setBusy(true);
     backend.answerApproval(s.key, allow).then(() => setErr(null), (x) => setErr(String(x))).finally(() => setBusy(false));
   };
-  const what = s.waiting?.tool ? `${s.waiting.tool} 실행` : '요청';
+  const what = s.waiting?.tool ? L(`${s.waiting.tool} 실행을`, `running ${s.waiting.tool}`) : L('요청을', 'this request');
   return (
-    <span className={`appr ${compact ? 'compact' : ''}`} title={`${what}을 여기서 허용하거나 거부해요. ${left}초 안에 답하지 않으면 에이전트 창에서 물어봐요`}>
-      <button className="btn primary appr-ok" disabled={busy} onClick={answer(true)}>허용</button>
-      <button className="btn appr-no" disabled={busy} onClick={answer(false)}>거부</button>
-      {!compact && <small>{left}초</small>}
+    <span className={`appr ${compact ? 'compact' : ''}`} title={L(`${what} 여기서 허용하거나 거부해요. ${left}초 안에 답하지 않으면 에이전트 창에서 물어봐요`, `Allow or deny ${what} here. With no answer in ${left}s, the agent asks in its own window`)}>
+      <button className="btn primary appr-ok" disabled={busy} onClick={answer(true)}>{L('허용', 'Allow')}</button>
+      <button className="btn appr-no" disabled={busy} onClick={answer(false)}>{L('거부', 'Deny')}</button>
+      {!compact && <small>{L(`${left}초`, `${left}s`)}</small>}
     </span>
   );
 }

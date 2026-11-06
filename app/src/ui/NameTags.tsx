@@ -6,6 +6,7 @@ import { AGENT_NAME, doingLabel, justDone, shortName, stateTone } from '../label
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 import { userTodo } from './Overview';
+import { L } from '../i18n';
 
 /** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
 export function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hover, onHover, pixel, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; hover: string | null; onHover: (k: string | null) => void; pixel: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
@@ -97,8 +98,8 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
         if (a.key.startsWith(GROUP)) {
           const keys = a.key.slice(GROUP.length).split(',');
           return (
-            <button key={a.key} className="nametag group" style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => setOpened(keys)} title={keys.map((k) => sessions[k]?.project ?? '').join('\n') + '\n눌러서 펼치기'}>
-              <span>펫 {keys.length}</span>
+            <button key={a.key} className="nametag group" style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => setOpened(keys)} title={keys.map((k) => sessions[k]?.project ?? '').join('\n') + '\n' + L('눌러서 펼치기', 'Click to expand')}>
+              <span>{L('펫', 'Pets')} {keys.length}</span>
             </button>
           );
         }
@@ -114,7 +115,7 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
                 the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}

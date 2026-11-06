@@ -1,6 +1,7 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
 import type { HistLine, MemoryFile, CharacterFile, SoundFile, HookStatus, Overview, RateLimits, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
+import { L, setLang } from './i18n';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -21,7 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto',
 };
 
 export interface Backend {
@@ -40,6 +41,8 @@ export interface Backend {
   notchSize(): Promise<[number, number] | null>;
   /** the local offset from UTC in minutes, for quiet hours */
   setTzOffset(min: number): Promise<void>;
+  /** the language the menu bar menu and notifications use */
+  setUiLang(en: boolean): Promise<void>;
   codexLimits(): Promise<RateLimits | null>;
   claudeLimits(): Promise<RateLimits | null>;
   hooksStatus(): Promise<HookStatus[]>;
@@ -89,6 +92,7 @@ const tauriBackend: Backend = {
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
   notchSize: () => tauriInvoke('notch_size'),
   setTzOffset: (min) => tauriInvoke('set_tz_offset', { min }),
+  setUiLang: (en) => tauriInvoke('set_ui_lang', { en }),
   codexLimits: () => tauriInvoke('codex_limits'),
   claudeLimits: () => tauriInvoke('claude_limits'),
   setRoomOnly: (on) => tauriInvoke('set_room_only', { on }),
@@ -132,11 +136,11 @@ function previewSnapshot(state: string): Snapshot {
     startedAt: now - 754_000, startExact: true, turnStartedAt: now - 312_000, turnEndedAt: null, lastEventAt: now - 2000,
     connection: 'live', waiting: null, error: null, lastTest: null,
     plan: [
-      { text: '요구사항 읽기', status: 'completed' }, { text: 'UI 컴포넌트 수정', status: 'completed' },
-      { text: '테스트 작성', status: 'in_progress' }, { text: '빌드 확인', status: 'pending' },
+      { text: L('요구사항 읽기', 'Read the requirements'), status: 'completed' }, { text: L('UI 컴포넌트 수정', 'Update UI components'), status: 'completed' },
+      { text: L('테스트 작성', 'Write tests'), status: 'in_progress' }, { text: L('빌드 확인', 'Check the build'), status: 'pending' },
     ],
     limits: { windows: [{ minutes: 300, usedPct: 38, resetsAt: now + 2.2 * 3_600_000 }, { minutes: 10080, usedPct: 22, resetsAt: now + 4.3 * 86_400_000 }], at: now },
-    completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0, origin: 'project', title: '대시보드 다듬기',
+    completedTurns: 2, toolCount: 37, filesEdited: ['Room.tsx', 'hud.css'], subagents: 0, origin: 'project', title: L('대시보드 다듬기', 'Polish the dashboard'),
   };
   const set = (p: Partial<Snapshot>) => Object.assign(s, p);
   switch (state) {
@@ -183,9 +187,10 @@ function previewBackend(): Backend {
     // ?more=N: sessions past the six desks
     ...[...Array(Number(params.get('more') ?? 0)).keys()].map((i) => ({ ...previewSnapshot('idle'), key: `p:more${i}`, agent: 'claude' as const, isDemo: false, project: `extra-${i + 1}` })),
   ];
-  const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   // ?settings={"tagLook":"pixel"}: start the preview with some settings changed
   let settings: Settings = { ...DEFAULT_SETTINGS, theme: (params.get('theme') as Settings['theme']) ?? 'day', ...(JSON.parse(params.get('settings') ?? '{}') as Partial<Settings>) };
+  setLang(settings.language); // the preview's made-up sessions below are written in it
+  const first = state === 'none' ? [] : state === 'multi' ? multi() : [previewSnapshot(state === 'cycle' ? order[0] : state)];
   const now = Date.now();
   const tl: TimelineEntry[] = [
     { id: 1, at: now - 312_000, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null },
@@ -205,6 +210,7 @@ function previewBackend(): Backend {
     islandLayout: async () => undefined,
     notchSize: async () => null,
     setTzOffset: async () => {},
+    setUiLang: async () => {},
     codexLimits: async () => null,
     claudeLimits: async () => null,
     setRoomOnly: async () => undefined,
@@ -212,9 +218,9 @@ function previewBackend(): Backend {
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },
       { agent: 'codex', configPath: '~/.codex/hooks.json', agentDetected: false, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },
     ],
-    hooksInstall: async () => { throw new Error('브라우저 미리보기에서는 설치할 수 없습니다'); },
-    hooksUninstall: async () => { throw new Error('브라우저 미리보기'); },
-    hooksRestore: async () => { throw new Error('브라우저 미리보기'); },
+    hooksInstall: async () => { throw new Error(L('브라우저 미리보기에서는 설치할 수 없습니다', "Can't install from the browser preview")); },
+    hooksUninstall: async () => { throw new Error(L('브라우저 미리보기', 'Browser preview')); },
+    hooksRestore: async () => { throw new Error(L('브라우저 미리보기', 'Browser preview')); },
     hooksRemoveAll: async () => undefined,
     demoStart: async () => undefined,
     demoStop: async () => undefined,
@@ -231,8 +237,8 @@ function previewBackend(): Backend {
       };
     },
     memoryFiles: async () => [
-      { label: '전역 · Claude Code', path: '~/.claude/CLAUDE.md', truncated: false, content: '# 미리보기용 예시\n\n- 한국어로 답하기\n- 커밋은 작게 나누지 말 것\n' },
-      { label: 'cozy-project · AGENTS.md', path: '/demo/cozy-project/AGENTS.md', truncated: false, content: '# cozy-project\n\n테스트는 `npm test`로 돌립니다.\n' },
+      { label: L('전역 · Claude Code', 'Global · Claude Code'), path: '~/.claude/CLAUDE.md', truncated: false, content: L('# 미리보기용 예시\n\n- 한국어로 답하기\n- 커밋은 작게 나누지 말 것\n', '# Preview example\n\n- Answer in English\n- Keep commits coarse\n') },
+      { label: 'cozy-project · AGENTS.md', path: '/demo/cozy-project/AGENTS.md', truncated: false, content: L('# cozy-project\n\n테스트는 `npm test`로 돌립니다.\n', '# cozy-project\n\nRun the tests with `npm test`.\n') },
     ],
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
@@ -242,12 +248,12 @@ function previewBackend(): Backend {
       a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
       a.download = name;
       a.click();
-      return `다운로드/${name}`;
+      return `${L('다운로드', 'Downloads')}/${name}`;
     },
     notifyText: async () => undefined,
     historyRead: async (from, to) => tl.map((entry) => ({ key: 'demo:preview', agent: 'demo', project: 'cozy-project', entry: { ...entry, at: from + (entry.at % 86_400_000) } })).filter((l) => l.entry.at < to),
     historyClear: async () => undefined,
-    answerApproval: async () => { throw new Error('브라우저 미리보기에서는 승인할 수 없어요'); },
+    answerApproval: async () => { throw new Error(L('브라우저 미리보기에서는 승인할 수 없어요', "Can't approve from the browser preview")); },
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
     setTrayFrames: async () => {},

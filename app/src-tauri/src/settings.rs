@@ -93,6 +93,8 @@ pub struct Settings {
     pub renotify_min: u32,
     /// the island opens for a moment when a session starts waiting on the user
     pub island_peek: bool,
+    /// "auto", "ko" or "en" (the UI resolves auto and tells the app, see `set_ui_lang`)
+    pub language: String,
 }
 
 impl Default for Settings {
@@ -149,6 +151,7 @@ impl Default for Settings {
             quiet_to: 8,
             renotify_min: 5,
             island_peek: true,
+            language: "auto".into(),
         }
     }
 }

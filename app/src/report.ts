@@ -2,6 +2,7 @@
 // token counters), as numbers for the dashboard and as a Markdown report the user can save.
 import type { Snapshot, TimelineEntry, UsageHistory } from './types';
 import { AGENT_NAME } from './labels';
+import { L } from './i18n';
 
 export interface DaySummary {
   /** local midnight the day starts at */
@@ -56,7 +57,7 @@ export function daySummary(day: DayLog | null, h: UsageHistory | null, now: numb
     // only files edited today, not everything the session touched since it started
     const files = [...new Set(today.filter((e) => e.kind === 'tool' && e.activity === 'edit' && e.detail).map((e) => e.detail!))];
     out.files += files.length;
-    out.sessions.push({ project: s.project ?? '프로젝트 미확인', agent: AGENT_NAME[s.agent], turns, files });
+    out.sessions.push({ project: s.project ?? L('프로젝트 미확인', 'Unknown project'), agent: AGENT_NAME[s.agent], turns, files });
   }
   // the usage history's last day is today in the local time zone
   const last = h?.days[h.days.length - 1];
@@ -81,23 +82,23 @@ const ymd = (t: number) => {
 
 export function dayMarkdown(d: DaySummary, fmtTok: (n: number) => string, cost: number | null): string {
   const lines = [
-    `# Agent Room 하루 요약 · ${ymd(d.from)}`,
+    L(`# Agent Room 하루 요약 · ${ymd(d.from)}`, `# Agent Room day summary · ${ymd(d.from)}`),
     '',
-    `- 끝낸 요청: ${d.turns}회`,
-    `- 테스트: 통과 ${d.testsOk}회, 실패 ${d.testsFail}회`,
-    `- 승인·답변 요청: ${d.asks}회`,
-    `- 고친 파일: ${d.files}개`,
+    L(`- 끝낸 요청: ${d.turns}회`, `- Requests done: ${d.turns}`),
+    L(`- 테스트: 통과 ${d.testsOk}회, 실패 ${d.testsFail}회`, `- Tests: ${d.testsOk} passed, ${d.testsFail} failed`),
+    L(`- 승인·답변 요청: ${d.asks}회`, `- Approvals and questions: ${d.asks}`),
+    L(`- 고친 파일: ${d.files}개`, `- Files edited: ${d.files}`),
   ];
-  if (d.tokens) lines.push(`- 토큰: Claude Code ${fmtTok(d.tokens.claude)}, Codex ${fmtTok(d.tokens.codex)}`);
-  if (cost !== null) lines.push(`- 추정 비용: ${fmtUsd(cost)} (설정한 단가로 계산한 추정치)`);
-  lines.push('', '## 세션', '');
-  if (!d.sessions.length) lines.push('오늘 활동한 세션이 없어요.', '');
+  if (d.tokens) lines.push(`${L('- 토큰', '- Tokens')}: Claude Code ${fmtTok(d.tokens.claude)}, Codex ${fmtTok(d.tokens.codex)}`);
+  if (cost !== null) lines.push(L(`- 추정 비용: ${fmtUsd(cost)} (설정한 단가로 계산한 추정치)`, `- Estimated cost: ${fmtUsd(cost)} (from the prices you set)`));
+  lines.push('', L('## 세션', '## Sessions'), '');
+  if (!d.sessions.length) lines.push(L('오늘 활동한 세션이 없어요.', 'No sessions were active today.'), '');
   for (const s of d.sessions) {
-    lines.push(`### ${s.project} (${s.agent})`, '', `- 끝낸 요청: ${s.turns}회`);
-    if (s.files.length) lines.push(`- 고친 파일: ${s.files.map((f) => `\`${f}\``).join(', ')}`);
+    lines.push(`### ${s.project} (${s.agent})`, '', L(`- 끝낸 요청: ${s.turns}회`, `- Requests done: ${s.turns}`));
+    if (s.files.length) lines.push(`${L('- 고친 파일', '- Files edited')}: ${s.files.map((f) => `\`${f}\``).join(', ')}`);
     lines.push('');
   }
-  lines.push('---', '요청 수와 테스트 결과는 Agent Room이 켜진 뒤 받은 이벤트만 셉니다.', '');
+  lines.push('---', L('요청 수와 테스트 결과는 Agent Room이 켜진 뒤 받은 이벤트만 셉니다.', 'Requests and test results count only events received while Agent Room was running.'), '');
   return lines.join('\n');
 }
 

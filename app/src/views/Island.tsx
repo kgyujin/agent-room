@@ -12,6 +12,7 @@ import { progressOf } from '../ui/Hud';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { LimitCards, fmtTokens, useUsageHistory } from '../ui/Usage';
 import { useLive } from './useLive';
+import { L } from '../i18n';
 
 const ROW = 40;
 /** height of the usage section in the open card (header line + one row of limit cards) */
@@ -132,7 +133,7 @@ export function Island() {
       <div className="is-bar">
         <div className="is-left">
           {!open && claudeLeft && <UsageLeft agent="claude" v={claudeLeft} />}
-          {open && list.length > 0 && <span className="is-head">에이전트 {list.length}</span>}
+          {open && list.length > 0 && <span className="is-head">{L('에이전트', 'Agents')} {list.length}</span>}
           {/* someone needs you: say who (the longest-waiting); no logos on the collapsed pill */}
           {!open && todos.length > 0 && (
             <span className="is-who t-wait">
@@ -140,16 +141,16 @@ export function Island() {
               {todos.length > 1 && <small>+{todos.length - 1}</small>}
             </span>
           )}
-          {!list.length && <span className="is-dim"><Icon name="moon" /> 대기</span>}
+          {!list.length && <span className="is-dim"><Icon name="moon" /> {L('대기', 'Idle')}</span>}
         </div>
         <div className="is-notch" />
         <div className="is-right">
           {todos.length ? (
-            <span className="is-alert"><Icon name="bell" />{open ? `확인 필요 ${todos.length}` : todos.length}</span>
+            <span className="is-alert"><Icon name="bell" />{open ? `${L('확인 필요', 'Needs you')} ${todos.length}` : todos.length}</span>
           ) : working.length ? (
-            <span className="is-work"><Icon name="cog" />{open ? `작업 중 ${working.length}` : working.length}</span>
+            <span className="is-work"><Icon name="cog" />{open ? `${L('작업 중', 'Working')} ${working.length}` : working.length}</span>
           ) : done.length ? (
-            <span className="is-ok"><Icon name="check" />{open ? `완료 ${done.length}` : done.length}</span>
+            <span className="is-ok"><Icon name="check" />{open ? `${L('완료', 'Done')} ${done.length}` : done.length}</span>
           ) : list.length ? (
             <span className="is-dim"><Icon name="moon" /></span>
           ) : null /* the left side already says 대기 */}
@@ -159,14 +160,14 @@ export function Island() {
       {open && (
         <ul className="is-list">
           {note && <li className="is-empty is-note">{note}</li>}
-          {list.length === 0 && <li className="is-empty">{running ? '에이전트가 실행 중이에요 · 다음 작업부터 여기에 보여요' : '진행 중인 작업이 없어요'}</li>}
+          {list.length === 0 && <li className="is-empty">{running ? L('에이전트가 실행 중이에요 · 다음 작업부터 여기에 보여요', 'Agents are running · they show here from their next task') : L('진행 중인 작업이 없어요', 'Nothing in progress')}</li>}
           {(list.length > 8 ? list.slice(0, 7) : list).map((s) => {
             const p = progressOf(s);
             const todo = userTodo(s, now);
             const t = s.turnStartedAt ? (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt : null;
             return (
               <li key={s.key}>
-                <button title={`${names[s.key]}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`} onClick={(e) => {
+                <button title={`${names[s.key]}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`} onClick={(e) => {
                   e.stopPropagation();
                   // jump to the agent's own app; when it can't be found, say why here instead of
                   // bringing up the main window (which looked like a flash and no app)
@@ -192,7 +193,7 @@ export function Island() {
           })}
           {list.length > 8 && (
             <li className="is-empty">
-              <button className="is-more" onClick={(e) => { e.stopPropagation(); void backend.trayAction('open'); }}>+{list.length - 7}개 더 · 방에서 보기</button>
+              <button className="is-more" onClick={(e) => { e.stopPropagation(); void backend.trayAction('open'); }}>{L(`+${list.length - 7}개 더 · 방에서 보기`, `+${list.length - 7} more · see the room`)}</button>
             </li>
           )}
         </ul>
@@ -200,8 +201,8 @@ export function Island() {
       {open && showLimits && (
         <div className="is-use">
           <div className="is-use-head">
-            <b><Icon name="bolt" />사용량</b>
-            {usage && <span>오늘 {fmtTokens(today)} 토큰 · 최근 10분 {fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/분</span>}
+            <b><Icon name="bolt" />{L('사용량', 'Usage')}</b>
+            {usage && <span>{L(`오늘 ${fmtTokens(today)} 토큰 · 최근 10분 ${fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/분`, `Today ${fmtTokens(today)} tokens · last 10 min ${fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/min`)}</span>}
           </div>
           <LimitCards sessions={list} now={now} dark />
         </div>
@@ -223,9 +224,9 @@ function leftOf(list: Snapshot[], agent: 'claude' | 'codex'): Left | null {
 
 function UsageLeft({ agent, v }: { agent: 'claude' | 'codex'; v: Left }) {
   const name = agent === 'claude' ? 'Claude' : 'Codex';
-  const parts = [v.session !== null && `세션 ${v.session}%`, v.week !== null && `주간 ${v.week}%`].filter(Boolean).join(' · ');
+  const parts = [v.session !== null && `${L('세션', 'session')} ${v.session}%`, v.week !== null && `${L('주간', 'weekly')} ${v.week}%`].filter(Boolean).join(' · ');
   return (
-    <span className={`is-pct is-pct-${agent}`} title={`${name} 남은 사용량: ${parts}`}>
+    <span className={`is-pct is-pct-${agent}`} title={`${name} ${L('남은 사용량', 'usage left')}: ${parts}`}>
       {v.session !== null && <b>{v.session}%</b>}
       {v.session !== null && v.week !== null && <i>·</i>}
       {v.week !== null && <b>{v.week}%</b>}
