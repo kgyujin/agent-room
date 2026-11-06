@@ -159,7 +159,11 @@ export default function App() {
   const dashSplit = dashView === 'split' && !mini && !office && vw >= SPLIT_MIN_VW;
   const dashPage = (dashView === 'full' || (dashView === 'split' && !dashSplit && !office)) && !mini;
   const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
-  const panelW = dashSplit ? Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480)) : PANEL_W;
+  const splitW = Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480));
+  // beside the dashboard the room is never cropped; when a slightly narrower dashboard (at most
+  // 10%) lets the whole room be drawn one step bigger, the dashboard gives up that width
+  const roomNeeds = dashSplit ? sceneRef.current?.widthForNextStep(vw - splitW) ?? null : null;
+  const panelW = !dashSplit ? PANEL_W : roomNeeds && vw - roomNeeds >= Math.max(480, splitW * 0.9) ? vw - roomNeeds : splitW;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -291,7 +295,6 @@ export default function App() {
     const sc = sceneRef.current;
     if (!sc) return;
     sc.insetRight = panelOpen ? panelW : 0;
-    sc.cover = dashSplit;
     sc.insetBottom = dockRoom ? dockRoom + 24 : tabsBelow ? 36 : 0;
     sc.insetTop = mini ? 0 : bannersRoom ? bannersRoom + 66 : 56;
     sc.resize();
@@ -727,8 +730,8 @@ export default function App() {
           else if (dashSplit) setDashView('off');
           else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
         }} />}
-        {!mini && <ToolBtn icon="eye" label={office ? L('HUD 보이기', 'Show HUD') : L('사무실만 보기', 'Office only')} on={office} onClick={() => setOffice(!office)} />}
-        <ToolBtn icon="mini" label={mini ? L('창으로 보기', 'Window') : L('룸만 띄우기', 'Room only')} on={mini} onClick={() => toggleMini()} />
+        {!mini && <ToolBtn icon="eye" label={office ? L('HUD 보이기', 'Show HUD') : L('HUD 숨기기', 'Hide HUD')} on={office} onClick={() => setOffice(!office)} />}
+        <ToolBtn icon="mini" label={mini ? L('창으로 보기', 'Window') : L('방만 띄우기', 'Room only')} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? L('대각선으로 보기', 'Isometric view') : L('탑다운으로 보기', 'Top-down view')} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
         {/* views above, the window itself below */}
         <i className="tb-sep" aria-hidden />
