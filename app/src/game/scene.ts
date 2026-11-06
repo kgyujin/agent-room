@@ -567,7 +567,7 @@ export class Scene {
       }
       if (this.bubbles && b?.bubble && !m.actor.walking) {
         const bub = Math.round(Math.sin((this.tickN + m.slot * 5) / 3) * 1);
-        A.draw(g, `bubble_${b.bubble}`, hx + 5, hy - 10 + bub);
+        A.draw(g, `bubble_${b.bubble}`, hx + 5, hy - 11 + bub);
       }
     }
 

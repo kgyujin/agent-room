@@ -53,6 +53,7 @@ C.update({k: hexc(v) for k, v in {
 def bubble(icon):
     """11x12 speech bubble with an icon"""
     s = Spr(13, 13)
+    # symmetric: 11x9 inside, icon centred with 2px all round vertically, tail on the middle column
     body = [
         ".ooooooooooo.",
         "owwwwwwwwwwwo",
@@ -63,9 +64,10 @@ def bubble(icon):
         "owwwwwwwwwwwo",
         "owwwwwwwwwwwo",
         "owwwwwwwwwwwo",
-        ".oooowwoooooo",
-        "....owo......",
-        ".....o.......",
+        "owwwwwwwwwwwo",
+        ".ooooowooooo.",
+        ".....owo.....",
+        "......o......",
     ]
     pal = {'o': C['ink'], 'w': C['white']}
     for y, r in enumerate(body):
@@ -82,14 +84,17 @@ def bubble(icon):
         'note': (["..xx.", "..x.x", "..x..", "xxx..", "xx..."], hexc('#e083a2')),
         'heart': ([".x.x.", "xxxxx", "xxxxx", ".xxx.", "..x.."], hexc('#e66b86')),
         'gear': (["x.x.x", ".xxx.", "xx.xx", ".xxx.", "x.x.x"], C['metal_d']),
-        'book': (["xx.xx", "xx.xx", "xx.xx", "xx.xx", "....."], hexc('#c65a5a')),
-        'zzz': (["xxxx.", "..x..", ".x...", "xxxx.", "....."], hexc('#7d86b3')),
+        # an open book: two pages meeting at the spine
+        'book': (["xx...xx", "x.x.x.x", "x..x..x", "x..x..x", "xxxxxxx"], hexc('#c65a5a')),
+        'zzz': (["xxxxx", "...x.", "..x..", ".x...", "xxxxx"], hexc('#7d86b3')),
     }
     rows, col = icons[icon]
+    # centred in the 11x9 inside (columns 1..11, rows 1..9)
+    x0 = 1 + (11 - len(rows[0])) // 2
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
             if ch == 'x':
-                s.put(4 + x, 2 + y, col)
+                s.put(x0 + x, 3 + y, col)
     return s
 
 

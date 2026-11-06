@@ -192,14 +192,18 @@ export function Desk() {
       // drawn mirrored with the pet, so the laptop is always on the side it faces
       g.restore();
       g.save();
-      const lx = right ? cx + (sk.w >> 1) - 3 : cx - (sk.w >> 1) - LAPTOP_W + 3;
+      // the same 4px overlap on either side of the pet, so facing left mirrors facing right
+      const left = cx - (sk.w >> 1);
+      const lx = right ? left + sk.w - 4 : left + 4 - LAPTOP_W;
       drawLaptop(g, lx, ch - LAPTOP_H, p.tick);
     }
     g.restore();
     const head = top + (sk.top ?? 0);
     const bubble = Date.now() < p.heartUntil ? 'heart' : p.plan.bubble;
-    if (atlas && bubbles && bubble && !walking) atlas.draw(g, `bubble_${bubble}`, cx + 3, Math.max(0, head - 12));
-    if (atlas && p.plan.act === 'panic') atlas.draw(g, 'sweat', cx - (sk.w >> 1) + 2, head + 2);
+    // the bubble is centred over the head (its tail on the pet's middle column), 1px above it
+    if (atlas && bubbles && bubble && !walking) atlas.draw(g, `bubble_${bubble}`, cx - 6, Math.max(0, head - 14));
+    // a sweat drop on the back of the head, whichever way the pet faces
+    if (atlas && p.plan.act === 'panic') atlas.draw(g, 'sweat', right ? cx - (sk.w >> 1) + 2 : cx + (sk.w >> 1) - 4, head + 2);
     const tag = tags.current.get(p.key);
     if (tag) tag.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(-p.lift - (sk.h - (sk.top ?? 0) + 2) * scale - (bubbles && bubble ? 14 * scale : 0))}px) translate(-50%, -100%)`;
   }
@@ -263,7 +267,7 @@ export function Desk() {
         return (
           <div key={k} className={`desk-tag ${on ? '' : 'off'}`} ref={(el) => { if (el) tags.current.set(k, el); else tags.current.delete(k); }}>
             <div className={`nametag ${s ? `t-${stateTone(s)}` : ''}`}>
-              {s ? <AgentMark agent={s.agent} size={12} /> : null}
+              {s ? <AgentMark agent={s.agent} size={13} /> : null}
               <span>{s ? names[k] : 'Agent Room'}</span>
               <small>{s ? stateLabel(s) : L('쉬는 중', 'Resting')}</small>
             </div>
