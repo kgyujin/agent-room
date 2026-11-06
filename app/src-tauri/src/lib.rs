@@ -517,6 +517,13 @@ fn open_session(host: &std::path::Path, key: &str, pid: Option<u32>, cwd: Option
     if done || ok(Command::new("/usr/bin/open").arg(host)) { Ok(()) } else { Err("앱 창을 열지 못했어요".into()) }
 }
 
+/// The UI's offset from UTC, sent by the main window (always open) so quiet hours keep local
+/// time even when no usage view is showing.
+#[tauri::command]
+fn set_tz_offset(min: i64) {
+    TZ_OFFSET_MIN.store(min.clamp(-840, 840), Ordering::Relaxed);
+}
+
 /// the system's double-click interval in ms, so a single click on a pet can wait exactly that long
 #[tauri::command]
 fn double_click_ms() -> u32 {
@@ -712,7 +719,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear, answer_approval
+            tray_action, set_tz_offset, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear, answer_approval
         ])
         .setup(|app| {
             let handle = app.handle().clone();
