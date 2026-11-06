@@ -53,10 +53,16 @@ export function Desk() {
   }, []);
 
   const colorsKey = JSON.stringify(settings?.critterColors ?? {});
+  // bumped when the room reloads its pictures (a PNG was added, renamed, replaced or removed)
+  const [charsVer, setCharsVer] = useState(0);
+  useEffect(() => {
+    const off = backend.onTrayEvent('characters-changed', () => setCharsVer((v) => v + 1));
+    return () => void off.then((f) => f());
+  }, []);
   useEffect(() => {
     if (!settings) return;
     void (async () => setSkins(await loadAllSkins(JSON.parse(colorsKey), await backend.listCharacters().catch(() => []))))();
-  }, [colorsKey, settings === null]);
+  }, [colorsKey, settings === null, charsVer]);
 
   const energy = settings?.petEnergy ?? 'normal';
   const scale = Math.min(4, Math.max(2, Math.round(settings?.desktopPetSize ?? 2)));

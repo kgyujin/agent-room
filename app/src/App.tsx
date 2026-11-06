@@ -324,6 +324,8 @@ export default function App() {
   const reloadSkins = useCallback(async () => {
     const colors: Record<string, string> = JSON.parse(colorsKey);
     setSkins(await loadAllSkins(colors, await backend.listCharacters().catch(() => [])));
+    // the desktop pets keep their own copy of the pictures
+    void backend.charactersChanged().catch(() => {});
   }, [colorsKey]);
   useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
 

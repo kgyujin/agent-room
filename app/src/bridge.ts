@@ -30,7 +30,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'open-dashboard' | 'hover-desk' | 'pet-skins', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'open-dashboard' | 'hover-desk' | 'pet-skins' | 'characters-changed', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
@@ -76,6 +76,8 @@ export interface Backend {
   /** which pet each session has in the room (the room tells the app; the desktop pets ask) */
   setPetSkins(bySession: Record<string, string>): Promise<void>;
   petSkins(): Promise<Record<string, string>>;
+  /** tells the desktop pets to load the pet pictures again (a PNG was added, renamed, replaced or removed) */
+  charactersChanged(): Promise<void>;
   /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
   setTrayFrames(frames: number[][]): Promise<void>;
   saveCharacter(name: string, bytes: number[]): Promise<string>;
@@ -125,6 +127,10 @@ const tauriBackend: Backend = {
   listCharacters: () => tauriInvoke('list_characters'),
   setPetSkins: (bySession) => tauriInvoke('set_pet_skins', { bySession }),
   petSkins: () => tauriInvoke('pet_skins'),
+  charactersChanged: async () => {
+    const { emitTo } = await import('@tauri-apps/api/event');
+    await emitTo('desk', 'characters-changed');
+  },
   setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
   replaceCharacter: (name, bytes) => tauriInvoke('replace_character', { name, bytes }),
@@ -289,6 +295,7 @@ function previewBackend(): Backend {
     setTrayFrames: async () => {},
     setPetSkins: async () => {},
     petSkins: async () => ({}),
+    charactersChanged: async () => {},
     saveCharacter: async (name, bytes) => {
       const w = window as { __previewCharacters?: CharacterFile[] };
       const stem = name.replace(/\.png$/i, '');
