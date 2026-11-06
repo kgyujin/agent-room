@@ -1,3 +1,4 @@
+import { ApproveButtons, canApprove } from './Approve';
 import type { Snapshot } from '../types';
 import { activityLabel, AGENT_NAME, fmtAgo, fmtDuration, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
@@ -38,7 +39,8 @@ export function Hud({ s, now, onOpenApp }: { s: Snapshot; now: number; onOpenApp
         </span>
       )}
       {turnMs !== null && <span className="shud-time" title={active ? '작업 시간' : '소요 시간'}><Icon name="clock" />{fmtDuration(turnMs)}</span>}
-      {onOpenApp && <button className="btn primary open-app" onClick={onOpenApp} title="이 세션이 열린 터미널 탭·편집기 창·Codex 대화로 이동해요">세션 열기</button>}
+      <ApproveButtons s={s} now={now} />
+      {onOpenApp && !canApprove(s, now) && <button className="btn primary open-app" onClick={onOpenApp} title="이 세션이 열린 터미널 탭·편집기 창·Codex 대화로 이동해요">세션 열기</button>}
     </div>
   );
 }

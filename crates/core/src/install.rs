@@ -282,8 +282,10 @@ pub fn install(t: Target, hook_bin_src: Option<&Path>) -> Result<HookStatus, Str
     for ev in t.events() {
         let arr = hooks.as_object_mut().unwrap().entry(ev.to_string()).or_insert_with(|| Value::Array(vec![]));
         if let Value::Array(groups) = arr {
-            // short timeout; the hook itself gives up after ~0.3s and always exits 0
-            groups.push(json!({ "hooks": [ { "type": "command", "command": cmd, "timeout": 5 } ] }));
+            // short timeout; the hook itself gives up after ~0.3s and always exits 0. A Claude Code
+            // permission request may wait for an answer in the app (opt-in), so it gets longer.
+            let timeout = if t == Target::Claude && *ev == "PermissionRequest" { 130 } else { 5 };
+            groups.push(json!({ "hooks": [ { "type": "command", "command": cmd, "timeout": timeout } ] }));
         }
     }
     if t == Target::Claude {
