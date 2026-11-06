@@ -113,3 +113,32 @@
 .pop-head, .pop-foot { background: var(--box); border-color: var(--edge); }
 .pop-foot button { border: 0; background: var(--fill); border-radius: 9px; padding: 7px 4px; }
 .pop-foot button:hover { background: var(--fill-2); border: 0; }
+
+/* menu bar popover sessions: grouped by urgency, two lines per row (who + when, then state + what it is doing) */
+.pp-g { display: flex; flex-direction: column; flex: none; }
+.pp-g + .pp-g { margin-top: 4px; }
+.pp-g h4 { letter-spacing: 0.01em; }
+.pp-g h4 span { color: var(--ink-soft); font-weight: 600; }
+.pp-g-todo h4 { color: var(--wait-ink, var(--wait)); }
+.pp-row { height: auto; min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+.pp-row:hover { background: var(--fill); }
+.pp-row.t-wait { background: color-mix(in srgb, var(--wait) 10%, var(--box)); }
+.pp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pp-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pp-top .pp-name { flex: 1; min-width: 0; }
+.pp-row .pp-state { max-width: none; min-width: 0; gap: 6px; }
+.pp-state b { flex: none; font-weight: 600; color: var(--ink); }
+.pp-state em { flex: 1; min-width: 0; font-style: normal; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-g:not(:has(.pp-rowwrap:not(.fit-off))) { display: none; }
+.pp-state em::before { content: '·'; margin-right: 6px; }
+.pp-g-todo .pp-state b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pp-more { border: 0; background: var(--fill); }
+.pp-more:hover { background: var(--fill-2); color: var(--ink); }
+
+/* one status language everywhere (like Claude Code's agent view): colour says the state, working and
+   "needs you" breathe, resting or gone is a hollow ring */
+.tone-calm .pulse, .tone-muted .pulse { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.7; }
+
+/* keyboard focus is visible, mouse focus is not */
+:where(button, a, [tabindex], select, input, summary):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent-strong) 70%, transparent); outline-offset: 2px; }
+:where(button, a, [tabindex], summary):focus:not(:focus-visible) { outline: none; }

@@ -4,6 +4,7 @@
 // Everything shown comes from hook events, the agents' local usage logs and their local
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useFit } from './fit';
 import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
@@ -33,37 +34,15 @@ const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.files 
 /** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
 function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [cut, setCut] = useState(0);
+  const dropped = useFit(ref, FIT_DROP);
+  // a short cell also hides card details by CSS (map activity and buttons, the session filters)
+  const [squeezed, setSqueezed] = useState(false);
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      el.querySelectorAll('.fit-off').forEach((x) => x.classList.remove('fit-off'));
-      let n = 0;
-      for (const sel of FIT_DROP) {
-        // columns (map, board) lose their last items in turn, so no column empties while another is full
-        const cols = new Map<Element, Element[]>();
-        for (const x of el.querySelectorAll(sel)) {
-          const c = x.closest('.dmap-col, .dboard-col') ?? el;
-          cols.set(c, [...(cols.get(c) ?? []), x]);
-        }
-        while (el.scrollHeight > el.clientHeight + 1) {
-          const longest = [...cols.values()].reduce((a, c) => (c.length > a.length ? c : a), [] as Element[]);
-          const x = longest.pop();
-          if (!x) break;
-          x.classList.add('fit-off');
-          n++;
-        }
-      }
-      // a short cell also hides card details by CSS (map activity and buttons, the session filters)
-      const squeezed = [...el.querySelectorAll('.dmap-doing, .dmap-meta, .dash-chips')].some((x) => getComputedStyle(x).display === 'none');
-      setCut(n + (squeezed ? 1 : 0));
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const v = !!el && [...el.querySelectorAll('.dmap-doing, .dmap-meta, .dash-chips')].some((x) => getComputedStyle(x).display === 'none');
+    if (v !== squeezed) setSqueezed(v);
   });
+  const cut = dropped + (squeezed ? 1 : 0);
   return (
     <section className={`dash-card ${cls}`} style={style}>
       <h4 className="dash-h">{title}{cut > 0 && <button className="link dp-whole" onClick={onWhole}>{L('전체 보기', 'Show all')}</button>}</h4>
