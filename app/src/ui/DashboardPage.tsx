@@ -46,7 +46,7 @@ function FitCard({ cls, title, style, onWhole, children }: { cls: string; title:
   const cut = dropped + (squeezed ? 1 : 0);
   return (
     <section className={`dash-card ${cls}`} style={style}>
-      <h4 className="dash-h">{title}{cut > 0 && <button className="dp-whole" onClick={onWhole}><Icon name="out" size={12} />{L('전체 보기', 'Show all')}</button>}</h4>
+      <h4 className="dash-h">{title}{cut > 0 && <button className="dp-whole" onClick={onWhole} title={L('전체 보기', 'Show all')}><Icon name="out" size={12} />{L('전체 보기', 'Show all')}</button>}</h4>
       <div className="dp-scroll" ref={ref}>{children}</div>
     </section>
   );
@@ -94,6 +94,18 @@ export function DashboardPage(props: {
   const [actView, setActView] = useState<'lanes' | 'log'>(() => { try { return localStorage.getItem('dashAct') === 'log' ? 'log' : 'lanes'; } catch { return 'lanes'; } });
   const pickActView = (v: 'lanes' | 'log') => { setActView(v); try { localStorage.setItem('dashAct', v); } catch { /* private window */ } };
   const [whole, setWhole] = useState<(typeof DASH_CARDS)[number][0] | null>(null);
+  // Escape closes an open overlay first, before the window shortcut closes the whole dashboard
+  const overlay = !!whole || todayOpen || pastOpen || memOpen;
+  useEffect(() => {
+    if (!overlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setWhole(null); setTodayOpen(false); setPastOpen(false); setMemOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [overlay]);
   const split = props.split !== undefined;
   const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
     map: () => ['g-map', <>{L('에이전트 지도', 'Agent map')} <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],

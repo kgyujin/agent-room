@@ -345,8 +345,31 @@
 .seg-tabs { flex: none; }
 .seg-tabs button { white-space: nowrap; }
 .dp-one .dboard-col h4 { text-overflow: ellipsis; }
-.lane-legend { white-space: nowrap; overflow: hidden; }
+.lane-legend { flex-wrap: wrap; row-gap: 2px; } .lane-legend span { white-space: nowrap; }
 @container (max-width: 420px) { .dp-one .g-use .dshare li.sum { display: none; } }
 /* English at narrow widths: board headings keep sentence case, the session table drops progress first */
 .dboard-col h4 { text-transform: none; letter-spacing: 0; }
 @container (max-width: 380px) { .dp-one .dash-table tr > :nth-child(3) { display: none; } }
+/* scrolling fallback: the stat row keeps its own height (an auto row collapsed to 0 under the fixed-height cards) */
+@media (max-height: 560px), (max-width: 860px) { .dpage:not(.split) .dp-one { grid-template-rows: max-content; } }
+@media (max-height: 560px) { .dpage.split .dp-one { grid-template-rows: max-content; } }
+/* narrow cards: "Show all" shrinks to its icon so header controls never wrap or get pushed out */
+.dp-one > .dash-card { container-type: inline-size; }
+.dp-whole { white-space: nowrap; flex: none; }
+@container (max-width: 340px) { .dp-one .dash-h .dp-whole { font-size: 0; gap: 0; padding: 5px 7px; } }
+/* "Show all" overlay: same surface, padding and title size as the cards it opens */
+.dp-over { background: rgba(20, 22, 30, 0.28); }
+.dp-over > .dash-card { background: var(--box); border-radius: 20px; padding: 0; overflow: hidden; }
+.dp-over .dash-h { gap: 8px; padding: 18px 22px 10px; font-size: 16px; }
+.dp-over .dash-h .pn-count { margin-left: 2px; }
+.dp-over .dp-scroll { padding: 0 22px 22px; }
+.dp-over .dboard { padding: 0; }
+.files li { display: flex; align-items: center; gap: 6px; }
+/* very narrow board: tighter cards, counts give way to the column names */
+@container (max-width: 300px) {
+  .dp-one .dboard-card { padding: 7px; }
+  .dp-one .dboard-card p { font-size: 11.5px; }
+  .dp-one .dboard-col h4 span { display: none; }
+}
+.dmap-top span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 300px) { .dp-one .dash-table tr > :last-child { display: none; } }
