@@ -87,16 +87,21 @@ def bubble(icon):
         # an open book: two pages meeting at the spine
         'book': (["xx...xx", "x.x.x.x", "x..x..x", "x..x..x", "xxxxxxx"], hexc('#c65a5a')),
         # writing (editing code): a pencil, in the "working" teal
-        'pencil': (["...xx", "..xxx", ".xxx.", "xxx..", "x...."], hexc('#2e9a9c')),
+        # several colours (e eraser, g ferrule, y/o yellow body and its shade, w sharpened wood, k lead) so it reads as a pencil
+        'pencil': (["......ee", ".....eee", "....ggee", "...yygg.", "..yyyo..", ".wyyo...", ".wwo....", "k......."],
+                   {'e': hexc('#e8899e'), 'g': hexc('#a6abbb'), 'y': hexc('#f2b93b'), 'o': hexc('#c97a2a'), 'w': hexc('#f6d8ae'), 'k': C['ink']}),
         'zzz': (["xxxxx", "...x.", "..x..", ".x...", "xxxxx"], hexc('#7d86b3')),
     }
     rows, col = icons[icon]
+    # one colour for 'x', or a palette for several
+    ink = col if isinstance(col, dict) else {'x': col}
     # centred in the 11x9 inside (columns 1..11, rows 1..9)
     x0 = 1 + (11 - len(rows[0])) // 2
+    y0 = 1 + (9 - len(rows)) // 2
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
-            if ch == 'x':
-                s.put(x0 + x, 3 + y, col)
+            if ch in ink:
+                s.put(x0 + x, y0 + y, ink[ch])
     return s
 
 
