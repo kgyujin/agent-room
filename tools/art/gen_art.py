@@ -53,6 +53,7 @@ C.update({k: hexc(v) for k, v in {
 def bubble(icon):
     """11x12 speech bubble with an icon"""
     s = Spr(13, 13)
+    # symmetric: 11x9 inside, icon centred with 2px all round vertically, tail on the middle column
     body = [
         ".ooooooooooo.",
         "owwwwwwwwwwwo",
@@ -63,9 +64,10 @@ def bubble(icon):
         "owwwwwwwwwwwo",
         "owwwwwwwwwwwo",
         "owwwwwwwwwwwo",
-        ".oooowwoooooo",
-        "....owo......",
-        ".....o.......",
+        "owwwwwwwwwwwo",
+        ".ooooowooooo.",
+        ".....owo.....",
+        "......o......",
     ]
     pal = {'o': C['ink'], 'w': C['white']}
     for y, r in enumerate(body):
@@ -82,14 +84,24 @@ def bubble(icon):
         'note': (["..xx.", "..x.x", "..x..", "xxx..", "xx..."], hexc('#e083a2')),
         'heart': ([".x.x.", "xxxxx", "xxxxx", ".xxx.", "..x.."], hexc('#e66b86')),
         'gear': (["x.x.x", ".xxx.", "xx.xx", ".xxx.", "x.x.x"], C['metal_d']),
-        'book': (["xx.xx", "xx.xx", "xx.xx", "xx.xx", "....."], hexc('#c65a5a')),
-        'zzz': (["xxxx.", "..x..", ".x...", "xxxx.", "....."], hexc('#7d86b3')),
+        # an open book: two pages meeting at the spine
+        'book': (["xx...xx", "x.x.x.x", "x..x..x", "x..x..x", "xxxxxxx"], hexc('#c65a5a')),
+        # writing (editing code): a pencil, in the "working" teal
+        # several colours (e eraser, g ferrule, y/o yellow body and its shade, w sharpened wood, k lead) so it reads as a pencil
+        'pencil': (["......ee", ".....eee", "....ggee", "...yygg.", "..yyyo..", ".wyyo...", ".wwo....", "k......."],
+                   {'e': hexc('#e8899e'), 'g': hexc('#a6abbb'), 'y': hexc('#f2b93b'), 'o': hexc('#c97a2a'), 'w': hexc('#f6d8ae'), 'k': C['ink']}),
+        'zzz': (["xxxxx", "...x.", "..x..", ".x...", "xxxxx"], hexc('#7d86b3')),
     }
     rows, col = icons[icon]
+    # one colour for 'x', or a palette for several
+    ink = col if isinstance(col, dict) else {'x': col}
+    # centred in the 11x9 inside (columns 1..11, rows 1..9)
+    x0 = 1 + (11 - len(rows[0])) // 2
+    y0 = 1 + (9 - len(rows)) // 2
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
-            if ch == 'x':
-                s.put(4 + x, 2 + y, col)
+            if ch in ink:
+                s.put(x0 + x, y0 + y, ink[ch])
     return s
 
 
@@ -146,7 +158,7 @@ def build(camera):
         sprites[st] = cropped(cottage.rig_overlay(st))
     for name, s in small_fx().items():
         sprites[name] = (s, 0, 0)
-    for icon in ('bang', 'ask', 'check', 'cross', 'dots', 'note', 'heart', 'gear', 'book', 'zzz'):
+    for icon in ('bang', 'ask', 'check', 'cross', 'dots', 'note', 'heart', 'gear', 'book', 'zzz', 'pencil'):
         sprites['bubble_' + icon] = (bubble(icon), 0, 0)
 
     nodes, edges, spots = cottage.walk_graph()

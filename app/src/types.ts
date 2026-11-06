@@ -155,6 +155,10 @@ export interface Settings {
   islandPeek?: boolean;
   /** UI language; 'auto' follows the system */
   language?: 'auto' | 'ko' | 'en';
+  /** the session pets also walk along the bottom of the screen, outside the room */
+  desktopPets?: boolean;
+  /** screen px per art px of the desktop pets (2 small, 3 medium, 4 large) */
+  desktopPetSize?: number;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }

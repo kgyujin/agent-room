@@ -4,7 +4,7 @@ import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
 import { Scene, type Theme } from './game/scene';
-import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
+import { loadAllSkins, petPool, type Skin } from './game/skin';
 import { trayFrames } from './game/trayFrames';
 import { addToDay, daySummary, type DayLog } from './report';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
@@ -261,6 +261,8 @@ export default function App() {
       // browser preview: ?hour=19.5 pins the clock for the sky and lighting
       const pin = new URLSearchParams(location.search).get('hour');
       if (!IN_TAURI && pin !== null) sc.now = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return new Date(d.getTime() + Number(pin) * 3600_000); };
+      // the desktop pets wear the same pet as the session's critter in the room
+      sc.onSkins = (by) => void backend.setPetSkins(by).catch(() => {});
       sceneRef.current = sc;
       sc.start();
       setReady(true);
@@ -330,12 +332,9 @@ export default function App() {
   const colorsKey = JSON.stringify(settings.critterColors ?? {});
   const reloadSkins = useCallback(async () => {
     const colors: Record<string, string> = JSON.parse(colorsKey);
-    const files = await backend.listCharacters().catch(() => []);
-    const loaded = await Promise.all([
-      ...BUILTIN_CRITTERS.map(([id]) => loadBuiltin(id, colors[id]).then((sk) => [`builtin/${id}`, sk] as const).catch(() => null)),
-      ...files.map((f) => loadSkin(f.bytes).then((sk) => [f.name, sk] as const).catch(() => null)),
-    ]);
-    setSkins(Object.fromEntries(loaded.filter((x) => x !== null)));
+    setSkins(await loadAllSkins(colors, await backend.listCharacters().catch(() => [])));
+    // the desktop pets keep their own copy of the pictures
+    void backend.charactersChanged().catch(() => {});
   }, [colorsKey]);
   useEffect(() => { void reloadSkins(); }, [reloadSkins, settingsOpen]);
 

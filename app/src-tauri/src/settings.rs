@@ -95,6 +95,10 @@ pub struct Settings {
     pub island_peek: bool,
     /// "auto", "ko" or "en" (the UI resolves auto and tells the app, see `set_ui_lang`)
     pub language: String,
+    /// the session pets also walk along the bottom of the screen, outside the room
+    pub desktop_pets: bool,
+    /// screen points per art pixel of the desktop pets (2, 3 or 4)
+    pub desktop_pet_size: u32,
 }
 
 impl Default for Settings {
@@ -152,6 +156,8 @@ impl Default for Settings {
             renotify_min: 5,
             island_peek: true,
             language: "auto".into(),
+            desktop_pets: false,
+            desktop_pet_size: 2,
         }
     }
 }
