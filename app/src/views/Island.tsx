@@ -131,7 +131,7 @@ export function Island() {
         <div className="is-right">
           {low && (settings?.islandUsage ?? true) && (
             <span className={`is-low ${low.left <= 10 ? 'low' : low.left <= 30 ? 'mid' : ''}`} title={`가장 적게 남은 사용량: ${low.name} ${low.left}%`}>
-              남음 {low.left}%
+              남음 <b>{low.left}%</b>
             </span>
           )}
           {todos.length ? (
