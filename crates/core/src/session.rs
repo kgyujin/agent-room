@@ -5,7 +5,7 @@
 
 use crate::model::*;
 use crate::limits::CodexLogReader;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
 const TIMELINE_MAX: usize = 300;
@@ -96,7 +96,7 @@ pub struct Snapshot {
     pub title: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineEntry {
     pub id: u64,

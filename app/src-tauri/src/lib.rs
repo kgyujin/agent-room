@@ -103,6 +103,8 @@ pub struct Settings {
     pub show_cost: bool,
     pub cost_claude_per_m: f64,
     pub cost_codex_per_m: f64,
+    /// days of timeline kept on disk (`~/.agent-room/history`), 0 = none kept
+    pub history_days: u32,
 }
 
 impl Default for Settings {
@@ -151,6 +153,7 @@ impl Default for Settings {
             show_cost: false,
             cost_claude_per_m: 0.0,
             cost_codex_per_m: 0.0,
+            history_days: 0,
         }
     }
 }
@@ -207,6 +210,11 @@ fn load_settings(app: &AppHandle) -> Settings {
 /// Pushes one session change to the UI, the tray and (if enabled) a system notification.
 fn publish(app: &AppHandle, u: Update) {
     let _ = app.emit("session-update", &u);
+    if !u.appended.is_empty() && !u.snapshot.is_demo && app.state::<Shared>().settings.lock().unwrap().history_days > 0 {
+        use agent_room_core::history::{self, HistLine};
+        let lines: Vec<HistLine> = u.appended.iter().map(|e| HistLine { key: u.snapshot.key.clone(), agent: u.snapshot.agent.as_str().into(), project: u.snapshot.project.clone(), entry: e.clone() }).collect();
+        let _ = history::append(&history::dir(), &lines);
+    }
     if let Some(n) = u.notice {
         notify(app, &u.snapshot, n);
     }
@@ -1030,6 +1038,8 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let path = settings_path(&app).ok_or("no config dir")?;
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(path, serde_json::to_string_pretty(&settings).unwrap()).map_err(|e| e.to_string())?;
+    // a shorter retention (or none) takes effect at once
+    agent_room_core::history::prune(&agent_room_core::history::dir(), now_ms(), settings.history_days as u64);
     show_island(&app, settings.island);
     sync_island(&app);
     // the popover and island keep their pages alive, so they pick up the change from this event
@@ -1699,6 +1709,17 @@ fn save_report(name: String, text: String) -> Result<String, String> {
     Ok(path.display().to_string())
 }
 
+/// Timeline entries kept on disk between two times (only while the user keeps history).
+#[tauri::command]
+fn history_read(from: u64, to: u64) -> Vec<agent_room_core::history::HistLine> {
+    agent_room_core::history::read(&agent_room_core::history::dir(), from, to)
+}
+
+#[tauri::command]
+fn history_clear() {
+    agent_room_core::history::prune(&agent_room_core::history::dir(), now_ms(), 0);
+}
+
 /// A plain notification from the UI (the evening summary, which has its own setting).
 #[tauri::command]
 fn notify_text(app: AppHandle, title: String, body: String) {
@@ -1781,7 +1802,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text
+            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files, save_report, notify_text, history_read, history_clear
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -1820,6 +1841,10 @@ pub fn run() {
                         sync_island(&h);
                         follow_logs(&h);
                         follow_desktop(&h);
+                        if n % 1800 == 0 {
+                            let keep = shared.settings.lock().unwrap().history_days as u64;
+                            agent_room_core::history::prune(&agent_room_core::history::dir(), now_ms(), keep);
+                        }
                         let d = shared.procs.lock().unwrap().scan_agents();
                         let changed = { let mut cur = shared.detected.lock().unwrap(); let c = *cur != d; *cur = d; c };
                         if changed {

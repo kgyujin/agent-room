@@ -719,6 +719,7 @@ export default function App() {
           onSettings={() => setSettingsOpen('last')}
           accountLimits={settings.claudeAccountLimits ?? true}
           hidden={settings.dashHidden ?? []}
+          historyDays={settings.historyDays ?? 0}
           cost={settings.showCost ? { claude: settings.costClaudePerM ?? 0, codex: settings.costCodexPerM ?? 0 } : undefined}
           notice={dashPage ? ((demoRunning || demoShown) ? '데모 모드 · 실제 에이전트 아님' : !IN_TAURI ? '브라우저 미리보기' : null) : null}
           mac={IS_MAC && IN_TAURI}

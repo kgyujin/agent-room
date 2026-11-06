@@ -93,7 +93,8 @@ xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 - Hook은 **stdout에 아무것도 쓰지 않고** 항상 exit 0으로 끝납니다. 그래서 에이전트의 컨텍스트, 동작, 권한 흐름에 끼어들지 않습니다.
 - 프롬프트, 응답, 파일 내용, 명령 출력은 Hook 안에서 버립니다. 명령어도 `*_TOKEN=`, `Bearer …`, `sk-…` 같은 값을 가린 뒤 잘라서 보냅니다.
 - 앱에는 HTTP 클라이언트가 없고, WebView CSP가 외부 연결을 막습니다. 업데이트 확인은 GitHub Releases에, Claude 계정 사용량은 `api.anthropic.com`에만 접속합니다.
-- 이벤트는 메모리에만 둡니다(세션당 최근 300개). 디스크에는 설정, 에이전트 설정 백업, 보관한 상태줄 명령만 저장합니다.
+- 이벤트는 메모리에만 둡니다(세션당 최근 300개). 디스크에는 설정, 에이전트 설정 백업, 보관한 상태줄 명령만 저장합니다. 설정에서 "타임라인 보관"을 켜면 화면에 보이는 것과 같은 (가린) 타임라인을 `~/.agent-room/history`에 날짜별로 저장하고, 정한 기간이 지나면 지웁니다. 끄면 저장된 기록도 지웁니다.
+- "오늘 요약" 보고서는 미리보기를 확인한 뒤 누를 때만 `~/Downloads`에 저장합니다.
 - `~/.agent-room`은 본인만 열 수 있고(0700), 백업과 상태줄 사본은 본인만 읽을 수 있습니다(0600). 에이전트 설정의 `env`에 API 키가 있을 수 있어서입니다. 소켓도 본인 전용입니다.
 - Hook이 없는 세션은 `~/.claude/projects`, `~/.codex/sessions`의 로그 파일 이름과 수정 시각, 파일 앞부분의 `cwd` 값만 봅니다. 대화 내용은 해석하거나 저장하지 않습니다.
 - Claude 데스크톱 앱이 남기는 세션 기록(`~/Library/Application Support/Claude/claude-code-sessions/**/local_*.json`)에서 하루 안에 바뀐 것만 열어, CLI 세션 id, 제목, 보관 여부, 원격 제어 표시만 읽습니다. 그래서 데스크톱 앱, 원격 제어, claude.ai 프로젝트에서 시작한 세션을 구분해 보여 줍니다. 앱의 키 파일(`remote-control-state.json`, `~/.claude/sessions/*.key`)은 열지 않습니다. 클라우드에서만 도는 세션은 이 컴퓨터에 흔적이 없어 보이지 않습니다.

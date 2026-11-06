@@ -5,8 +5,8 @@
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { backend, IN_TAURI } from '../bridge';
-import type { MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
+import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
+import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards } from './Activity';
 import { userTodo } from './Overview';
@@ -42,6 +42,8 @@ export function DashboardPage(props: {
   accountLimits: boolean;
   /** settings: card ids turned off */
   hidden: string[];
+  /** settings: days of timeline kept on disk (0 hides the past-day view) */
+  historyDays: number;
   /** settings: blended USD prices per million tokens, when the user wants an estimated cost */
   cost?: { claude: number; codex: number };
   /** a short note that would otherwise float over the page as a banner (demo, preview) */
@@ -52,6 +54,7 @@ export function DashboardPage(props: {
   const h = useUsageHistory(30);
   const [memOpen, setMemOpen] = useState(false);
   const [todayOpen, setTodayOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
@@ -84,6 +87,7 @@ export function DashboardPage(props: {
         <h2>대시보드</h2>
         <p>세션 {live.length}개 · 내 차례 {todo}건{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
         <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />오늘 요약</button>
+        {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />지난 기록</button>}
         <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />지침 파일</button>
         {props.onToggleSplit && <button className="btn" onClick={props.onToggleSplit}><Icon name={split ? 'monitor' : 'panel'} />{split ? '대시보드만' : '방과 같이'}</button>}
         <button className="btn" onClick={props.onRoom}><Icon name="iso" />{split ? '닫기' : '방으로'}</button>
@@ -114,6 +118,14 @@ export function DashboardPage(props: {
           <section className="dash-card">
             <h4 className="dash-h">오늘 요약<button className="link dp-open" onClick={() => setTodayOpen(false)}>닫기</button></h4>
             <div className="dp-scroll"><TodayReport sessions={sessions} timelines={props.timelines} h={h} now={now} cost={props.cost} /></div>
+          </section>
+        </div>
+      )}
+      {pastOpen && (
+        <div className="dp-over">
+          <section className="dash-card">
+            <h4 className="dash-h">지난 기록<button className="link dp-open" onClick={() => setPastOpen(false)}>닫기</button></h4>
+            <div className="dp-scroll"><PastDays days={props.historyDays} now={now} /></div>
           </section>
         </div>
       )}
@@ -265,6 +277,43 @@ function TodayReport({ sessions, timelines, h, now, cost }: { sessions: Snapshot
         <button className="btn" onClick={() => void copy()}>복사</button>
         {saved && <span className="muted small">{saved}</span>}
       </div>
+    </div>
+  );
+}
+
+/** a past day's timeline, from the history kept on this computer */
+function PastDays({ days, now }: { days: number; now: number }) {
+  const iso = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const [day, setDay] = useState(() => iso(now - 86_400_000));
+  const [lines, setLines] = useState<HistLine[] | null>(null);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    const [y, m, d] = day.split('-').map(Number);
+    const from = new Date(y, m - 1, d).getTime();
+    setLines(null);
+    void backend.historyRead(from, from + 86_400_000).then(setLines).catch(() => setLines([]));
+  }, [day]);
+  const query = q.trim().toLowerCase();
+  const shown = (lines ?? []).filter((l) => !query || `${l.project ?? ''} ${timelineText(l.entry)}`.toLowerCase().includes(query));
+  const projects = new Set((lines ?? []).map((l) => l.key)).size;
+  return (
+    <div className="dash-log dpast">
+      <div className="dash-chips">
+        <input type="date" value={day} min={iso(now - (days - 1) * 86_400_000)} max={iso(now)} onChange={(e) => e.target.value && setDay(e.target.value)} />
+        <span className="muted small">{lines ? `세션 ${projects}개 · 기록 ${lines.length}개` : '읽는 중…'}</span>
+        <input type="search" placeholder="프로젝트·내용 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      {lines && !shown.length && <p className="muted pad">{lines.length ? '검색과 맞는 기록이 없어요.' : '이 날의 기록이 없어요. 기록은 설정에서 켠 뒤부터 쌓여요.'}</p>}
+      <ol>
+        {shown.map((l) => (
+          <li key={`${l.key}-${l.entry.id}-${l.entry.at}`} className={`k-${l.entry.kind} ${l.entry.ok === false ? 'bad' : l.entry.ok === true ? 'ok' : ''}`}>
+            <i />
+            <time>{fmtClock(l.entry.at)}</time>
+            <span className="tag"><AgentMark agent={l.agent === 'demo' ? 'demo' : (l.agent as 'claude' | 'codex')} size={11} />{l.project ?? AGENT_NAME[l.agent as 'claude'] ?? l.agent}</span>
+            <span className="txt">{timelineText(l.entry)}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
