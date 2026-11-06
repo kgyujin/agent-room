@@ -28,7 +28,7 @@ const PANEL_MIN_VW = 900;
 /** the dashboard beside the room needs room for both; narrower windows show it as a full page */
 const SPLIT_MIN_VW = 1180;
 /** room-only window width limits for resizing it with the scroll wheel (CSS px) */
-const ROOM_ONLY_MIN_W = 300;
+const ROOM_ONLY_MIN_W = 160;
 const ROOM_ONLY_MAX_W = 1200;
 /** how long a new session must last before its critter comes in */
 const NEW_SESSION_MS = 3000;
@@ -95,6 +95,8 @@ export default function App() {
   }, [zoom]);
   const zoomRef = useRef((_: string) => {});
   zoomRef.current = (how: string) => {
+    // room-only shows only the room, so the shortcuts size it instead of the page text
+    if (mini) return void roomStepRef.current(how === 'in' ? 1 : how === 'out' ? -1 : 0);
     const i = ZOOMS.findIndex((z) => z >= zoom - 0.001);
     const next = how === 'reset' ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? ZOOMS.length - 1 : i) + (how === 'in' ? 1 : -1)))];
     if (next !== zoom) void saveSettings({ ...settings, uiZoom: next });
@@ -527,20 +529,42 @@ export default function App() {
     const dir = wheelAcc.current < 0 ? 1 : -1;
     wheelAcc.current = 0;
     if (mini) lock();
-    if (!mini) {
-      const sc = sceneRef.current;
-      sc?.zoomBy(dir);
-      try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
-      return;
-    }
-    // one whole pixel scale per step; grows from the corner it sits in, so a room in a screen
-    // corner stays fully visible
+    zoomStepRef.current(dir);
+  };
+  /** room-only: one whole pixel scale bigger (1) or smaller (-1), or back to the first size (0). The
+   * window grows from the corner it sits in, so a room in a screen corner stays fully visible */
+  const roomStep = async (dir: number) => {
     const sc = sceneRef.current;
     if (!sc) return;
-    const f = roomOnlyFit(sc.scale + dir);
-    // smaller than this the pets and their tags can't be made out; larger fills most screens
+    const f = roomOnlyFit(dir === 0 ? undefined : sc.scale + dir);
+    // smaller than this the pets can't be made out; larger fills most screens
     if (f.w >= ROOM_ONLY_MIN_W && f.w <= ROOM_ONLY_MAX_W) await resizeOnScreen(f.w, f.h);
   };
+  /** one zoom step: the room inside the window, or the room-only window itself */
+  const roomStepRef = useRef(roomStep);
+  roomStepRef.current = roomStep;
+  const zoomStepRef = useRef((_: number) => {});
+  zoomStepRef.current = (dir: number) => {
+    if (mini) return void roomStep(dir);
+    const sc = sceneRef.current;
+    sc?.zoomBy(dir);
+    try { localStorage.setItem('roomZoom', String(sc?.zoom ?? 0)); } catch { /* storage unavailable */ }
+  };
+  // a trackpad pinch: WebKit sends it as gesture events, Chromium as a wheel with ctrl held (above)
+  useEffect(() => {
+    let done = false;
+    const start = (e: Event) => { e.preventDefault(); done = false; };
+    const change = (e: Event) => {
+      e.preventDefault();
+      const k = (e as Event & { scale?: number }).scale ?? 1;
+      if (done || (k < 1.15 && k > 0.87)) return;
+      done = true;
+      zoomStepRef.current(k > 1 ? 1 : -1);
+    };
+    window.addEventListener('gesturestart', start);
+    window.addEventListener('gesturechange', change);
+    return () => { window.removeEventListener('gesturestart', start); window.removeEventListener('gesturechange', change); };
+  }, []);
 
   const petClick = useRef(0);
   // the OS double-click interval: a single click on a pet waits this long so a slow double-click still counts
