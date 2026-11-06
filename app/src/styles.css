@@ -579,8 +579,13 @@ html.font-pixel { --font-body: var(--font-pixel); --font-display: var(--font-pix
 .is-lim span { display: inline-flex; align-items: center; gap: 6px; }
 .is-lim em { font-style: normal; font-variant-numeric: tabular-nums; }
 .is-lim em.mid { color: #f2b45a; } .is-lim em.low { color: #ff7a6b; }
-.is-low { display: inline-flex; align-items: center; gap: 2px; color: #8fd6a0; font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 4px; font-size: 11px; }
-.is-low.mid { color: #f2b45a; } .is-low.low { color: #ff7a6b; }
+/* the remaining share on the collapsed pill: a tinted badge on one line, so the colour reads on the
+   black notch at a glance (plain 11px coloured text wrapped to two lines and blended into the bar) */
+.is-low { --tone: #7ee59a; display: inline-flex; align-items: baseline; gap: 3px; flex: none; white-space: nowrap; margin-right: 6px; padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 20%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 45%, transparent);
+  color: #f4f1ec; font-size: 10.5px; font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; }
+.is-low b { color: var(--tone); font-size: 12px; font-weight: 800; }
+.is-low.mid { --tone: #ffc062; } .is-low.low { --tone: #ff8474; }
 .is-lim em { display: inline-flex; align-items: center; gap: 4px; }
 .is-lim-bar { display: inline-block; width: 34px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .is-lim-bar i { display: block; height: 100%; background: #8fd6a0; border-radius: 999px; }
@@ -832,10 +837,16 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .lc-pace { font-size: 10.5px; color: var(--wait-ink, var(--wait)); font-weight: 600; }
 .lc-none { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ink-soft); }
 .lc-grid.dark .lc { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08); }
-.lc-grid.dark .lc-head, .lc-grid.dark .lc-foot b { color: #ece8e4; }
-.lc-grid.dark .lc-name, .lc-grid.dark .lc-foot small, .lc-grid.dark .lc-head small, .lc-grid.dark .lc-none { color: #8a8790; }
-.lc-grid.dark .lc-bar { background: rgba(255, 255, 255, 0.12); }
-.lc-grid.dark .lc-row.low .lc-foot b { color: #ff7a6b; }
+/* on the island's black card the light theme's ink-tinted bar all but vanished: light track and a light
+   neutral fill, amber and red only when running out (same rule as the light cards) */
+.lc-grid.dark .lc-bar, .lc-grid.dark .lc-bar.a-claude, .lc-grid.dark .lc-bar.a-codex { background: rgba(255, 255, 255, 0.14); }
+.lc-grid.dark .lc-bar i { background: #d9d3cc; }
+.lc-grid.dark .lc-row.mid .lc-bar i { background: #ffc062; }
+.lc-grid.dark .lc-row.low .lc-bar i { background: #ff8474; }
+.lc-grid.dark .lc-head, .lc-grid.dark .lc-foot b { color: #f4f1ec; }
+.lc-grid.dark .lc-row.mid .lc-foot b, .lc-grid.dark .lc-pace { color: #ffc062; }
+.lc-grid.dark .lc-row.low .lc-foot b { color: #ff8474; }
+.lc-grid.dark .lc-name, .lc-grid.dark .lc-foot small, .lc-grid.dark .lc-head small, .lc-grid.dark .lc-none { color: #a9a3ad; }
 
 /* popover tabs */
 .pop-tabs { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: rgba(122, 86, 70, 0.08); }
