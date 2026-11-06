@@ -3,20 +3,21 @@ import { backend, checkUpdate, DEFAULT_SETTINGS, IN_TAURI, win, ZOOMS, type AppU
 import { runCheck, UpdateDialog, type UpdateState } from './ui/UpdateDialog';
 import { loadAtlas } from './game/assets';
 import { Sound } from './game/audio';
-import { Scene, type Anchor, type Theme } from './game/scene';
+import { Scene, type Theme } from './game/scene';
 import { BUILTIN_CRITTERS, loadBuiltin, loadSkin, petPool, type Skin } from './game/skin';
 import { trayFrames } from './game/trayFrames';
+import { addToDay, daySummary, type DayLog } from './report';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
+import { NameTags } from './ui/NameTags';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { DashboardPage } from './ui/DashboardPage';
 import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
 import { UsageStrip, useAccountLimits, userTodo } from './ui/Overview';
-import { AgentMark, Icon } from './ui/icons';
-import { progressOf } from './ui/Hud';
-import { AGENT_NAME, doingLabel, fmtAgo, justDone, setTokenUnit, shortName, stateTone } from './labels';
+import { Icon } from './ui/icons';
+import { fmtAgo, setTokenUnit } from './labels';
 import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
@@ -47,12 +48,17 @@ export default function App() {
   const soundRef = useRef(new Sound());
   const [sessions, setSessions] = useState<Record<string, Snapshot>>({});
   const [timelines, setTimelines] = useState<Record<string, TimelineEntry[]>>({});
+  // today's entries of every session, for the day summary (see DayLog)
+  const [day, setDay] = useState<DayLog | null>(null);
   const [detected, setDetected] = useState<Overview['detected']>({ claude: 0, codex: 0 });
   const [serverError, setServerError] = useState<string | null>(null);
   const [demoRunning, setDemoRunning] = useState(false);
   const [pinned, setPinned] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   setTokenUnit(settings.tokenUnit); // read by fmtTokens while this render runs
+  // quiet hours need local time; this changes at a daylight saving switch, and the effect sends it again
+  const tzOff = -new Date().getTimezoneOffset();
+  useEffect(() => void backend.setTzOffset(tzOff), [tzOff]);
   const [mini, setMini] = useState(false);
   // pointer over the window, reported by Rust: an inactive macOS window gets no hover events,
   // so the room-only controls would otherwise only appear after a click
@@ -150,6 +156,8 @@ export default function App() {
     (async () => {
       const [ov, st] = await Promise.all([backend.overview(), backend.getSettings()]);
       setSessions(Object.fromEntries(ov.sessions.map((s) => [s.key, s])));
+      // what the sessions already did today, before this window started listening
+      for (const s of ov.sessions) void backend.timeline(s.key).then((tl) => setDay((d) => addToDay(d, s, tl, Date.now())), () => {});
       setDetected(ov.detected);
       setServerError(ov.serverError);
       setDemoRunning(ov.demoRunning);
@@ -165,6 +173,7 @@ export default function App() {
             return next;
           });
           if (u.appended.length) {
+            setDay((d) => addToDay(d, u.snapshot, u.appended, Date.now()));
             setTimelines((prev) => (prev[u.snapshot.key] ? { ...prev, [u.snapshot.key]: [...prev[u.snapshot.key], ...u.appended].slice(-300) } : prev));
           }
           if (u.snapshot.isDemo && u.removed) setDemoRunning(false);
@@ -174,6 +183,7 @@ export default function App() {
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'last')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
+        await backend.onTrayEvent('open-dashboard', () => { setOffice(false); void toggleRef.current(false); setDashView(window.innerWidth >= PANEL_MIN_VW ? 'split' : 'full'); }),
         await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
@@ -526,6 +536,35 @@ export default function App() {
     if (!IN_TAURI || sessions[key]?.isDemo) return;
     backend.focusAgent(key).catch((e) => setFlash(String(e)));
   };
+  // window shortcuts (only while Agent Room is in front, never while typing)
+  const keysRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  keysRef.current = (e) => {
+    const t = e.target as HTMLElement | null;
+    if (e.metaKey || e.ctrlKey || e.altKey || settingsOpen || mini || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'd') { setOffice(false); setDashView(dashSplit ? 'off' : vw >= PANEL_MIN_VW ? 'split' : 'full'); }
+    else if (k === 'f') { setOffice(false); setDashView(dashPage ? 'off' : 'full'); }
+    else if (k === 'escape' && (dashPage || dashSplit)) setDashView('off');
+    else if (k === 'n') { const next = list.find((x) => userTodo(x, now)); if (next) openApp(next.key); }
+    else if (k === '/' && (dashPage || dashSplit)) { (document.querySelector('.sess-q') as HTMLInputElement | null)?.focus(); }
+    else return;
+    e.preventDefault();
+  };
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => keysRef.current(e);
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
+  // the evening summary: once a day, after the chosen hour, with what the app counted today
+  useEffect(() => {
+    if (!settings.dailySummary || !IN_TAURI) return;
+    const d = new Date(now);
+    if (d.getHours() < (settings.dailySummaryHour ?? 18)) return;
+    const ymd = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    try { if (localStorage.getItem('summaryShown') === ymd) return; localStorage.setItem('summaryShown', ymd); } catch { return; }
+    const t = daySummary(day, null, Date.now());
+    void backend.notifyText('오늘 요약', `끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`);
+  }, [now, settings.dailySummary, settings.dailySummaryHour, day]);
   const openDetails = (key: string) => {
     setPinned(key);
     setDetailTab('session');
@@ -676,6 +715,7 @@ export default function App() {
         <DashboardPage
           sessions={list}
           timelines={timelines}
+          day={day}
           selected={selected}
           now={now}
           onSelect={setPinned}
@@ -686,6 +726,8 @@ export default function App() {
           onSettings={() => setSettingsOpen('last')}
           accountLimits={settings.claudeAccountLimits ?? true}
           hidden={settings.dashHidden ?? []}
+          historyDays={settings.historyDays ?? 0}
+          cost={settings.showCost ? { claude: settings.costClaudePerM ?? 0, codex: settings.costCodexPerM ?? 0 } : undefined}
           notice={dashPage ? ((demoRunning || demoShown) ? '데모 모드 · 실제 에이전트 아님' : !IN_TAURI ? '브라우저 미리보기' : null) : null}
           mac={IS_MAC && IN_TAURI}
         />
@@ -720,152 +762,6 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
   );
 }
 
-/** HTML name tags that follow each critter (crisp text over the pixel canvas); click selects the session */
-function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, hover, onHover, pixel, few, short, doneSec, idleTags }: { scene: React.RefObject<Scene | null>; sessions: Record<string, Snapshot>; now: number; selected: string | null; onSelect: (k: string) => void; hidden: boolean; full: boolean; hover: string | null; onHover: (k: string | null) => void; pixel: boolean; few: boolean; short: boolean; doneSec: number; idleTags: Settings['idleTags'] }) {
-  const [anchors, setAnchors] = useState<Anchor[]>([]);
-  // 'hover' tags: null = every tag; otherwise only the pointed pet's (plus the picked and waiting ones)
-  const hoverRef = useRef(hover);
-  hoverRef.current = hover;
-  // hidden resting tags are left out before tags are bundled, so a bundle only counts tags it can show
-  const hideRef = useRef({ idleTags, doneSec });
-  hideRef.current = { idleTags, doneSec };
-  // a bundle of crowded tags that was opened: its keys, until the timer closes it again
-  const [opened, setOpened] = useState<string[]>([]);
-  const openedRef = useRef(opened);
-  openedRef.current = opened;
-  useEffect(() => {
-    if (!opened.length) return;
-    const id = window.setTimeout(() => setOpened([]), 15_000);
-    return () => window.clearTimeout(id);
-  }, [opened]);
-  const fullRef = useRef(full);
-  fullRef.current = full;
-  const selRef = useRef(selected);
-  selRef.current = selected;
-  const sessRef = useRef(sessions);
-  sessRef.current = sessions;
-  // narrow windows: only the tags that matter (selected, or waiting on the user), so the small room is not buried
-  const fewRef = useRef(few);
-  fewRef.current = few;
-  // small windows: just what the pet is doing ("코드 수정 중"), without the file or command
-  const shortRef = useRef(short);
-  shortRef.current = short;
-  useEffect(() => {
-    let last = '';
-    const loop = () => {
-      const keep = (p: Anchor) => p.key === selRef.current || needsYou(sessRef.current[p.key]);
-      const hv = hoverRef.current;
-      const hiddenRest = (p: Anchor) => {
-        const s = sessRef.current[p.key];
-        if (!s || hideRef.current.idleTags !== 'hide' || p.key === selRef.current) return false;
-        const settled = s.state === 'completed' && !justDone(s, Date.now(), hideRef.current.doneSec);
-        return settled || (s.state === 'idle' && s.connection === 'live');
-      };
-      let a = (scene.current?.anchors() ?? []).filter((p) => !hiddenRest(p) && (keep(p) || (!fewRef.current && (hv === null || p.key === hv))));
-      // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
-      // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => (p.key.startsWith(GROUP) ? 46 : tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current));
-      // three or more tags crowded together become one bundle tag ("펫 3"), opened by a click;
-      // the picked and waiting pets always keep their own tag
-      const near = (p: Anchor, q: Anchor) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H * 1.5;
-      const loose = a.filter((p) => !keep(p) && !openedRef.current.includes(p.key));
-      const groups: Anchor[][] = [];
-      for (const p of loose) {
-        const hit = groups.filter((g) => g.some((q) => near(p, q)));
-        const merged = [p, ...hit.flat()];
-        for (const g of hit) groups.splice(groups.indexOf(g), 1);
-        groups.push(merged);
-      }
-      for (const g of groups.filter((g) => g.length >= 3)) {
-        a = a.filter((p) => !g.includes(p));
-        a.push({ key: GROUP + g.map((p) => p.key).sort().join(','), agent: '', x: g.reduce((t, p) => t + p.x, 0) / g.length, y: Math.min(...g.map((p) => p.y)) });
-      }
-      const placed: Anchor[] = [];
-      for (const p of [...a].sort((u, v) => v.y - u.y)) {
-        while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H)) p.y -= TAG_H;
-        placed.push(p);
-      }
-      // keep every tag inside the window: one pushed past the top edge comes back down (it may then overlap
-      // a neighbour, which is better than being cut off), and one near a side edge slides inward
-      const vw = window.innerWidth;
-      for (const p of a) {
-        p.y = Math.max(p.y, TAG_H + 2);
-        const half = w(p) / 2;
-        p.x = Math.min(Math.max(p.x, half + 2), vw - half - 2);
-      }
-      const sig = selRef.current + '|' + a.map((p) => `${p.key}:${Math.round(p.x)}:${Math.round(p.y)}`).join('|');
-      if (sig !== last) {
-        last = sig;
-        setAnchors(a);
-      }
-    };
-    // the room only redraws at 12 fps, so following it faster is wasted work
-    const id = window.setInterval(() => !document.hidden && loop(), 1000 / 12);
-    return () => window.clearInterval(id);
-  }, [scene]);
-  if (hidden) return null;
-  return (
-    <div className={`nametags ${pixel ? 'pixel' : ''}`}>
-      {anchors.map((a) => {
-        if (a.key.startsWith(GROUP)) {
-          const keys = a.key.slice(GROUP.length).split(',');
-          return (
-            <button key={a.key} className="nametag group" style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => setOpened(keys)} title={keys.map((k) => sessions[k]?.project ?? '').join('\n') + '\n눌러서 펼치기'}>
-              <span>펫 {keys.length}</span>
-            </button>
-          );
-        }
-        const s = sessions[a.key];
-        if (!s) return null;
-        const prog = progressOf(s);
-        // a turn finished a while ago reads as idle: no "완료" any more, and the tag steps back
-        const settled = s.state === 'completed' && !justDone(s, now, doneSec);
-        const resting = settled || (s.state === 'idle' && s.connection === 'live');
-        // the setting can hide resting pets' tags (the selected one stays)
-        if (resting && idleTags === 'hide' && selected !== a.key) return null;
-        const tone = settled ? 'calm' : stateTone(s);
-        const urgent = needsYou(s);
-        const doing = settled ? null : tagLabel(s, short);
-        return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
-            <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
-                the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}
-            {full ? (
-              <>
-                <b className="tag-project">{tagName(s)}</b>
-                {doing && <span>{doing}</span>}
-              </>
-            ) : (
-              <span>{tagName(s, selected === a.key ? 14 : 8)}</span>
-            )}
-            <i className={`dot tone-${tone}`} />
-            {prog && full && <small>{prog.done}/{prog.total}</small>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** height of a name tag in CSS px (it is drawn above its anchor point) */
-const TAG_H = 22;
-/** key prefix of a bundle of crowded tags */
-const GROUP = 'group:';
-const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
-/** project name on a tag, cut to keep tags small */
-const tagName = (s: Snapshot, max = 14) => shortName(s.project ?? AGENT_NAME[s.agent], max);
-
-/** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
-function tagWidth(s: Snapshot | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
-  if (!s) return 34;
-  const text = mode === 'full' ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s, mode === 'sel' ? 14 : 8);
-  const big = mode !== 'min';
-  let w = big ? 40 : 34;
-  for (const ch of text) w += ch.charCodeAt(0) > 255 ? (big ? 12 : 11) : big ? 7.2 : 6.4;
-  return Math.min(w, 260);
-}
-
 /** what the furniture is for (hover tooltip); keys are sprite names without their number */
 const FURN_TIPS: Record<string, string> = {
   desk: '작업 책상 · 생각하거나 코드를 고칠 때 앉아서 종이에 적어요. 종이에 지금 상태가 그려져요',
@@ -888,9 +784,6 @@ function furnTipOf(name: string, list: Snapshot[], now: number): string | null {
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);
-
-/** the session is waiting on the user (approval, answer, or an error to look at) */
-const needsYou = (s: Snapshot | undefined) => !!s && userTodo(s, 0) !== null;
 
 /** soft radial backdrop around the room (window mode); the canvas leaves it clear */
 function backdropStyle(s: Settings): React.CSSProperties {

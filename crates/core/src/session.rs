@@ -5,7 +5,7 @@
 
 use crate::model::*;
 use crate::limits::CodexLogReader;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
 const TIMELINE_MAX: usize = 300;
@@ -94,9 +94,11 @@ pub struct Snapshot {
     pub origin: Option<String>,
     /// the desktop app's title for the session
     pub title: Option<String>,
+    /// a permission request the user can answer in Agent Room until this time (opt-in)
+    pub approve_until: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineEntry {
     pub id: u64,
@@ -188,6 +190,16 @@ impl SessionStore {
         Some(Update { snapshot: s.snap.clone(), appended: vec![], removed: false, notice: None })
     }
 
+    /// Opens (Some deadline) or closes (None) answering the session's permission request in the app.
+    pub fn set_approve_until(&mut self, key: &str, until: Option<u64>) -> Option<Update> {
+        let s = self.sessions.get_mut(key)?;
+        if s.snap.approve_until == until {
+            return None;
+        }
+        s.snap.approve_until = until;
+        Some(Update { snapshot: s.snap.clone(), appended: vec![], removed: false, notice: None })
+    }
+
     pub fn remove(&mut self, key: &str) -> Option<Update> {
         self.sessions.remove(key).map(|s| Update { snapshot: s.snap, appended: vec![], removed: true, notice: None })
     }
@@ -233,6 +245,7 @@ impl SessionStore {
                 subagents: 0,
                 origin: None,
                 title: None,
+                approve_until: None,
             },
             timeline: VecDeque::new(),
             tasks: vec![],

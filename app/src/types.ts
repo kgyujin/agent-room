@@ -43,6 +43,8 @@ export interface Snapshot {
   origin?: 'desktop' | 'remote' | 'project' | null;
   /** the desktop app's title for the session */
   title?: string | null;
+  /** a permission request can be answered in Agent Room until this time */
+  approveUntil?: number | null;
 }
 
 export interface TimelineEntry {
@@ -129,6 +131,26 @@ export interface Settings {
   tokenUnit?: 'si' | 'ko';
   /** dashboard cards turned off, by id (see DASH_CARDS) */
   dashHidden?: string[];
+  /** one notification with the day's numbers after this local hour */
+  dailySummary?: boolean;
+  dailySummaryHour?: number;
+  /** estimated API cost (USD per million tokens, blended); hidden by default, since plans are flat-rate */
+  showCost?: boolean;
+  costClaudePerM?: number;
+  costCodexPerM?: number;
+  /** days of timeline kept on this computer, 0 = only in memory */
+  historyDays?: number;
+  /** answer Claude Code permission requests in Agent Room; Claude Code waits this long for the answer */
+  approveInApp?: boolean;
+  approveWaitSec?: number;
+  /** no notifications between these local hours */
+  quietHours?: boolean;
+  quietFrom?: number;
+  quietTo?: number;
+  /** notify once more after a request has waited this many minutes (0 = never) */
+  renotifyMin?: number;
+  /** the island opens for a moment when a session starts waiting on the user */
+  islandPeek?: boolean;
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }
@@ -149,3 +171,6 @@ export interface DayTokens { day: number; claude: number; codex: number }
 export interface UsageHistory { days: DayTokens[]; recentClaude: number; recentCodex: number; streakLongest: number; streakCurrent: number }
 
 export interface MemoryFile { label: string; path: string; content: string; truncated: boolean }
+
+/** a timeline entry kept on disk, with the session it came from */
+export interface HistLine { key: string; agent: string; project: string | null; entry: TimelineEntry }

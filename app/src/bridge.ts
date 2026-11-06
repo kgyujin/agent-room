@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { MemoryFile, CharacterFile, SoundFile, HookStatus, Overview, RateLimits, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
+import type { HistLine, MemoryFile, CharacterFile, SoundFile, HookStatus, Overview, RateLimits, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'peach', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [],
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true,
 };
 
 export interface Backend {
@@ -29,7 +29,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'open-dashboard', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */
@@ -38,6 +38,8 @@ export interface Backend {
   setRoomOnly(on: boolean): Promise<void>;
   /** camera notch of the menu bar screen [width, height] in points; null without one */
   notchSize(): Promise<[number, number] | null>;
+  /** the local offset from UTC in minutes, for quiet hours */
+  setTzOffset(min: number): Promise<void>;
   codexLimits(): Promise<RateLimits | null>;
   claudeLimits(): Promise<RateLimits | null>;
   hooksStatus(): Promise<HookStatus[]>;
@@ -59,6 +61,12 @@ export interface Backend {
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
+  /** writes a previewed report to ~/Downloads/<name> and returns the path */
+  saveReport(name: string, text: string): Promise<string>;
+  notifyText(title: string, body: string): Promise<void>;
+  historyRead(from: number, to: number): Promise<HistLine[]>;
+  historyClear(): Promise<void>;
+  answerApproval(key: string, allow: boolean): Promise<void>;
   listCharacters(): Promise<CharacterFile[]>;
   /** menu bar icon frames (8 PNGs: run0..3, wait, done, idle, off) */
   setTrayFrames(frames: number[][]): Promise<void>;
@@ -80,6 +88,7 @@ const tauriBackend: Backend = {
   trayAction: (action, key) => tauriInvoke('tray_action', { action, key: key ?? null }),
   islandLayout: (width, height) => tauriInvoke('island_layout', { width, height }),
   notchSize: () => tauriInvoke('notch_size'),
+  setTzOffset: (min) => tauriInvoke('set_tz_offset', { min }),
   codexLimits: () => tauriInvoke('codex_limits'),
   claudeLimits: () => tauriInvoke('claude_limits'),
   setRoomOnly: (on) => tauriInvoke('set_room_only', { on }),
@@ -98,6 +107,11 @@ const tauriBackend: Backend = {
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
+  saveReport: (name, text) => tauriInvoke('save_report', { name, text }),
+  notifyText: (title, body) => tauriInvoke('notify_text', { title, body }),
+  historyRead: (from, to) => tauriInvoke('history_read', { from, to }),
+  historyClear: () => tauriInvoke('history_clear'),
+  answerApproval: (key, allow) => tauriInvoke('answer_approval', { key, allow }),
   listCharacters: () => tauriInvoke('list_characters'),
   setTrayFrames: (frames) => tauriInvoke('set_tray_frames', { frames }),
   saveCharacter: (name, bytes) => tauriInvoke('save_character', { name, bytes }),
@@ -190,6 +204,7 @@ function previewBackend(): Backend {
     trayAction: async () => undefined,
     islandLayout: async () => undefined,
     notchSize: async () => null,
+    setTzOffset: async () => {},
     codexLimits: async () => null,
     claudeLimits: async () => null,
     setRoomOnly: async () => undefined,
@@ -222,6 +237,17 @@ function previewBackend(): Backend {
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',
+    saveReport: async (name, text) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+      a.download = name;
+      a.click();
+      return `다운로드/${name}`;
+    },
+    notifyText: async () => undefined,
+    historyRead: async (from, to) => tl.map((entry) => ({ key: 'demo:preview', agent: 'demo', project: 'cozy-project', entry: { ...entry, at: from + (entry.at % 86_400_000) } })).filter((l) => l.entry.at < to),
+    historyClear: async () => undefined,
+    answerApproval: async () => { throw new Error('브라우저 미리보기에서는 승인할 수 없어요'); },
     // design previews can inject test images; the preview never reads the disk
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
     setTrayFrames: async () => {},

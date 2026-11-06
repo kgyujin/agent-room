@@ -5,13 +5,15 @@
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { backend, IN_TAURI } from '../bridge';
-import type { MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
+import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
+import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards } from './Activity';
 import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
 import { Tasks, Timeline } from './DetailPanel';
+import { ApproveButtons } from './Approve';
+import { dayMarkdown, daySummary, estCost, fmtUsd, reportName, type DayLog } from '../report';
 
 /** the cards below the counts, in grid order; settings can turn any of them off */
 export const DASH_CARDS = [
@@ -26,6 +28,7 @@ export const DASH_CARDS = [
 export function DashboardPage(props: {
   sessions: Snapshot[];
   timelines: Record<string, TimelineEntry[]>;
+  day: DayLog | null;
   selected: Snapshot | null;
   now: number;
   onSelect: (k: string) => void;
@@ -41,6 +44,10 @@ export function DashboardPage(props: {
   accountLimits: boolean;
   /** settings: card ids turned off */
   hidden: string[];
+  /** settings: days of timeline kept on disk (0 hides the past-day view) */
+  historyDays: number;
+  /** settings: blended USD prices per million tokens, when the user wants an estimated cost */
+  cost?: { claude: number; codex: number };
   /** a short note that would otherwise float over the page as a banner (demo, preview) */
   notice?: string | null;
   mac: boolean;
@@ -48,6 +55,8 @@ export function DashboardPage(props: {
   const { sessions, now, selected } = props;
   const h = useUsageHistory(30);
   const [memOpen, setMemOpen] = useState(false);
+  const [todayOpen, setTodayOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
@@ -79,6 +88,8 @@ export function DashboardPage(props: {
       <header className="dp-head">
         <h2>대시보드</h2>
         <p>세션 {live.length}개 · 내 차례 {todo}건{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+        <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />오늘 요약</button>
+        {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />지난 기록</button>}
         <button className="btn" onClick={() => setMemOpen(true)}><Icon name="book" />지침 파일</button>
         {props.onToggleSplit && <button className="btn" onClick={props.onToggleSplit}><Icon name={split ? 'monitor' : 'panel'} />{split ? '대시보드만' : '방과 같이'}</button>}
         <button className="btn" onClick={props.onRoom}><Icon name="iso" />{split ? '닫기' : '방으로'}</button>
@@ -88,22 +99,41 @@ export function DashboardPage(props: {
         <div className="dp-turn" role="list" aria-label="내 차례">
           <b>내 차례</b>
           {waiting.map((x) => (
-            <button key={x.key} role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
+            <span key={x.key} className="dp-turn-item">
+            <button role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
               <AgentMark agent={x.isDemo ? 'demo' : x.agent} size={12} />
               <span>{x.project ?? AGENT_NAME[x.agent]}</span>
               <em>{userTodo(x, now)!.text}</em>
             </button>
+            <ApproveButtons s={x} now={now} compact />
+            </span>
           ))}
         </div>
       )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
-        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} /></div>
+        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} cost={props.cost} /></div>
         {shown.map(([id], i) => {
           const [cls, title, body] = cards[id]();
           const last = i === shown.length - 1 && rest > 0;
           return <Fragment key={id}>{card(last ? `${cls} dp-last` : cls, title, body, last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined)}</Fragment>;
         })}
       </div>
+      {todayOpen && (
+        <div className="dp-over">
+          <section className="dash-card">
+            <h4 className="dash-h">오늘 요약<button className="link dp-open" onClick={() => setTodayOpen(false)}>닫기</button></h4>
+            <div className="dp-scroll"><TodayReport day={props.day} h={h} now={now} cost={props.cost} /></div>
+          </section>
+        </div>
+      )}
+      {pastOpen && (
+        <div className="dp-over">
+          <section className="dash-card">
+            <h4 className="dash-h">지난 기록<button className="link dp-open" onClick={() => setPastOpen(false)}>닫기</button></h4>
+            <div className="dp-scroll"><PastDays days={props.historyDays} now={now} /></div>
+          </section>
+        </div>
+      )}
       {memOpen && (
         <div className="dp-over">
           <section className="dash-card">
@@ -216,6 +246,79 @@ function UsageShare({ h }: { h: UsageHistory | null }) {
         <li><i style={{ background: 'var(--claude)' }} />Claude Code<b>{fmtTokens(c)}</b><small>{total ? Math.round((c / total) * 100) : 0}%</small></li>
         <li><i style={{ background: 'var(--codex)' }} />Codex<b>{fmtTokens(x)}</b><small>{total ? Math.round((x / total) * 100) : 0}%</small></li>
       </ul>
+    </div>
+  );
+}
+
+/** today's numbers, and the same as a Markdown report to look at before it is saved */
+function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistory | null; now: number; cost?: { claude: number; codex: number } }) {
+  const [saved, setSaved] = useState<string | null>(null);
+  const d = daySummary(day, h, now);
+  const usd = d.tokens ? estCost(d.tokens, cost) : null;
+  const md = dayMarkdown(d, fmtTokens, usd);
+  const nums: [string, string][] = [
+    ['끝낸 요청', `${d.turns}회`],
+    ['테스트', `통과 ${d.testsOk} · 실패 ${d.testsFail}`],
+    ['승인·답변 요청', `${d.asks}회`],
+    ['고친 파일', `${d.files}개`],
+    ['토큰', d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'],
+    ...(usd !== null ? [['추정 비용', fmtUsd(usd)] as [string, string]] : []),
+  ];
+  const save = async () => {
+    try { setSaved(`${await backend.saveReport(reportName(d.from), md)}에 저장했어요`); } catch (e) { setSaved(`저장하지 못했어요: ${String(e)}`); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(md); setSaved('복사했어요'); } catch { setSaved('복사하지 못했어요'); }
+  };
+  return (
+    <div className="dtoday">
+      <div className="dash-stats">
+        {nums.map(([k, v]) => <div key={k} className="dash-stat"><small>{k}</small><b>{v}</b></div>)}
+      </div>
+      <h4 className="dash-h">보고서 미리보기 <small className="muted">저장하기 전에 확인하세요. 프로젝트 이름과 파일 이름이 들어가요.</small></h4>
+      <pre className="dtoday-md">{md}</pre>
+      <div className="dtoday-act">
+        <button className="btn primary" onClick={() => void save()}>{IN_TAURI ? '다운로드 폴더에 저장' : 'Markdown 받기'}</button>
+        <button className="btn" onClick={() => void copy()}>복사</button>
+        {saved && <span className="muted small">{saved}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** a past day's timeline, from the history kept on this computer */
+function PastDays({ days, now }: { days: number; now: number }) {
+  const iso = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const [day, setDay] = useState(() => iso(now - 86_400_000));
+  const [lines, setLines] = useState<HistLine[] | null>(null);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    const [y, m, d] = day.split('-').map(Number);
+    const from = new Date(y, m - 1, d).getTime();
+    setLines(null);
+    void backend.historyRead(from, from + 86_400_000).then(setLines).catch(() => setLines([]));
+  }, [day]);
+  const query = q.trim().toLowerCase();
+  const shown = (lines ?? []).filter((l) => !query || `${l.project ?? ''} ${timelineText(l.entry)}`.toLowerCase().includes(query));
+  const projects = new Set((lines ?? []).map((l) => l.key)).size;
+  return (
+    <div className="dash-log dpast">
+      <div className="dash-chips">
+        <input type="date" value={day} min={iso(now - (days - 1) * 86_400_000)} max={iso(now)} onChange={(e) => e.target.value && setDay(e.target.value)} />
+        <span className="muted small">{lines ? `세션 ${projects}개 · 기록 ${lines.length}개` : '읽는 중…'}</span>
+        <input type="search" placeholder="프로젝트·내용 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      {lines && !shown.length && <p className="muted pad">{lines.length ? '검색과 맞는 기록이 없어요.' : '이 날의 기록이 없어요. 기록은 설정에서 켠 뒤부터 쌓여요.'}</p>}
+      <ol>
+        {shown.map((l) => (
+          <li key={`${l.key}-${l.entry.id}-${l.entry.at}`} className={`k-${l.entry.kind} ${l.entry.ok === false ? 'bad' : l.entry.ok === true ? 'ok' : ''}`}>
+            <i />
+            <time>{fmtClock(l.entry.at)}</time>
+            <span className="tag"><AgentMark agent={l.agent === 'demo' ? 'demo' : (l.agent as 'claude' | 'codex')} size={11} />{l.project ?? AGENT_NAME[l.agent as 'claude'] ?? l.agent}</span>
+            <span className="txt">{timelineText(l.entry)}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

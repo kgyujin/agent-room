@@ -13,6 +13,11 @@ pub mod limits;
 pub mod logs;
 pub mod usage;
 pub mod desktop;
+pub mod history;
 
 #[cfg(feature = "runtime")]
 pub mod runtime;
+
+/// How long the hook waits on a Claude Code permission request for the app's answer; the app
+/// answers sooner (at once when in-app approval is off, otherwise after the user's chosen wait).
+pub const PERMISSION_WAIT_MS: u64 = 125_000;

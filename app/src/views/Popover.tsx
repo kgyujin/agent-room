@@ -1,6 +1,7 @@
 // Menu bar popover: the essentials in one view that fits the window, never scrolling.
 // Remaining usage per agent, today's tokens, and as many sessions as fit (the user's turn first);
 // the rest is one click away in the main window.
+import { ApproveButtons } from '../ui/Approve';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
 import { fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
@@ -56,7 +57,12 @@ export function Popover() {
         {live.length ? (
           <>
             <h4>세션 <span>{live.length}</span></h4>
-            {rows.map((s) => <Row key={s.key} s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom || s.isDemo ? 'select' : 'focus', s.key)} />)}
+            {rows.map((s) => (
+              <div key={s.key} className="pp-rowwrap">
+                <Row s={s} name={names[s.key]} now={now} onClick={(inRoom) => act(inRoom || s.isDemo ? 'select' : 'focus', s.key)} />
+                <ApproveButtons s={s} now={now} compact />
+              </div>
+            ))}
             {more > 0 && <button className="pp-more" onClick={() => act('open')}>+{more}개 더 · 방에서 보기</button>}
           </>
         ) : (
@@ -68,6 +74,7 @@ export function Popover() {
       </div>
       <footer className="pop-foot">
         <button onClick={() => act('open')}><Icon name="panel" size={16} />방 열기</button>
+        <button onClick={() => act('dashboard')}><Icon name="monitor" size={16} />대시보드</button>
         <button onClick={() => act('mini')}><Icon name="mini" size={16} />룸만 띄우기</button>
         <button onClick={() => act('settings')}><Icon name="gear" size={16} />설정</button>
         <button onClick={() => act('quit')} className="quit">종료</button>
