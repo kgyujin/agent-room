@@ -74,9 +74,9 @@ export function Popover() {
       <footer className="pop-foot">
         <button onClick={() => act('open')}><Icon name="panel" size={16} />{L('방 열기', 'Room')}</button>
         <button onClick={() => act('dashboard')}><Icon name="monitor" size={16} />{L('대시보드', 'Dashboard')}</button>
-        <button onClick={() => act('mini')}><Icon name="mini" size={16} />{L('룸만 띄우기', 'Mini')}</button>
+        <button onClick={() => act('mini')}><Icon name="mini" size={16} />{L('방만 띄우기', 'Room only')}</button>
         <button onClick={() => act('settings')}><Icon name="gear" size={16} />{L('설정', 'Settings')}</button>
-        <button onClick={() => act('quit')} className="quit">{L('종료', 'Quit')}</button>
+        <button onClick={() => act('quit')} className="quit"><Icon name="close" size={16} />{L('종료', 'Quit')}</button>
       </footer>
     </div>
   );

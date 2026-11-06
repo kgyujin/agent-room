@@ -1,17 +1,17 @@
 # Agent Room
 
-AI 코딩 에이전트(Claude Code, OpenAI Codex CLI)가 지금 무엇을 하는지 **작은 픽셀 아트 사무실**로 보여주는 macOS 앱입니다.
+AI 코딩 에이전트(Claude Code, OpenAI Codex CLI)가 지금 무엇을 하는지 **작은 픽셀 아트 방**로 보여주는 macOS 앱입니다.
 세션마다 펫이 한 마리씩 자기 책상에 앉아 일하고, 승인이나 답변이 필요하면 앞으로 나와 알려줍니다.
 
 ![낮 화면](docs/screenshot-day.png)
 
-> **English**: Agent Room shows what your AI coding agents (Claude Code, OpenAI Codex CLI) are doing as a tiny pixel-art office on macOS. Each session gets a pet at its own desk; when an agent needs your approval or an answer, its pet comes forward. Monitoring uses no extra LLM tokens. The UI is in Korean and English (Settings → General → 언어 · Language; "auto" follows the system language).
+> **English**: Agent Room shows what your AI coding agents (Claude Code, OpenAI Codex CLI) are doing as a tiny pixel-art room on macOS. Each session gets a pet at its own desk; when an agent needs your approval or an answer, its pet comes forward. Monitoring uses no extra LLM tokens. The UI is in Korean and English (Settings → General → 언어 · Language; "auto" follows the system language).
 
 > 모니터링에 쓰는 **추가 LLM 토큰은 0**입니다. 에이전트의 공식 Hook과 로컬 로그만 읽고, 네트워크 요청은 Claude 계정 사용량 확인과 업데이트 확인뿐입니다(둘 다 설정에서 끌 수 있음).
 
 ## 주요 기능
 
-- **사무실 화면**: 세션마다 펫 한 마리(최대 6). 하는 일에 따라 그림판에 쓰고, 책장에서 읽고, 나무 장치를 돌리고, 승인을 기다리면 콩콩 뛰고, 끝나면 점프합니다. 일이 없으면 커피를 마시거나 돌아다닙니다.
+- **방 화면**: 세션마다 펫 한 마리(최대 6). 하는 일에 따라 그림판에 쓰고, 책장에서 읽고, 나무 장치를 돌리고, 승인을 기다리면 콩콩 뛰고, 끝나면 점프합니다. 일이 없으면 커피를 마시거나 돌아다닙니다.
 - **여러 경로의 세션**: Hook이 닿지 않는 세션(앱보다 먼저 시작한 세션, Claude·Codex 데스크톱 앱, Codex 예약 작업이나 `codex exec`)도 에이전트의 세션 로그가 쓰이는 시각으로 찾아서 작업 중·쉬는 중을 보여 줍니다.
 - **현황판**: 내 차례·작업 중·완료 수, 내가 할 일(승인·입력·오류), 에이전트별 진행(n/m)과 경과 시간.
 - **남은 사용량**: Claude·Codex의 5시간·주간 남은 %와 초기화까지 남은 시간. 10% 이하가 되면 알림을 보냅니다.
@@ -85,7 +85,7 @@ xattr -dr com.apple.quarantine "/Applications/Agent Room.app"
 - **다이나믹 아일랜드**: 왼쪽에는 일하는 에이전트가, 오른쪽에는 확인할 일 수(`! 1`)나 작업 중 수가 보입니다. 마우스를 올리면(설정에서 클릭으로 바꿀 수 있음) 펼쳐지고, 줄을 누르면 그 세션이 열립니다. 노치가 있는 맥에서는 노치 크기에 맞춰집니다.
 - **오른쪽 패널**: 현황, 타임라인, 작업 목록, 세션 정보 탭이 있습니다. "약 N분 남음"은 끝난 단계의 평균 시간으로 낸 추정치이고, 단계가 하나라도 끝나야 보입니다.
 - **위쪽 탭**: 세션을 고릅니다. "자동"은 가장 주의가 필요한 세션(승인 대기 > 오류 > 작업 중)을 보여줍니다. 펫이나 이름표를 눌러도 됩니다.
-- **오른쪽 위 버튼**: 대시보드, 패널 접기, 사무실만 보기, 룸만 띄우기(테두리 없이 방만 바탕화면에 띄움, 어디를 잡아도 창이 옮겨지고 펫을 두 번 누르면 상세가 열림), 대각선·탑다운 시점, 항상 위, 소리, 설정.
+- **오른쪽 위 버튼**: 대시보드, 패널 접기, HUD 숨기기, 방만 띄우기(테두리 없이 방만 바탕화면에 띄움, 어디를 잡아도 창이 옮겨지고 펫을 두 번 누르면 상세가 열림), 대각선·탑다운 시점, 항상 위, 소리, 설정.
 - **방 조작**: 스크롤하면 확대·축소되고, 끌면 이동합니다. 빈 곳을 두 번 누르면 원래 크기로 돌아갑니다.
 - **창밖 하늘**: 컴퓨터 시계에 따라 아침·낮·노을·밤으로 바뀝니다.
 

@@ -163,7 +163,7 @@ export function DashboardPage(props: {
       {sessions.length === 0 && props.onConnect && (
         <div className="dp-empty">
           <div><b>{L('아직 보이는 세션이 없어요', 'No sessions yet')}</b><span>{L('에이전트를 연결해 두면 Claude Code나 Codex가 일할 때 여기에 바로 나타나요.', 'Once agents are connected, Claude Code and Codex show up here as they work.')}</span></div>
-          <button className="btn primary" onClick={props.onConnect}>{L('에이전트 연결 확인', 'Check agent connection')}</button>
+          <button className="btn primary" onClick={props.onConnect}>{L('에이전트 연결하기', 'Connect agents')}</button>
         </div>
       )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
@@ -235,10 +235,13 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
           return (
             <div key={a} className="dmap-col">
               <div className={`dmap-agent ag-${a}`}><AgentMark agent={a} size={16} /><b>{AGENT_NAME[a]}</b><small>{list.length}</small></div>
-              {projects.map((p) => (
+              {projects.map((p) => {
+                const inP = list.filter((s) => (s.project ?? L('프로젝트 미확인', 'Unknown project')) === p);
+                return (
                 <div key={p} className="dmap-proj">
-                  <div className="dmap-pname">{p}</div>
-                  {list.filter((s) => (s.project ?? L('프로젝트 미확인', 'Unknown project')) === p).map((s) => (
+                  {/* a project with one session already named after it needs no heading */}
+                  {!(inP.length === 1 && names[inP[0].key] === p) && <div className="dmap-pname">{p}</div>}
+                  {inP.map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
                       {mapLine(s, now) && <div className="dmap-doing">{mapLine(s, now)}</div>}
@@ -251,7 +254,8 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                     </div>
                   ))}
                 </div>
-              ))}
+                );
+              })}
             </div>
           );
         })}
@@ -282,7 +286,7 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
       {!none && <div className="dboard" title={L('작업 목록은 각 에이전트가 직접 만든 것이라 여기서 옮기거나 고칠 수 없어요. 카드를 누르면 그 세션으로 가요.', "The agents make these task lists themselves, so they can't be moved or edited here. Click a card to go to its session.")}>
         {cols.map((c) => (
           <section key={c.id} className={`dboard-col c-${c.id}`}>
-            <h4>{c.label}<span>{c.cards.length}</span></h4>
+            <h4><em>{c.label}</em><span>{c.cards.length}</span></h4>
             {c.cards.map((k) => (
               <div key={k.key} className="dboard-card" onClick={() => onPick(k.s.key)}>
                 <p>{k.text}</p>

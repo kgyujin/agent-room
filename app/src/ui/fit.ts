@@ -14,13 +14,16 @@ export function useFit(ref: RefObject<HTMLElement | null>, groups: string[]): nu
     if (!el) return;
     const fit = () => {
       el.querySelectorAll('.fit-off').forEach((x) => x.classList.remove('fit-off'));
+      el.querySelectorAll<HTMLElement>('.fit-spread').forEach((x) => { x.classList.remove('fit-spread'); x.style.removeProperty('--fit-extra'); });
       let n = 0;
+      let rows: Element[][] = [];
       for (const sel of groups) {
         const cols = new Map<Element, Element[]>();
         for (const x of el.querySelectorAll(sel)) {
           const c = x.closest('.dmap-col, .dboard-col') ?? el;
           cols.set(c, [...(cols.get(c) ?? []), x]);
         }
+        let dropped = false;
         while (el.scrollHeight > el.clientHeight + 1) {
           // on a tie the later column gives first, so the first one (내 차례 on the board) stays longest
           const longest = [...cols.values()].reduce((a, c) => (c.length >= a.length ? c : a), [] as Element[]);
@@ -28,6 +31,27 @@ export function useFit(ref: RefObject<HTMLElement | null>, groups: string[]): nu
           if (!x) break;
           x.classList.add('fit-off');
           n++;
+          dropped = true;
+        }
+        if (dropped) rows = [...cols.values()];
+      }
+      // rows were dropped: share the space left (less than one row) out between the rows that stayed,
+      // so the cell doesn't end in an empty band
+      const k = Math.max(0, ...rows.map((c) => c.length));
+      if (k > 1) {
+        const top = el.getBoundingClientRect().top;
+        const bottom = Math.max(...[...el.children].map((c) => c.getBoundingClientRect().bottom));
+        const rowH = rows.flat().reduce((a, x) => a + x.getBoundingClientRect().height, 0) / rows.flat().length;
+        // the gaps go between rows, so the last row of each column stays on the bottom edge; table
+        // rows instead all grow a little (a gap would only fatten one row)
+        const table = rows[0]?.[0]?.tagName === 'TR';
+        const spread = (table ? rows.flat() : rows.flatMap((c) => c.slice(0, -1))) as HTMLElement[];
+        spread.forEach((x) => x.classList.add('fit-spread'));
+        // rows don't always grow by exactly the extra (table cells round), so step down until it fits;
+        // never trade the fit for the spacing
+        for (let extra = Math.min(Math.round(rowH), Math.floor((el.clientHeight - (bottom - top)) / (table ? k : k - 1))); ; extra -= 2) {
+          spread.forEach((x) => x.style.setProperty('--fit-extra', `${Math.max(0, extra)}px`));
+          if (extra <= 0 || el.scrollHeight <= el.clientHeight + 1) break;
         }
       }
       setCut(n);
