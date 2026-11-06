@@ -36,7 +36,9 @@ interface Mate {
   restUntil: number;
 }
 
-export interface Anchor { key: string; agent: string; x: number; y: number }
+/** x, y: the point above the head a tag hangs from; foot, half: the floor line and half width of the
+ *  critter (and its bubble) below it, all in CSS px */
+export interface Anchor { key: string; agent: string; x: number; y: number; foot?: number; half?: number }
 
 export class Scene {
   private ctx: CanvasRenderingContext2D;
@@ -422,7 +424,7 @@ export class Scene {
       const h = sk ? sk.h - (sk.top ?? 0) : 24;
       // leave room for a thought bubble above the head when there is one
       const gap = this.bubbles && m.actor.current?.bubble && !m.actor.walking ? 13 : 3;
-      return { key: m.key, agent: m.session!.agent, x: (this.off.x + f.x) * k, y: (this.off.y + f.y - h - gap) * k };
+      return { key: m.key, agent: m.session!.agent, x: (this.off.x + f.x) * k, y: (this.off.y + f.y - h - gap) * k, foot: (this.off.y + f.y) * k, half: ((sk?.w ?? 24) / 2) * k };
     });
   }
 

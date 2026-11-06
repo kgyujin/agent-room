@@ -14,7 +14,10 @@ pub(crate) async fn codex_limits() -> Option<agent_room_core::model::RateLimits>
 #[tauri::command]
 pub(crate) async fn claude_limits(app: AppHandle) -> Option<agent_room_core::model::RateLimits> {
     static LAST: Mutex<(u64, Option<agent_room_core::model::RateLimits>, u32)> = Mutex::new((0, None, 0));
-    if !app.state::<Shared>().settings.lock().unwrap().claude_account_limits {
+    // with usage hidden the account isn't asked either (that switch is hidden then, so it couldn't be turned off)
+    let shared = app.state::<Shared>();
+    let on = { let st = shared.settings.lock().unwrap(); st.show_limits && st.claude_account_limits };
+    if !on {
         return None;
     }
     let now = now_ms();
