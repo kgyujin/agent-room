@@ -3,14 +3,15 @@
 // randomness only picks where an idle pet strolls to and for how long it stands still.
 import type { Snapshot } from '../types';
 
-export type DeskBubble = 'bang' | 'ask' | 'check' | 'cross' | 'dots' | 'note' | 'gear' | 'book' | 'zzz' | 'heart';
+export type DeskBubble = 'bang' | 'ask' | 'check' | 'cross' | 'dots' | 'note' | 'gear' | 'book' | 'zzz' | 'heart' | 'pencil';
 /** roam: stroll around · work: stay put on the job · call: come to the pointer and hop · cheer / panic: in place */
 export type DeskAct = 'roam' | 'work' | 'call' | 'cheer' | 'panic' | 'nap' | 'stale';
-export interface DeskPlan { act: DeskAct; bubble: DeskBubble | null; laptop: boolean }
+/** `table`: the pet works at a little low table, writing on a sheet of paper */
+export interface DeskPlan { act: DeskAct; bubble: DeskBubble | null; table: boolean }
 
 /** what a session's pet does on the desktop, from the session's state alone */
 export function deskPlan(s: Snapshot, now: number, napAfter: number): DeskPlan {
-  const plan = (act: DeskAct, bubble: DeskBubble | null = null, laptop = false): DeskPlan => ({ act, bubble, laptop });
+  const plan = (act: DeskAct, bubble: DeskBubble | null = null, table = false): DeskPlan => ({ act, bubble, table });
   if (s.connection === 'stale') return plan('stale', 'dots');
   const idle = () => (now - s.lastEventAt > napAfter ? plan('nap', 'zzz') : plan('roam'));
   switch (s.state) {
@@ -23,9 +24,10 @@ export function deskPlan(s: Snapshot, now: number, napAfter: number): DeskPlan {
     case 'planning':
       return plan('work', s.activity === 'plan' ? 'note' : 'dots');
     case 'reading':
-      return s.activity === 'web' ? plan('work', null, true) : plan('work', 'book');
+      return plan('work', 'book');
     case 'editing':
-      return plan('work', null, true);
+      // writing code: scribbling with a pencil at its little table
+      return plan('work', 'pencil', true);
     case 'running':
       return plan('work', 'gear');
     case 'testing':
@@ -203,7 +205,7 @@ export function deskMotion(p: DeskPet, walking: boolean): [number, number, 'stil
   if (p.held) return [k % 6 < 3 ? -1 : 1, 0, 'still']; // wriggles while held
   if (walking) return [0, [0, 1, 2, 1][Math.floor(k / 2) % 4], Math.floor(k / 3) % 2 ? 'walk1' : 'walk0'];
   switch (p.plan.act) {
-    case 'work': return [0, p.plan.laptop ? Math.floor(k / 2) % 2 : Math.floor(k / 12) % 2, 'still']; // tap-tap / slow nod
+    case 'work': return [0, p.plan.table ? Math.floor(k / 2) % 2 : Math.floor(k / 12) % 2, 'still']; // scribble-scribble / slow nod
     case 'call': return [0, [0, 2, 4, 2, 0, 0][Math.floor(k / 2) % 6], 'still'];                      // hop for attention
     case 'cheer': return [0, [0, 3, 5, 3][Math.floor(k / 2) % 4], 'still'];
     case 'panic': return [k % 2 ? 1 : -1, 0, 'still'];
@@ -212,38 +214,41 @@ export function deskMotion(p: DeskPet, walking: boolean): [number, number, 'stil
   }
 }
 
-// A tiny laptop a working pet types on. One colour per pixel: K outline, B body, D front edge,
-// s screen; the code lines on the screen grow as the pet types.
-const LAPTOP = [
-  '.KKKKKKKKKK.',
-  '.KssssssssK.',
-  '.KssssssssK.',
-  '.KssssssssK.',
-  '.KssssssssK.',
-  '.KKKKKKKKKK.',
-  'KBBBBBBBBBBK',
-  'KDDDDDDDDDDK',
-  '.KKKKKKKKKK.',
+// A little low table (like the room's wood) with a sheet of paper a working pet writes on.
+// One colour per pixel: K outline, W wood top, D wood front, L legs, P paper; the pencil lines on the
+// paper grow as the pet writes, and a fresh sheet starts when it is full.
+const TABLE = [
+  '.KKKKKKKKKKKK.',
+  'KWWWWWWWWWWWWK',
+  'KWPPPPPPPPPPWK',
+  'KWPPPPPPPPPPWK',
+  'KWPPPPPPPPPPWK',
+  'KWPPPPPPPPPPWK',
+  'KWPPPPPPPPPPWK',
+  'KWWWWWWWWWWWWK',
+  'KDDDDDDDDDDDDK',
+  '.KLK......KLK.',
+  '.KKK......KKK.',
 ];
-const LAPTOP_INK: Record<string, string> = { K: '#3b3346', B: '#c9cdd6', D: '#9aa0ad', s: '#2b3a4a' };
-const CODE_INK = ['#7fd4c1', '#f2c14e', '#e8899e'];
-export const LAPTOP_W = LAPTOP[0].length;
-export const LAPTOP_H = LAPTOP.length;
+const TABLE_INK: Record<string, string> = { K: '#2a2230', W: '#ebc18d', D: '#c99a66', L: '#8a5a40', P: '#fff8ec' };
+const PENCIL_INK = '#9a8a96';
+export const TABLE_W = TABLE[0].length;
+export const TABLE_H = TABLE.length;
 
-export function drawLaptop(g: CanvasRenderingContext2D, x: number, y: number, tick: number) {
-  LAPTOP.forEach((row, j) => {
+export function drawTable(g: CanvasRenderingContext2D, x: number, y: number, tick: number) {
+  TABLE.forEach((row, j) => {
     for (let i = 0; i < row.length; i++) {
-      const c = LAPTOP_INK[row[i]];
+      const c = TABLE_INK[row[i]];
       if (!c) continue;
       g.fillStyle = c;
       g.fillRect(x + i, y + j, 1, 1);
     }
   });
-  // three lines of "code", each indented differently, typed out and wiped again
-  const t = Math.floor(tick / 2) % 24;
-  [[0, 6], [1, 5], [2, 4]].forEach(([indent, max], j) => {
-    const n = Math.max(0, Math.min(max, t - j * 6));
-    g.fillStyle = CODE_INK[j];
-    if (n) g.fillRect(x + 2 + indent, y + 2 + j, n, 1);
+  // two lines of writing on the 10x5 sheet, a blank row around each, written out one after the other
+  const t = Math.floor(tick / 2) % 20;
+  g.fillStyle = PENCIL_INK;
+  [7, 5].forEach((len, j) => {
+    const n = Math.max(0, Math.min(len, t - j * 8));
+    if (n) g.fillRect(x + 3, y + 3 + j * 2, n, 1);
   });
 }

@@ -9,7 +9,7 @@ const snap = (p: Partial<Snapshot>): Snapshot => ({
   lastEventAt: T - 1000, connection: 'live', waiting: null, error: null, lastTest: null, plan: [], limits: null,
   completedTurns: 0, toolCount: 0, filesEdited: [], subagents: 0, ...p,
 });
-const roam: DeskPlan = { act: 'roam', bubble: null, laptop: false };
+const roam: DeskPlan = { act: 'roam', bubble: null, table: false };
 const run = (w: DeskWorld, seconds: number, pointer: number | null = null, from = T) => {
   for (let i = 0; i < seconds * 12; i++) w.step(1 / 12, from + (i * 1000) / 12, pointer);
 };
@@ -24,10 +24,10 @@ const world = () => {
 
 describe('deskPlan follows the session state', () => {
   it('maps each state to what the pet does', () => {
-    expect(deskPlan(snap({ state: 'editing' }), T, 60_000)).toEqual({ act: 'work', bubble: null, laptop: true });
+    expect(deskPlan(snap({ state: 'editing' }), T, 60_000)).toEqual({ act: 'work', bubble: 'pencil', table: true });
     expect(deskPlan(snap({ state: 'reading', activity: 'search' }), T, 60_000).bubble).toBe('book');
     expect(deskPlan(snap({ state: 'running' }), T, 60_000).bubble).toBe('gear');
-    expect(deskPlan(snap({ state: 'waiting', waiting: { kind: 'approval', tool: 'Bash', message: null, since: T } }), T, 60_000)).toEqual({ act: 'call', bubble: 'bang', laptop: false });
+    expect(deskPlan(snap({ state: 'waiting', waiting: { kind: 'approval', tool: 'Bash', message: null, since: T } }), T, 60_000)).toEqual({ act: 'call', bubble: 'bang', table: false });
     expect(deskPlan(snap({ state: 'waiting', waiting: { kind: 'input', tool: null, message: null, since: T } }), T, 60_000).bubble).toBe('ask');
     expect(deskPlan(snap({ state: 'error', error: { message: 'x', tool: null, at: T, fatal: false } }), T, 60_000).act).toBe('panic');
     expect(deskPlan(snap({ state: 'running', connection: 'stale' }), T, 60_000).act).toBe('stale');
@@ -76,7 +76,7 @@ describe('DeskWorld', () => {
 
   it('a working pet stays where it is', () => {
     const w = world();
-    w.sync([['a', { act: 'work', bubble: null, laptop: true }]]);
+    w.sync([['a', { act: 'work', bubble: 'pencil', table: true }]]);
     run(w, 1);
     const x = w.pets.get('a')!.x;
     run(w, 30, 100);
@@ -85,7 +85,7 @@ describe('DeskWorld', () => {
 
   it('a pet that needs the user runs over to the pointer and stops beside it', () => {
     const w = world();
-    w.sync([['a', { act: 'call', bubble: 'bang', laptop: false }]]);
+    w.sync([['a', { act: 'call', bubble: 'bang', table: false }]]);
     run(w, 1);
     run(w, 20, 150);
     const p = w.pets.get('a')!;

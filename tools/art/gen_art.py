@@ -86,6 +86,8 @@ def bubble(icon):
         'gear': (["x.x.x", ".xxx.", "xx.xx", ".xxx.", "x.x.x"], C['metal_d']),
         # an open book: two pages meeting at the spine
         'book': (["xx...xx", "x.x.x.x", "x..x..x", "x..x..x", "xxxxxxx"], hexc('#c65a5a')),
+        # writing (editing code): a pencil, in the "working" teal
+        'pencil': (["...xx", "..xxx", ".xxx.", "xxx..", "x...."], hexc('#2e9a9c')),
         'zzz': (["xxxxx", "...x.", "..x..", ".x...", "xxxxx"], hexc('#7d86b3')),
     }
     rows, col = icons[icon]
@@ -151,7 +153,7 @@ def build(camera):
         sprites[st] = cropped(cottage.rig_overlay(st))
     for name, s in small_fx().items():
         sprites[name] = (s, 0, 0)
-    for icon in ('bang', 'ask', 'check', 'cross', 'dots', 'note', 'heart', 'gear', 'book', 'zzz'):
+    for icon in ('bang', 'ask', 'check', 'cross', 'dots', 'note', 'heart', 'gear', 'book', 'zzz', 'pencil'):
         sprites['bubble_' + icon] = (bubble(icon), 0, 0)
 
     nodes, edges, spots = cottage.walk_graph()

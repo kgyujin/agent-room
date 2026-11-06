@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { backend, IN_TAURI, win } from '../bridge';
 import { loadAtlas, type Atlas } from '../game/assets';
 import { NAP_AFTER } from '../game/behaviors';
-import { DeskWorld, deskMotion, deskPlan, drawLaptop, LAPTOP_H, LAPTOP_W, type DeskPet, type DeskPlan } from '../game/deskPet';
+import { DeskWorld, deskMotion, deskPlan, drawTable, TABLE_H, TABLE_W, type DeskPet, type DeskPlan } from '../game/deskPet';
 import { loadAllSkins, petPool, type Skin } from '../game/skin';
 import { sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark } from '../ui/icons';
@@ -92,7 +92,7 @@ export function Desk() {
     w.half = (Math.max(25, ...Object.values(wear).map((n) => skins[n]?.w ?? 25)) * scale) / 2;
     const plans: [string, DeskPlan][] = shown.length
       ? shown.map((s) => [s.key, deskPlan(s, now, NAP_AFTER[energy])])
-      : [[REST_KEY, { act: 'roam', bubble: null, laptop: false }]];
+      : [[REST_KEY, { act: 'roam', bubble: null, table: false }]];
     w.sync(plans);
   }, [shown, now, energy, scale, wear, skins]);
 
@@ -163,7 +163,7 @@ export function Desk() {
     const sk = skins[wear[p.key]];
     if (!c || !sk) return;
     const w = worldRef.current;
-    const cw = sk.w + 2 * (LAPTOP_W + 2);
+    const cw = sk.w + 2 * (TABLE_W + 2);
     const ch = sk.h + HEAD_ROOM;
     if (c.width !== cw || c.height !== ch) {
       c.width = cw;
@@ -188,14 +188,14 @@ export function Desk() {
       g.scale(-1, 1);
     }
     g.drawImage(img, cx - (sk.w >> 1) + (right ? -mx : mx), top);
-    if (p.plan.laptop && !walking && !p.held && p.lift === 0) {
-      // drawn mirrored with the pet, so the laptop is always on the side it faces
+    if (p.plan.table && !walking && !p.held && p.lift === 0) {
+      // the table stands on the side the pet faces
       g.restore();
       g.save();
-      // the same 4px overlap on either side of the pet, so facing left mirrors facing right
+      // the same 2px overlap on either side of the pet, so facing left mirrors facing right
       const left = cx - (sk.w >> 1);
-      const lx = right ? left + sk.w - 4 : left + 4 - LAPTOP_W;
-      drawLaptop(g, lx, ch - LAPTOP_H, p.tick);
+      const lx = right ? left + sk.w - 2 : left + 2 - TABLE_W;
+      drawTable(g, lx, ch - TABLE_H, p.tick);
     }
     g.restore();
     const head = top + (sk.top ?? 0);
