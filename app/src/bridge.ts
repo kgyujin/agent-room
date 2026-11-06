@@ -211,6 +211,7 @@ function previewBackend(): Backend {
       let id = 1;
       while (t < now - 60_000) {
         const work = (3 + ((seed + id) % 6)) * 60_000;
+        if (t + work + 3 * 60_000 >= now) break;
         out.push({ id: id++, at: t, kind: 'turn_start', activity: null, tool: null, detail: null, ok: null });
         out.push({ id: id++, at: t + work / 3, kind: 'tool', activity: 'edit', tool: 'Edit', detail: 'App.tsx', ok: null });
         if ((seed + id) % 3 === 0) out.push({ id: id++, at: t + work / 2, kind: 'tool_fail', activity: 'run', tool: 'Bash', detail: 'npm run build', ok: false });

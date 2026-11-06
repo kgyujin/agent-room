@@ -264,11 +264,7 @@
 .lc-r.low .lc-ring text { fill: var(--bad); }
 .lc-r .lc-name { font-size: 11.5px; font-weight: 600; color: var(--ink); max-width: 100%; }
 .lc-r .lc-reset { font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-/* the 30-day share: a bigger ring with readable labels */
-.dp-one .dshare svg { width: 88px; height: 88px; flex: none; }
 .dp-one .dshare { padding: 8px 18px; }
-.dshare-n { font-size: 15px; }
-.dshare-s { font-size: 9px; }
 /* the agent map keeps each session's "doing" line unless the cell is really short */
 @container (min-height: 240px) { .dp-one .dmap-doing { display: block; } .dp-one .dmap-node, .dp-one .dmap.few .dmap-node { padding: 9px 12px; } }
 
@@ -279,7 +275,7 @@
 .dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off)))::after { content: ''; height: 40px; border: 1.5px dashed var(--edge); border-radius: 12px; }
 .dp-one .dboard-col h4 { white-space: nowrap; overflow: hidden; }
 .dp-one .dboard-card { padding: 8px 9px; gap: 5px; }
-.dp-one .dboard-card p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: anywhere; }
+.dp-one .dboard-card p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: break-word; hyphens: auto; }
 .dp-one .dboard-card .tag { max-width: 100%; }
 
 /* a small segmented switch inside a card title */
@@ -311,7 +307,6 @@
 .lane-legend .seg { display: inline-block; width: 14px; height: 8px; border-radius: 3px; }
 .lane-legend .fail { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
 @container (max-width: 380px) { .lane-axis, .lane { grid-template-columns: 76px minmax(0, 1fr); } .lane-legend { padding-left: 86px; } }
-.dp-one .g-act .dp-scroll { container-type: size; }
 
 /* 14 days of tokens: stacked bars, today in full colour */
 .dshare { flex-direction: column; align-items: stretch; gap: 6px; }
@@ -337,3 +332,21 @@
 /* the picked-session card: a section whose rows all dropped goes away with its header */
 .dp-one .timeline:not(:has(li:not(.fit-off))) { display: none; }
 .dp-one .pn-sec:has(.files):not(:has(.files li:not(.fit-off))) { display: none; }
+
+/* nothing connected yet: one clear next step at the top of the dashboard */
+.dp-empty { display: flex; align-items: center; gap: 16px; margin: 0 24px 4px; padding: 14px 16px 14px 18px; border-radius: 16px; background: var(--box); border: 1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
+.dp-empty > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp-empty b { font-size: 14px; }
+.dp-empty span { font-size: 12.5px; color: var(--ink-soft); }
+.dp-empty .btn { flex: none; }
+.dpage.split .dp-empty { margin: 0 16px 4px; }
+/* card titles and their small switches stay on one line (long English labels end in "…") */
+.dp-one .dash-h { white-space: nowrap; min-width: 0; }
+.seg-tabs { flex: none; }
+.seg-tabs button { white-space: nowrap; }
+.dp-one .dboard-col h4 { text-overflow: ellipsis; }
+.lane-legend { white-space: nowrap; overflow: hidden; }
+@container (max-width: 420px) { .dp-one .g-use .dshare li.sum { display: none; } }
+/* English at narrow widths: board headings keep sentence case, the session table drops progress first */
+.dboard-col h4 { text-transform: none; letter-spacing: 0; }
+@container (max-width: 380px) { .dp-one .dash-table tr > :nth-child(3) { display: none; } }

@@ -30,7 +30,7 @@ export const DASH_CARDS = [
 
 /** what a card drops, first group first and the last item of a group first, until the rest fits
  * without scrolling: the usage share and pace notes, the weekly rows, edited files, then list rows */
-const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.files li', '.lane, .dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
+const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-grid:not(.rings) .lc-row ~ .lc-row', '.files li', '.lane, .dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
 
 /** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
 function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
@@ -67,6 +67,8 @@ export function DashboardPage(props: {
   onToggleSplit: (() => void) | null;
   onRoom: () => void;
   onSettings: () => void;
+  /** opens the agent connection settings (shown while there are no sessions at all) */
+  onConnect?: () => void;
   /** settings: whether Claude account limits are read (explains an empty limits card) */
   accountLimits: boolean;
   /** settings: card ids turned off */
@@ -146,6 +148,12 @@ export function DashboardPage(props: {
           ))}
         </div>
       )}
+      {sessions.length === 0 && props.onConnect && (
+        <div className="dp-empty">
+          <div><b>{L('아직 보이는 세션이 없어요', 'No sessions yet')}</b><span>{L('에이전트를 연결해 두면 Claude Code나 Codex가 일할 때 여기에 바로 나타나요.', 'Once agents are connected, Claude Code and Codex show up here as they work.')}</span></div>
+          <button className="btn primary" onClick={props.onConnect}>{L('에이전트 연결 확인', 'Check agent connection')}</button>
+        </div>
+      )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
         <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} cost={props.cost} /></div>
         {shown.map(([id], i) => {
@@ -223,7 +231,6 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
                       {mapLine(s, now) && <div className="dmap-doing">{mapLine(s, now)}</div>}
                       <div className="dmap-meta">
-                        {userTodo(s, now) && <em className="wait">{userTodo(s, now)!.text}</em>}
                         {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}
                         {s.subagents > 0 && <em>{L('하위 에이전트', 'Subagents')} {s.subagents}</em>}
                         {s.model && <em>{s.model}</em>}

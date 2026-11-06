@@ -25,6 +25,8 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
+/** the dashboard beside the room needs room for both; narrower windows show it as a full page */
+const SPLIT_MIN_VW = 1180;
 /** room-only window width limits for resizing it with the scroll wheel (CSS px) */
 const ROOM_ONLY_MIN_W = 300;
 const ROOM_ONLY_MAX_W = 1200;
@@ -55,7 +57,11 @@ export default function App() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [demoRunning, setDemoRunning] = useState(false);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // until the saved settings arrive, paint with the theme used last time (kept in localStorage) so a
+  // non-default theme doesn't flash the default one at every launch
+  const [settings, setSettings] = useState<Settings>(() => {
+    try { return { ...DEFAULT_SETTINGS, uiTheme: localStorage.getItem('uiTheme') || DEFAULT_SETTINGS.uiTheme }; } catch { return DEFAULT_SETTINGS; }
+  });
   setTokenUnit(settings.tokenUnit); // read by fmtTokens while this render runs
   // quiet hours need local time; this changes at a daylight saving switch, and the effect sends it again
   const tzOff = -new Date().getTimezoneOffset();
@@ -150,7 +156,7 @@ export default function App() {
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
   // the split dashboard takes the panel's place (wider), leaving the room at least 480px on the left
-  const dashSplit = dashView === 'split' && !mini && !office && vw >= PANEL_MIN_VW;
+  const dashSplit = dashView === 'split' && !mini && !office && vw >= SPLIT_MIN_VW;
   const dashPage = (dashView === 'full' || (dashView === 'split' && !dashSplit && !office)) && !mini;
   const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
   const panelW = dashSplit ? Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480)) : PANEL_W;
@@ -188,7 +194,7 @@ export default function App() {
         await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
         await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'last')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
-        await backend.onTrayEvent('open-dashboard', () => { setOffice(false); void toggleRef.current(false); setDashView(window.innerWidth >= PANEL_MIN_VW ? 'split' : 'full'); }),
+        await backend.onTrayEvent('open-dashboard', () => { setOffice(false); void toggleRef.current(false); setDashView(window.innerWidth >= SPLIT_MIN_VW ? 'split' : 'full'); }),
         await backend.onTrayEvent('ui-zoom', (how) => zoomRef.current(String(how))),
         await backend.onTrayEvent('hover-main', (p) => pointAt.current(Array.isArray(p) ? (p as [number, number]) : null)),
       );
@@ -327,6 +333,7 @@ export default function App() {
   useEffect(() => {
     const th = uiTheme(settings.uiTheme);
     applyUiTheme(th);
+    try { localStorage.setItem('uiTheme', th.id); } catch { /* private storage */ }
     document.documentElement.classList.remove('font-mixed', 'font-system', 'font-pixel');
     document.documentElement.classList.add(`font-${settings.font ?? 'mixed'}`);
     sceneRef.current?.setTheme(settings.theme);
@@ -561,7 +568,7 @@ export default function App() {
     const t = e.target as HTMLElement | null;
     if (e.metaKey || e.ctrlKey || e.altKey || settingsOpen || mini || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
     const k = e.key.toLowerCase();
-    if (k === 'd') { setOffice(false); setDashView(dashSplit ? 'off' : vw >= PANEL_MIN_VW ? 'split' : 'full'); }
+    if (k === 'd') { setOffice(false); setDashView(dashSplit ? 'off' : vw >= SPLIT_MIN_VW ? 'split' : 'full'); }
     else if (k === 'f') { setOffice(false); setDashView(dashPage ? 'off' : 'full'); }
     else if (k === 'escape' && (dashPage || dashSplit)) setDashView('off');
     else if (k === 'n') { const next = list.find((x) => userTodo(x, now)); if (next) openApp(next.key); }
@@ -656,7 +663,7 @@ export default function App() {
         {!compact && !office && !dashPage && list.length > (sceneRef.current?.capacity ?? 6) && (
           <div className="banner more">
             {L(`방에는 책상 수만큼 ${sceneRef.current?.capacity ?? 6}마리만 있어요 · ${list.length - (sceneRef.current?.capacity ?? 6)}개 세션 더`, `The room fits ${sceneRef.current?.capacity ?? 6} pets, one per desk · ${list.length - (sceneRef.current?.capacity ?? 6)} more sessions`)}
-            <button onClick={() => { setOffice(false); setDashView(vw >= PANEL_MIN_VW ? 'split' : 'full'); }}>{L('모두 보기', 'Show all')}</button>
+            <button onClick={() => { setOffice(false); setDashView(vw >= SPLIT_MIN_VW ? 'split' : 'full'); }}>{L('모두 보기', 'Show all')}</button>
           </div>
         )}
         {!petHintSeen && !compact && !office && !dashPage && list.some((x) => !x.isDemo) && (
@@ -740,9 +747,10 @@ export default function App() {
           onSelect={setPinned}
           onOpen={openApp}
           split={dashSplit ? panelW : undefined}
-          onToggleSplit={vw >= PANEL_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
+          onToggleSplit={vw >= SPLIT_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
           onRoom={() => setDashView('off')}
           onSettings={() => setSettingsOpen('last')}
+          onConnect={() => setSettingsOpen('agents')}
           accountLimits={settings.claudeAccountLimits ?? true}
           hidden={settings.dashHidden ?? []}
           historyDays={settings.historyDays ?? 0}

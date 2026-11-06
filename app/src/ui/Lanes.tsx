@@ -6,37 +6,7 @@ import { sessionNames, stateTone } from '../labels';
 import { AgentMark } from './icons';
 import { userTodo } from './Overview';
 import { L } from '../i18n';
-
-type Phase = 'work' | 'wait' | 'idle' | 'end';
-export interface Seg { from: number; to: number; phase: Phase }
-
-const PHASE: Record<string, Phase> = {
-  turn_start: 'work', tool: 'work', tool_fail: 'work', plan: 'work', subagent: 'work', test: 'work', compacting: 'work',
-  approval: 'wait', input: 'wait',
-  turn_complete: 'idle', turn_failed: 'idle', interrupted: 'idle', session_start: 'idle',
-  session_end: 'end',
-};
-
-/** the phases of one session between `from` and `to`, merged where nothing changed */
-export function segments(entries: TimelineEntry[], from: number, to: number): Seg[] {
-  const ev = [...entries].sort((a, b) => a.at - b.at);
-  let phase: Phase = 'idle';
-  const out: Seg[] = [];
-  let at = from;
-  for (const e of ev) {
-    const next = PHASE[e.kind];
-    if (!next) continue;
-    if (e.at <= from) { phase = next; continue; }
-    if (e.at >= to) break;
-    if (next !== phase) {
-      if (e.at > at) out.push({ from: at, to: e.at, phase });
-      phase = next;
-      at = e.at;
-    }
-  }
-  if (to > at) out.push({ from: at, to, phase });
-  return out.filter((s) => s.phase === 'work' || s.phase === 'wait');
-}
+import { segments } from '../lanes';
 
 const MIN = 60_000;
 
@@ -59,13 +29,13 @@ export function Lanes({ sessions, timelines, now, minutes = 30, selected, onSele
       </div>
       {rows.map((s) => {
         const tl = timelines[s.key] ?? [];
-        const fails = tl.filter((e) => e.at > from && (e.kind === 'tool_fail' || e.kind === 'turn_failed' || (e.kind === 'test' && e.ok === false)));
+        const fails = tl.filter((e) => e.at > from && e.at <= now && (e.kind === 'tool_fail' || e.kind === 'turn_failed' || (e.kind === 'test' && e.ok === false)));
         return (
           <button key={s.key} className={`lane ${selected === s.key ? 'on' : ''}`} onClick={() => onSelect(s.key)}>
             <span className="lane-name"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={12} /><b>{names[s.key]}</b></span>
             <span className="lane-track">
               {ticks.map((m) => <i key={m} className="grid" style={{ left: x(now - m * MIN) }} />)}
-              {segments(tl, from, now).map((g) => <i key={g.from} className={`seg ${g.phase}`} style={{ left: x(g.from), width: `calc(${x(g.to)} - ${x(g.from)})` }} />)}
+              {segments(tl, from, now, s.waiting ? undefined : s.lastEventAt).map((g) => <i key={g.from} className={`seg ${g.phase}`} style={{ left: x(g.from), width: `calc(${x(g.to)} - ${x(g.from)})` }} />)}
               {fails.map((e) => <i key={e.id} className="fail" style={{ left: x(e.at) }} title={e.detail ?? ''} />)}
             </span>
           </button>
