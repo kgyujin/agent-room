@@ -1,6 +1,6 @@
 import { ApproveButtons, canApprove } from './Approve';
 import type { Snapshot } from '../types';
-import { activityLabel, AGENT_NAME, fmtAgo, fmtDuration, stateLabel, stateTone } from '../labels';
+import { activityLabel, AGENT_NAME, chatName, fmtAgo, fmtDuration, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { L } from '../i18n';
 
@@ -26,8 +26,8 @@ export function Hud({ s, now, onOpenApp }: { s: Snapshot; now: number; onOpenApp
     <div className={`card shud t-${tone}`}>
       <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={20} />
       <div className="shud-id">
-        <b title={s.cwd ?? ''}>{s.project ?? L('프로젝트 미확인', 'Unknown project')}</b>
-        <small>{AGENT_NAME[s.agent]}{s.isDemo && <span className="tag demo">DEMO</span>}</small>
+        <b title={`${chatName(s) ?? ''}\n${s.cwd ?? ''}`.trim()}>{chatName(s) ?? s.project ?? L('프로젝트 미확인', 'Unknown project')}</b>
+        <small>{AGENT_NAME[s.agent]}{chatName(s) && s.project && ` · ${s.project}`}{s.isDemo && <span className="tag demo">DEMO</span>}</small>
       </div>
       <div className={`shud-state tone-${tone}`}><i className="pulse" />{stateLabel(s)}</div>
       <div className={`shud-what ${note ? `note ${note.tone}` : ''}`} title={note?.text ?? doing ?? ''}>

@@ -1,5 +1,5 @@
 import type { Snapshot, TimelineEntry } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, timelineText } from '../labels';
+import { AGENT_NAME, ORIGIN_LABEL, chatName, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, timelineText } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 import { Overview } from './Overview';
@@ -47,7 +47,8 @@ export function DetailPanel(props: {
         {s && PER_SESSION.includes(tab) && (
           <div className="pn-who">
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-            <b>{s.project ?? L('프로젝트 미확인', 'Unknown project')}</b>
+            <b title={chatName(s) ?? ''}>{chatName(s) ?? s.project ?? L('프로젝트 미확인', 'Unknown project')}</b>
+            {chatName(s) && s.project && <small className="muted">{s.project}</small>}
             <span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span>
           </div>
         )}
@@ -126,11 +127,11 @@ export function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; on
   const groups: [string, [string, string][]][] = [
     [L('세션', 'Session'), [
       [L('에이전트', 'Agent'), AGENT_NAME[s.agent] + (s.isDemo ? L(' (데모)', ' (demo)') : '')],
+      [L('대화', 'Chat'), chatName(s) ?? '—'],
       [L('프로젝트', 'Project'), s.project ?? '—'],
       [L('경로', 'Path'), s.cwd ?? '—'],
       [L('모델', 'Model'), s.model ?? '—'],
       ...(s.origin ? [[L('시작한 곳', 'Started from'), ORIGIN_LABEL[s.origin]] as [string, string]] : []),
-      ...(s.title ? [[L('제목', 'Title'), s.title] as [string, string]] : []),
     ]],
     [L('시간', 'Time'), [
       [L('시작', 'Started'), `${fmtClock(s.startedAt)}${s.startExact ? '' : L(' (처음 본 시각)', ' (first seen)')}`],

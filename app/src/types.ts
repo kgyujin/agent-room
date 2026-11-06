@@ -43,6 +43,8 @@ export interface Snapshot {
   origin?: 'desktop' | 'remote' | 'project' | null;
   /** the desktop app's title for the session */
   title?: string | null;
+  /** the session's name from its own transcript: the name it was given, its summary, or the first ask */
+  chatTitle?: string | null;
   /** a permission request can be answered in Agent Room until this time */
   approveUntil?: number | null;
 }

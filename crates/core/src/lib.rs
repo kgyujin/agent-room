@@ -14,6 +14,7 @@ pub mod logs;
 pub mod usage;
 pub mod desktop;
 pub mod history;
+pub mod title;
 
 #[cfg(feature = "runtime")]
 pub mod runtime;

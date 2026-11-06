@@ -42,9 +42,13 @@ describe('sessionNames', () => {
     expect(n['c:aaaa1111']).toBe('web · one');
     expect(n['c:bbbb2222']).toBe('web · two');
   });
-  it('falls back to the id tail in the same folder', () => {
-    const n = sessionNames([snap('c:x-0001', 'web', '/a/web'), snap('c:x-0002', 'web', '/a/web')]);
-    expect(n['c:x-0001']).toBe('web · 0001');
+  it('numbers twins in the same folder by start', () => {
+    const n = sessionNames([{ ...snap('c:x-0002', 'web', '/a/web'), startedAt: 20 }, { ...snap('c:x-0001', 'web', '/a/web'), startedAt: 10 }] as Snapshot[]);
+    expect([n['c:x-0001'], n['c:x-0002']]).toEqual(['web · 1', 'web · 2']);
+  });
+  it('uses the chat name when the session has one', () => {
+    const n = sessionNames([{ ...snap('c:a', 'web', '/a/web'), chatTitle: '로그인 버그 고쳐줘' }, snap('c:b', 'web', '/a/web'), { ...snap('c:c', 'web', '/a/web'), title: 'Desktop title', chatTitle: 'x' }] as Snapshot[]);
+    expect([n['c:a'], n['c:b'], n['c:c']]).toEqual(['로그인 버그 고쳐줘', 'web', 'Desktop title']);
   });
 });
 

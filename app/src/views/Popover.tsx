@@ -5,7 +5,7 @@ import { ApproveButtons } from '../ui/Approve';
 import { useEffect, useRef, useState } from 'react';
 import { useFit } from '../ui/fit';
 import { backend } from '../bridge';
-import { doingLabel, fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
+import { chatName, doingLabel, fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import type { Snapshot } from '../types';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { fmtTokens, useUsageHistory } from '../ui/Usage';
@@ -123,11 +123,11 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
 function Row({ s, name, now, onClick }: { s: Snapshot; name: string; now: number; onClick: (inRoom: boolean) => void }) {
   const todo = userTodo(s, now);
   const tone = stateTone(s);
-  // "코드 작성 중 · Room.tsx": the state in bold, then the file or command it is on (or the session title)
+  // "코드 작성 중 · Room.tsx": the state in bold, then the file or command it is on (or the folder, when the name is the chat's)
   const doing = doingLabel(s);
   const cut = doing?.indexOf(' · ') ?? -1;
   const what = stateLabel(s); // the same words as the dashboard and the room
-  const detail = (doing && cut >= 0 ? doing.slice(cut + 3) : null) ?? s.title;
+  const detail = (doing && cut >= 0 ? doing.slice(cut + 3) : null) ?? (chatName(s) ? s.project : null);
   return (
     <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n${L('⌥ 클릭: 방에서 보기', '⌥-click: see it in the room')}`}>
       <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />

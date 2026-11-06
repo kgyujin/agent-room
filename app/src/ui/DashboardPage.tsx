@@ -8,7 +8,7 @@ import { useFit } from './fit';
 import { Lanes } from './Lanes';
 import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
+import { AGENT_NAME, ORIGIN_LABEL, chatName, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards, type SessFilter, type StatId } from './Activity';
 import { userTodo } from './Overview';
@@ -127,7 +127,7 @@ export function DashboardPage(props: {
     board: () => ['g-board', L('작업 보드', 'Task board'), <TaskBoard sessions={live} now={now} onPick={pick} />],
     sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
     picked: () => ['g-pick', <>
-      {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {selected.project ?? L('세션', 'Session')}</> : L('선택한 세션', 'Picked session')}
+      {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {sessionNames(sessions)[selected.key] ?? L('세션', 'Session')}</> : L('선택한 세션', 'Picked session')}
       {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>{L('세션 열기', 'Open session')}</button>}
     </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">{L('세션을 누르면 작업과 타임라인이 여기에 나와요.', 'Pick a session to see its tasks and timeline here.')}</p>],
   };
@@ -159,7 +159,7 @@ export function DashboardPage(props: {
             <span key={x.key} className="dp-turn-item">
             <button role="listitem" className={selected?.key === x.key ? 'on' : ''} onClick={() => pick(x.key)} title={userTodo(x, now)!.text}>
               <AgentMark agent={x.isDemo ? 'demo' : x.agent} size={12} />
-              <span>{x.project ?? AGENT_NAME[x.agent]}</span>
+              <span>{sessionNames(sessions)[x.key]}</span>
               <em>{userTodo(x, now)!.text}</em>
             </button>
             <ApproveButtons s={x} now={now} compact />
@@ -217,13 +217,14 @@ export function DashboardPage(props: {
   );
 }
 
-/** the second line of a map card: what is asked of the user, else the file or command it is on, else the session title
+/** the second line of a map card: what is asked of the user, else the file or command it is on, else the folder
+ *  of a session shown by its chat name
  *  (a bare state like "승인 필요" would only repeat the label above it) */
 function mapLine(s: Snapshot, now: number): string | null {
   const todo = userTodo(s, now);
   if (todo) return todo.text;
   const d = doingLabel(s);
-  return d && d.includes(' · ') ? d : s.title ?? null;
+  return d && d.includes(' · ') ? d : chatName(s) ? s.project : null;
 }
 
 /** me → each agent → its projects → their sessions (with sub-agent counts), like an org chart */
@@ -250,8 +251,8 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                   {!(inP.length === 1 && names[inP[0].key] === p) && <div className="dmap-pname">{p}</div>}
                   {inP.map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
-                      <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
-                      {mapLine(s, now) && <div className="dmap-doing">{mapLine(s, now)}</div>}
+                      <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b title={`${names[s.key]}${s.cwd ? `\n${s.cwd}` : ''}`}>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
+                      {mapLine(s, now) && <div className="dmap-doing" title={mapLine(s, now) ?? ''}>{mapLine(s, now)}</div>}
                       <div className="dmap-meta">
                         {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}
                         {s.subagents > 0 && <em>{L('하위 에이전트', 'Subagents')} {s.subagents}</em>}
@@ -296,7 +297,7 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
             <h4><em>{c.label}</em><span>{c.cards.length}</span></h4>
             {c.cards.map((k) => (
               <div key={k.key} className="dboard-card" onClick={() => onPick(k.s.key)}>
-                <p>{k.text}</p>
+                <p title={`${k.text}\n${names[k.s.key]}`}>{k.text}</p>
                 <span className="tag"><AgentMark agent={k.s.isDemo ? 'demo' : k.s.agent} size={12} /><span className="nm">{names[k.s.key]}</span></span>
               </div>
             ))}
