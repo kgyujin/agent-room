@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { backend, IN_TAURI } from '../bridge';
 import type { MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
+import { AGENT_NAME, ORIGIN_LABEL, doingLabel, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards } from './Activity';
 import { userTodo } from './Overview';
@@ -138,9 +138,10 @@ function AgentMap({ sessions, now, selected, onPick, onOpen }: { sessions: Snaps
                   {list.filter((s) => (s.project ?? '프로젝트 미확인') === p).map((s) => (
                     <div key={s.key} className={`dmap-node t-${stateTone(s)} ${selected === s.key ? 'on' : ''}`} onClick={() => onPick(s.key)}>
                       <div className="dmap-top"><i className={`dot tone-${stateTone(s)}`} /><b>{names[s.key]}</b><span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span></div>
-                      {doingLabel(s) && <div className="dmap-doing">{doingLabel(s)}</div>}
+                      {(doingLabel(s) ?? s.title) && <div className="dmap-doing">{doingLabel(s) ?? s.title}</div>}
                       <div className="dmap-meta">
                         {userTodo(s, now) && <em className="wait">{userTodo(s, now)!.text}</em>}
+                        {s.origin && <em className={`o-${s.origin}`}>{ORIGIN_LABEL[s.origin]}</em>}
                         {s.subagents > 0 && <em>하위 에이전트 {s.subagents}</em>}
                         {s.model && <em>{s.model}</em>}
                         {IN_TAURI && !s.isDemo && <button className="link" onClick={(e) => { e.stopPropagation(); onOpen(s.key); }}>세션 열기</button>}

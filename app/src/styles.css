@@ -1189,6 +1189,7 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .dmap-meta em { font-style: normal; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: rgba(122, 86, 70, 0.08); color: var(--ink-soft); }
 .dmap-meta em.wait { background: rgba(217, 146, 46, 0.16); color: #9a5f12; font-weight: 700; }
 .dmap-meta .link { margin-left: auto; }
+.dmap-meta em.o-project, .dmap-meta em.o-remote { background: rgba(122, 96, 200, 0.12); color: #5b4aa6; font-weight: 600; }
 
 /* task board */
 .dboard { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; }

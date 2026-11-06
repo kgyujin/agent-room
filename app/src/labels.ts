@@ -200,3 +200,9 @@ export function fmtTokens(n: number): string {
   if (n >= 1e3) return f(n / 1e3, 'K');
   return String(n);
 }
+
+export const ORIGIN_LABEL: Record<'desktop' | 'remote' | 'project', string> = {
+  desktop: '데스크톱 앱',
+  remote: '원격 제어',
+  project: '프로젝트에서 시작됨',
+};

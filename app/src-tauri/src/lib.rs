@@ -521,6 +521,33 @@ fn handle_envelope(app: &AppHandle, env: Envelope) {
 /// desktop apps, or by a schedule (Codex automations, `codex exec`). A log being written means the
 /// agent is working; a quiet log means its turn is over; long quiet ends the session. Only the log
 /// files' times and their `cwd` are read (see agent_room_core::logs).
+/// Marks Claude sessions run by the desktop app, Remote Control or a claude.ai project thread,
+/// from the app's own session records (see `agent_room_core::desktop`).
+fn follow_desktop(app: &AppHandle) {
+    use agent_room_core::desktop;
+    let Some(home) = std::env::var_os("HOME") else { return };
+    let root = std::path::Path::new(&home).join("Library/Application Support/Claude/claude-code-sessions");
+    let found = desktop::scan(&root, now_ms(), 24 * 3_600_000);
+    if found.is_empty() {
+        return;
+    }
+    let shared = app.state::<Shared>();
+    let mut out = Vec::new();
+    {
+        let mut store = shared.store.lock().unwrap();
+        for snap in store.snapshots().into_iter().filter(|s| s.agent == agent_room_core::model::AgentKind::Claude) {
+            // a session continued in a new record: the most recently active record wins
+            let rec = found.iter().filter(|r| r.cli_ids.contains(&snap.session_id)).max_by_key(|r| r.last_activity);
+            if let Some(r) = rec {
+                out.extend(store.set_origin(&snap.key, Some(r.origin.as_str().into()), r.title.clone()));
+            }
+        }
+    }
+    for u in out {
+        publish(app, u);
+    }
+}
+
 fn follow_logs(app: &AppHandle) {
     use agent_room_core::logs;
     use agent_room_core::model::{AgentKind, EvKind};
@@ -1756,6 +1783,7 @@ pub fn run() {
                         // "완료" runs out with time, not with an event
                         sync_island(&h);
                         follow_logs(&h);
+                        follow_desktop(&h);
                         let d = shared.procs.lock().unwrap().scan_agents();
                         let changed = { let mut cur = shared.detected.lock().unwrap(); let c = *cur != d; *cur = d; c };
                         if changed {

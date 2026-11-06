@@ -90,6 +90,10 @@ pub struct Snapshot {
     pub tool_count: u32,
     pub files_edited: Vec<String>,
     pub subagents: u32,
+    /// where a Claude session was started from: "desktop", "remote" or "project" (the desktop app's records)
+    pub origin: Option<String>,
+    /// the desktop app's title for the session
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -173,6 +177,17 @@ impl SessionStore {
         }
     }
 
+    /// Records where the session came from; an update only when that changed.
+    pub fn set_origin(&mut self, key: &str, origin: Option<String>, title: Option<String>) -> Option<Update> {
+        let s = self.sessions.get_mut(key)?;
+        if s.snap.origin == origin && s.snap.title == title {
+            return None;
+        }
+        s.snap.origin = origin;
+        s.snap.title = title;
+        Some(Update { snapshot: s.snap.clone(), appended: vec![], removed: false, notice: None })
+    }
+
     pub fn remove(&mut self, key: &str) -> Option<Update> {
         self.sessions.remove(key).map(|s| Update { snapshot: s.snap, appended: vec![], removed: true, notice: None })
     }
@@ -216,6 +231,8 @@ impl SessionStore {
                 tool_count: 0,
                 files_edited: vec![],
                 subagents: 0,
+                origin: None,
+                title: None,
             },
             timeline: VecDeque::new(),
             tasks: vec![],
