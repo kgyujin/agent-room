@@ -145,7 +145,7 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
                 <div className="row" onClick={() => (compact ? onSelect(s.key) : setOpen(open === id ? null : id))}>
                   <i />
                   <time>{fmtClock(e.at)}</time>
-                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} />{names[s.key]}</span>
+                  <span className="tag"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={11} /><span className="nm">{names[s.key]}</span></span>
                   <span className="txt" title={timelineText(e)}>{timelineText(e)}</span>
                 </div>
                 {open === id && (

@@ -53,9 +53,14 @@
 @container (max-width: 480px) { .dash-table .opt2 { display: none; } .dash-table .dash-prog .trk { display: none; } }
 /* a card scrolls on its own, so nothing inside it gets a second scroll bar */
 .dp-one .dash-log ol { max-height: none; overflow: visible; }
-.dp-one .dp-scroll { overflow-x: hidden; scrollbar-width: none; }
-.dp-one .dp-scroll::-webkit-scrollbar { display: none; }
-@container (max-width: 480px) { .dp-one .dash-table th, .dp-one .dash-table td { padding-left: 5px; padding-right: 5px; } .dp-one .dash-table .who { max-width: 86px; } }
+/* nothing scrolls in a cell: FitCard drops what does not fit and offers the whole card */
+.dp-one .dp-scroll { overflow: hidden; container-type: size; }
+.fit-off { display: none !important; }
+.dash-h .dp-whole { margin-left: auto; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.dash-h .dp-open + .dp-whole { margin-left: 10px; }
+/* a short cell keeps the list and drops the filter row */
+@container (max-height: 230px) { .g-sess .dash-chips { display: none; } }
+@container (max-width: 480px) { .dp-one .dash-table th, .dp-one .dash-table td { padding-left: 5px; padding-right: 5px; }  }
 .dp-one .lc-grid { padding: 0 10px; }
 .dp-one .dshare { padding: 8px 12px; }
 .dp-one .dshare svg { width: 84px; height: 84px; }
@@ -169,3 +174,30 @@
 @media (max-width: 760px) { .dmem { grid-template-columns: 1fr; } }
 button.link { border: none; background: none; padding: 0; font-size: 11px; font-weight: 700; color: var(--work); cursor: pointer; }
 button.link:hover { text-decoration: underline; }
+/* text stays on its line: long names end in "…" instead of running past their pill or card */
+.dash-log .tag, .dboard-card .tag { min-width: 0; max-width: 100%; line-height: 16px; padding: 1px 8px 1px 6px; }
+.tag .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-log .tag svg, .dboard-card .tag svg { flex: none; }
+.dash-log .txt { line-height: 18px; }
+.dp-one .dash-log .tag { max-width: 130px; }
+.dash-stat { container-type: inline-size; }
+.dash-stat b { white-space: nowrap; }
+.dash-stat b em { flex: none; }
+@container (max-width: 118px) { .dash-stat b em { display: none; } }
+.lc-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lc-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dmap-agent b { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dmap-agent small { flex: none; }
+.dmap-top { flex-wrap: wrap; row-gap: 2px; }
+.dmap-top span { white-space: nowrap; }
+/* a short cell: one line per agent card on the map, and board columns only while they hold a card */
+@container (max-height: 300px) {
+  .dp-one .dmap-doing, .dp-one .dmap-meta, .dp-one .dmap-pname { display: none; }
+  .dp-one .dmap-node, .dp-one .dmap.few .dmap-node { padding: 5px 8px; }
+  .dp-one .dboard-col { min-height: 0; }
+}
+.dp-one .dboard-col:not(:has(.dboard-card:not(.fit-off))) { display: none; }
+.dp-one .dash-table .who { max-width: clamp(70px, 100cqw - 260px, 220px); }
+.dash-h .pn-count ~ .dp-whole { margin-left: 10px; }
+.dp-one .dmap-proj:not(:has(.dmap-node:not(.fit-off))) { display: none; }
+.dmap-top b { flex: 1 1 60px; min-width: 60px; }

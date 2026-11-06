@@ -242,8 +242,8 @@ export class Scene {
     const room = this.atlas.frames.room;
     const availW = Math.max(1, w - this.insetRight * dpr);
     const availH = Math.max(1, h - (this.insetBottom + this.insetTop) * dpr);
-    const margin = this.roomOnly ? 2 : 4;
-    const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / (room.w + margin), availH / (room.h + margin))));
+    const box = this.roomOnly ? this.roomBox() : { w: room.w + 4, h: room.h + 4 };
+    const fitIn = (aw: number) => Math.max(1, Math.floor(Math.min(aw / box.w, availH / box.h)));
     // the room fits the area the side panel leaves free (it keeps its size when that still fits)
     // beside the dashboard up to about an eighth of the room's width may go under the panel
     const fit = this.cover ? Math.max(fitIn(availW), fitIn(availW * 1.15)) : fitIn(availW);
@@ -296,18 +296,42 @@ export class Scene {
     return Math.min(Math.max(seat, lo + 0.01), hi - 0.01);
   }
 
+  /** the drawn part of the room frame: the art has a clear border, which the room-only window
+   * leaves out so a room pushed into a screen corner touches it */
+  private opaque: { key: HTMLImageElement; x: number; y: number; w: number; h: number } | null = null;
+  roomBox(): { x: number; y: number; w: number; h: number } {
+    const room = this.atlas.frames.room;
+    if (this.opaque?.key === this.atlas.img) return this.opaque;
+    let box = { x: 0, y: 0, w: room.w, h: room.h };
+    try {
+      const c = document.createElement('canvas');
+      c.width = room.w;
+      c.height = room.h;
+      const g = c.getContext('2d')!;
+      g.drawImage(this.atlas.img, room.x, room.y, room.w, room.h, 0, 0, room.w, room.h);
+      const a = g.getImageData(0, 0, room.w, room.h).data;
+      let [x0, y0, x1, y1] = [room.w, room.h, -1, -1];
+      for (let y = 0; y < room.h; y++) for (let x = 0; x < room.w; x++) if (a[(y * room.w + x) * 4 + 3] > 0) {
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      if (x1 >= 0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    } catch { /* a canvas that can't be read keeps the whole frame */ }
+    this.opaque = { key: this.atlas.img, ...box };
+    return box;
+  }
+
   /** largest whole scale at which the room-only window still fits in w x h CSS px */
   roomOnlyScale(cssW: number, cssH: number): number {
     const dpr = window.devicePixelRatio || 1;
-    const room = this.atlas.frames.room;
-    return Math.max(1, Math.floor(Math.min((cssW * dpr) / (room.w + 2), (cssH * dpr) / (room.h + 2))));
+    const room = this.roomBox();
+    return Math.max(1, Math.floor(Math.min((cssW * dpr) / room.w, (cssH * dpr) / room.h)));
   }
 
-  /** CSS size of a room-only window that holds the room at `scale` with no spare clear margin */
+  /** CSS size of a room-only window that holds the drawn room at `scale` with no clear margin */
   roomOnlySize(scale: number): { w: number; h: number } {
     const dpr = window.devicePixelRatio || 1;
-    const room = this.atlas.frames.room;
-    return { w: Math.ceil(((room.w + 2) * scale) / dpr), h: Math.ceil(((room.h + 2) * scale) / dpr) };
+    const room = this.roomBox();
+    return { w: Math.ceil((room.w * scale) / dpr), h: Math.ceil((room.h * scale) / dpr) };
   }
 
   /** zoom one step in (dir 1) or out (-1) around the window centre, so the room stays in the middle */
@@ -473,8 +497,10 @@ export class Scene {
     this.pan.x = Math.max(-freeW / 2 - room.w / 2 + 24, Math.min(freeW / 2 + room.w / 2 - 24, this.pan.x));
     this.pan.y = Math.max(-freeH / 2 - room.h / 2 + 24, Math.min(freeH / 2 + room.h / 2 - 24, this.pan.y));
     const pan = this.roomOnly ? { x: 0, y: 0 } : this.pan;
-    const ox = Math.floor((freeW - room.w) / 2 + pan.x) - room.dx;
-    const oy = Math.floor(top + (freeH - room.h) / 2 + pan.y) - room.dy;
+    // room-only: the drawn part of the room is centred, so its clear border falls outside the window
+    const box = this.roomOnly ? this.roomBox() : { x: 0, y: 0, w: room.w, h: room.h };
+    const ox = Math.floor((freeW - box.w) / 2 + pan.x) - box.x - room.dx;
+    const oy = Math.floor(top + (freeH - box.h) / 2 + pan.y) - box.y - room.dy;
     this.off = { x: ox, y: oy };
 
     A.placed(g, 'room', ox, oy);
