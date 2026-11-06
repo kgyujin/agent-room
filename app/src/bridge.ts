@@ -202,12 +202,12 @@ function previewBackend(): Backend {
   ];
   return {
     overview: async () => ({ sessions: first, detected: { claude: 0, codex: 0 }, serverError: null, demoRunning: false }),
-    // each preview session gets its own made-up half hour so the activity lanes differ
+    // each preview session gets its own made-up hour and a half so the activity lanes differ and can be scrolled back
     timeline: async (key) => {
       if (!key.startsWith('p:')) return tl;
       const seed = [...key].reduce((a, ch) => a + ch.charCodeAt(0), 0);
       const out: TimelineEntry[] = [];
-      let t = now - 29 * 60_000 + (seed % 7) * 60_000;
+      let t = now - 89 * 60_000 + (seed % 7) * 60_000;
       let id = 1;
       while (t < now - 60_000) {
         const work = (3 + ((seed + id) % 6)) * 60_000;
