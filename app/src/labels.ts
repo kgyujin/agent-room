@@ -1,26 +1,27 @@
 import type { Activity, AgentKind, Snapshot, TimelineEntry } from './types';
+import { isEn, L } from './i18n';
 
-export const AGENT_NAME: Record<AgentKind, string> = { claude: 'Claude Code', codex: 'Codex', demo: '데모' };
+export const AGENT_NAME: Record<AgentKind, string> = { claude: 'Claude Code', codex: 'Codex', get demo() { return L('데모', 'Demo'); } };
 
 /** Main status line. Only what the events say; no guessed intent. */
 export function stateLabel(s: Snapshot): string {
-  if (s.connection === 'stale') return '응답 없음';
-  if (s.connection === 'lost') return '연결 끊김';
-  if (s.connection === 'ended') return '세션 종료';
+  if (s.connection === 'stale') return L('응답 없음', 'Not responding');
+  if (s.connection === 'lost') return L('연결 끊김', 'Disconnected');
+  if (s.connection === 'ended') return L('세션 종료', 'Session ended');
   switch (s.state) {
-    case 'idle': return '대기 중';
-    case 'starting': return '작업 시작';
-    case 'planning': return s.activity === 'plan' ? '계획 수립 중' : '작업 분석 중';
-    case 'reading': return s.activity === 'search' ? '파일 검색 중' : s.activity === 'web' ? '웹 자료 확인 중' : '파일 확인 중';
-    case 'editing': return '코드 작성 중';
-    case 'running': return s.activity === 'delegate' ? '하위 작업 실행 중' : '명령어 실행 중';
+    case 'idle': return L('대기 중', 'Idle');
+    case 'starting': return L('작업 시작', 'Starting');
+    case 'planning': return s.activity === 'plan' ? L('계획 수립 중', 'Planning') : L('작업 분석 중', 'Thinking');
+    case 'reading': return s.activity === 'search' ? L('파일 검색 중', 'Searching files') : s.activity === 'web' ? L('웹 자료 확인 중', 'Checking the web') : L('파일 확인 중', 'Reading files');
+    case 'editing': return L('코드 작성 중', 'Writing code');
+    case 'running': return s.activity === 'delegate' ? L('하위 작업 실행 중', 'Running a subtask') : L('명령어 실행 중', 'Running a command');
     case 'testing':
-      if (s.tool === null && s.lastTest) return s.lastTest.ok === true ? '테스트 통과' : s.lastTest.ok === false ? '테스트 실패' : '테스트 종료';
-      return '테스트 실행 중';
-    case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '답변 기다리는 중';
-    case 'completed': return '작업 완료';
-    case 'error': return s.error?.fatal ? '오류로 중단됨' : '오류 발생';
-    case 'disconnected': return '연결 끊김';
+      if (s.tool === null && s.lastTest) return s.lastTest.ok === true ? L('테스트 통과', 'Tests passed') : s.lastTest.ok === false ? L('테스트 실패', 'Tests failed') : L('테스트 종료', 'Tests ended');
+      return L('테스트 실행 중', 'Running tests');
+    case 'waiting': return s.waiting?.kind === 'approval' ? L('승인 필요', 'Needs approval') : L('답변 기다리는 중', 'Waiting for your answer');
+    case 'completed': return L('작업 완료', 'Done');
+    case 'error': return s.error?.fatal ? L('오류로 중단됨', 'Stopped by an error') : L('오류 발생', 'Error');
+    case 'disconnected': return L('연결 끊김', 'Disconnected');
   }
 }
 
@@ -30,20 +31,20 @@ export function stateLabel(s: Snapshot): string {
 export const justDone = (s: Snapshot, now: number, sec = 60) => s.state === 'completed' && (!sec || now - (s.turnEndedAt ?? s.lastEventAt) < sec * 1000);
 
 export function doingLabel(s: Snapshot): string | null {
-  if (s.connection === 'stale') return '응답 없음';
+  if (s.connection === 'stale') return L('응답 없음', 'Not responding');
   if (s.connection !== 'live') return null;
   const what = ((): string | null => {
     switch (s.state) {
       case 'idle': return null;
-      case 'starting': return '시작하는 중';
-      case 'planning': return s.activity === 'plan' ? '계획 세우는 중' : '생각하는 중';
-      case 'reading': return s.activity === 'search' ? '찾아보는 중' : s.activity === 'web' ? '웹 확인 중' : '파일 읽는 중';
-      case 'editing': return '코드 수정 중';
-      case 'running': return s.activity === 'delegate' ? '하위 작업 중' : '명령 실행 중';
-      case 'testing': return s.tool === null && s.lastTest ? (s.lastTest.ok === false ? '테스트 실패' : '테스트 끝') : '테스트 중';
-      case 'waiting': return s.waiting?.kind === 'approval' ? '승인 필요' : '답변 기다림';
-      case 'completed': return '완료';
-      case 'error': return '오류';
+      case 'starting': return L('시작하는 중', 'Starting');
+      case 'planning': return s.activity === 'plan' ? L('계획 세우는 중', 'Planning') : L('생각하는 중', 'Thinking');
+      case 'reading': return s.activity === 'search' ? L('찾아보는 중', 'Searching') : s.activity === 'web' ? L('웹 확인 중', 'On the web') : L('파일 읽는 중', 'Reading');
+      case 'editing': return L('코드 수정 중', 'Editing');
+      case 'running': return s.activity === 'delegate' ? L('하위 작업 중', 'Subtask') : L('명령 실행 중', 'Running');
+      case 'testing': return s.tool === null && s.lastTest ? (s.lastTest.ok === false ? L('테스트 실패', 'Tests failed') : L('테스트 끝', 'Tests done')) : L('테스트 중', 'Testing');
+      case 'waiting': return s.waiting?.kind === 'approval' ? L('승인 필요', 'Needs approval') : L('답변 기다림', 'Waiting for you');
+      case 'completed': return L('완료', 'Done');
+      case 'error': return L('오류', 'Error');
       case 'disconnected': return null;
     }
   })();
@@ -68,31 +69,31 @@ export function stateTone(s: Snapshot): 'work' | 'wait' | 'ok' | 'bad' | 'calm' 
   }
 }
 
-const ACT: Record<Activity, string> = {
-  think: '분석', plan: '계획', search: '검색', read: '읽기', web: '웹', edit: '편집', run: '실행', test: '테스트', delegate: '하위 작업', ask: '질문', other: '도구',
-};
+const ACT = (): Record<Activity, string> => ({
+  think: L('분석', 'Think'), plan: L('계획', 'Plan'), search: L('검색', 'Search'), read: L('읽기', 'Read'), web: L('웹', 'Web'), edit: L('편집', 'Edit'), run: L('실행', 'Run'), test: L('테스트', 'Test'), delegate: L('하위 작업', 'Subtask'), ask: L('질문', 'Ask'), other: L('도구', 'Tool'),
+});
 
 export function activityLabel(a: Activity | null): string {
-  return a ? ACT[a] : '';
+  return a ? ACT()[a] : '';
 }
 
 export function timelineText(e: TimelineEntry): string {
   const d = e.detail ? ` · ${e.detail}` : '';
   switch (e.kind) {
-    case 'session_start': return '세션 시작';
-    case 'session_end': return '세션 종료';
-    case 'turn_start': return '새 요청 처리 시작';
+    case 'session_start': return L('세션 시작', 'Session started');
+    case 'session_end': return L('세션 종료', 'Session ended');
+    case 'turn_start': return L('새 요청 처리 시작', 'New request');
     case 'tool': return `${activityLabel(e.activity)} — ${e.tool ?? ''}${d}`;
-    case 'tool_fail': return `실패 — ${e.tool ?? ''}${d}`;
-    case 'test': return `${e.ok === true ? '테스트 통과' : e.ok === false ? '테스트 실패' : '테스트 종료(결과 미제공)'}${d}`;
-    case 'approval': return `승인 요청 — ${e.tool ?? '도구'}${d}`;
-    case 'input': return `입력 요청${d}`;
-    case 'turn_complete': return '작업 완료';
-    case 'turn_failed': return `오류로 중단${d}`;
-    case 'interrupted': return '사용자가 중단';
-    case 'compacting': return '대화 요약 (컴팩트)';
-    case 'subagent': return `하위 에이전트 시작${d}`;
-    case 'plan': return `작업 목록 갱신${d}`;
+    case 'tool_fail': return `${L('실패', 'Failed')} — ${e.tool ?? ''}${d}`;
+    case 'test': return `${e.ok === true ? L('테스트 통과', 'Tests passed') : e.ok === false ? L('테스트 실패', 'Tests failed') : L('테스트 종료(결과 미제공)', 'Tests ended (no result)')}${d}`;
+    case 'approval': return `${L('승인 요청', 'Approval asked')} — ${e.tool ?? L('도구', 'tool')}${d}`;
+    case 'input': return `${L('입력 요청', 'Input asked')}${d}`;
+    case 'turn_complete': return L('작업 완료', 'Done');
+    case 'turn_failed': return `${L('오류로 중단', 'Stopped by an error')}${d}`;
+    case 'interrupted': return L('사용자가 중단', 'Stopped by you');
+    case 'compacting': return L('대화 요약 (컴팩트)', 'Compacting the conversation');
+    case 'subagent': return `${L('하위 에이전트 시작', 'Subagent started')}${d}`;
+    case 'plan': return `${L('작업 목록 갱신', 'Task list updated')}${d}`;
     default: return e.kind;
   }
 }
@@ -107,34 +108,34 @@ export function fmtDuration(ms: number): string {
 }
 
 export function fmtClock(ts: number): string {
-  return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  return new Date(ts).toLocaleTimeString(isEn() ? 'en-GB' : 'ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
 export function fmtAgo(ms: number): string {
   const s = Math.floor(ms / 1000);
-  if (s < 5) return '방금';
-  if (s < 60) return `${s}초 전`;
+  if (s < 5) return L('방금', 'just now');
+  if (s < 60) return L(`${s}초 전`, `${s}s ago`);
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}분 전`;
-  return `${Math.floor(m / 60)}시간 전`;
+  if (m < 60) return L(`${m}분 전`, `${m}m ago`);
+  return L(`${Math.floor(m / 60)}시간 전`, `${Math.floor(m / 60)}h ago`);
 }
 
 /** "5시간" / "주간" for the usage windows the agents report */
 export function windowLabel(minutes: number): string {
-  if (minutes === 300) return '5시간';
-  if (minutes === 10080) return '주간';
-  if (minutes >= 1440) return `${Math.round(minutes / 1440)}일`;
-  if (minutes > 0) return `${Math.round(minutes / 60)}시간`;
-  return '한도';
+  if (minutes === 300) return L('5시간', '5-hour');
+  if (minutes === 10080) return L('주간', 'Weekly');
+  if (minutes >= 1440) return L(`${Math.round(minutes / 1440)}일`, `${Math.round(minutes / 1440)}-day`);
+  if (minutes > 0) return L(`${Math.round(minutes / 60)}시간`, `${Math.round(minutes / 60)}-hour`);
+  return L('한도', 'Limit');
 }
 
 /** time until a limit resets: "40분 후", "3시간 10분 후", "2일 5시간 후" */
 export function fmtUntil(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60000));
-  if (m < 60) return `${m}분 후`;
+  if (m < 60) return L(`${m}분 후`, `in ${m}m`);
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간${m % 60 ? ` ${m % 60}분` : ''} 후`;
-  return `${Math.floor(h / 24)}일${h % 24 ? ` ${h % 24}시간` : ''} 후`;
+  if (h < 24) return L(`${h}시간${m % 60 ? ` ${m % 60}분` : ''} 후`, `in ${h}h${m % 60 ? ` ${m % 60}m` : ''}`);
+  return L(`${Math.floor(h / 24)}일${h % 24 ? ` ${h % 24}시간` : ''} 후`, `in ${Math.floor(h / 24)}d${h % 24 ? ` ${h % 24}h` : ''}`);
 }
 
 /**
@@ -148,7 +149,7 @@ export function paceNote(w: { minutes: number; usedPct: number; resetsAt: number
   const elapsed = at - (w.resetsAt - span);
   if (elapsed < span * 0.1) return null;
   const toFull = ((100 - w.usedPct) * elapsed) / w.usedPct;
-  return toFull < w.resetsAt - at ? `이 속도면 ${fmtUntil(toFull)} 소진` : null;
+  return toFull < w.resetsAt - at ? L(`이 속도면 ${fmtUntil(toFull)} 소진`, `runs out ${fmtUntil(toFull)} at this pace`) : null;
 }
 
 /**
@@ -156,7 +157,7 @@ export function paceNote(w: { minutes: number; usedPct: number; resetsAt: number
  * folder), or the session's short id when they run in the same folder. Others keep the folder name.
  */
 export function sessionNames(list: Snapshot[]): Record<string, string> {
-  const base = (s: Snapshot) => s.project ?? '프로젝트';
+  const base = (s: Snapshot) => s.project ?? L('프로젝트', 'project');
   const parent = (s: Snapshot) => (s.cwd ?? '').split('/').filter(Boolean).slice(-2, -1)[0] ?? null;
   const out: Record<string, string> = {};
   for (const s of list) {
@@ -202,7 +203,7 @@ export function fmtTokens(n: number): string {
 }
 
 export const ORIGIN_LABEL: Record<'desktop' | 'remote' | 'project', string> = {
-  desktop: '데스크톱 앱',
-  remote: '원격 제어',
-  project: '프로젝트 스레드',
+  get desktop() { return L('데스크톱 앱', 'Desktop app'); },
+  get remote() { return L('원격 제어', 'Remote Control'); },
+  get project() { return L('프로젝트 스레드', 'Project thread'); },
 };

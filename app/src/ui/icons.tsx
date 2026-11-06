@@ -1,4 +1,5 @@
-// Pixel icons drawn with rects (crisp at any integer scale): 'x' = ink, 'o' = soft fill.
+
+import { L } from '../i18n';// Pixel icons drawn with rects (crisp at any integer scale): 'x' = ink, 'o' = soft fill.
 // Toolbar icons are 16x16; close/expand and the status icons (bell ... note) are 12x12.
 const P: Record<string, string[]> = {
   panel: ['................', '.xxxxxxxxxxxxxx.', '.x........xooox.', '.x........xooox.', '.x........x...x.', '.x........xooox.', '.x........x...x.', '.x........xooox.', '.x........x...x.', '.x........x...x.', '.x........x...x.', '.x........x...x.', '.x........x...x.', '.xxxxxxxxxxxxxx.', '................', '................'],
@@ -83,7 +84,7 @@ const MARK: Record<'claude' | 'codex' | 'demo', string[]> = {
   // demo: play triangle
   demo: ['.ppppppppppp.', 'ppppppppppppp', 'ppppppppppppp', 'ppppwpppppppp', 'ppppwwppppppp', 'PPPPwwwPPPPPP', 'PPPPwwwwPPPPP', 'PPPPwwwPPPPPP', 'PPPPwwPPPPPPP', 'PPPPwPPPPPPPP', 'PPPPPPPPPPPPP', 'PPPPPPPPPPPPP', '.PPPPPPPPPPP.'],
 };
-const MARK_TITLE = { claude: 'Claude Code', codex: 'Codex', demo: '데모' };
+const MARK_TITLE = { claude: 'Claude Code', codex: 'Codex', get demo() { return L('데모', 'Demo'); } };
 
 /** small square badge that tells the agents apart without words */
 export function AgentMark({ agent, size = 14 }: { agent: 'claude' | 'codex' | 'demo'; size?: number }) {

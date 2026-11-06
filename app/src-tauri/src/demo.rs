@@ -5,11 +5,12 @@ use agent_room_core::model::{Activity, AgentKind, EvKind, LimitWindow, NormEvent
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use crate::tr;
 
 pub const DEMO_SESSION: &str = "demo-session";
 
 fn plan(done: usize, active: Option<usize>) -> EvKind {
-    let steps = ["요구사항 읽기", "UI 컴포넌트 수정", "테스트 작성", "빌드 확인"];
+    let steps = [tr("요구사항 읽기", "Read the requirements"), tr("UI 컴포넌트 수정", "Update UI components"), tr("테스트 작성", "Write tests"), tr("빌드 확인", "Check the build")];
     EvKind::Plan {
         items: steps
             .iter()
@@ -65,7 +66,7 @@ fn script() -> Vec<(u64, EvKind)> {
         (0, plan(4, None)),
         (0, EvKind::Limits { limits: RateLimits { windows: vec![LimitWindow { minutes: 300, used_pct: 38.0, resets_at: Some(agent_room_core::model::now_ms() + 2 * 3_600_000) }, LimitWindow { minutes: 10080, used_pct: 22.0, resets_at: Some(agent_room_core::model::now_ms() + 4 * 86_400_000) }], at: agent_room_core::model::now_ms() } }),
         (2000, EvKind::TurnComplete),
-        (25_000, EvKind::NeedsInput { message: Some("다음 요청을 기다리는 중".into()) }),
+        (25_000, EvKind::NeedsInput { message: Some(tr("다음 요청을 기다리는 중", "Waiting for the next request").into()) }),
         (12_000, EvKind::PromptSubmitted),
         (2500, tool("Bash", Run, "git status")),
         (2000, end("Bash", Run, Some(true))),

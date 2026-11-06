@@ -71,7 +71,7 @@ pub(crate) fn list_sounds() -> Vec<SoundFile> {
 pub(crate) fn save_sound(event: String, name: String, bytes: Vec<u8>) -> Result<(), String> {
     let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     if !SOUND_EVENTS.contains(&event.as_str()) || !SOUND_EXTS.contains(&ext.as_str()) || bytes.len() > 2 << 20 {
-        return Err("2MB 이하의 mp3·wav·ogg·m4a 파일만 쓸 수 있어요".into());
+        return Err(tr("2MB 이하의 mp3·wav·ogg·m4a 파일만 쓸 수 있어요", "Only mp3, wav, ogg or m4a files up to 2 MB").into());
     }
     remove_sound(event.clone())?;
     std::fs::create_dir_all(sounds_dir()).map_err(|e| e.to_string())?;
@@ -115,7 +115,7 @@ pub(crate) fn free_character_stem(dir: &std::path::Path, stem: &str) -> String {
 
 pub(crate) fn check_png(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > 4 << 20 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Err("4MB 이하의 PNG 파일만 추가할 수 있어요".into());
+        return Err(tr("4MB 이하의 PNG 파일만 추가할 수 있어요", "Only PNG files up to 4 MB").into());
     }
     Ok(())
 }
@@ -130,7 +130,7 @@ pub(crate) fn existing_character(name: &str) -> Result<std::path::PathBuf, Strin
                 && p.extension().and_then(|x| x.to_str()).is_some_and(|x| x.eq_ignore_ascii_case("png"))
         })
     });
-    found.ok_or_else(|| "캐릭터 파일을 찾지 못했어요".into())
+    found.ok_or_else(|| tr("캐릭터 파일을 찾지 못했어요", "Couldn't find the character file").into())
 }
 
 /// Copies a PNG the user picked into ~/.agent-room/characters (never overwrites). Returns the saved name.
@@ -181,7 +181,7 @@ pub(crate) fn data_dir() -> String {
 pub(crate) fn save_report(name: String, text: String) -> Result<String, String> {
     let ok = name.ends_with(".md") && name.len() <= 80 && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && !name.starts_with('.');
     if !ok {
-        return Err("파일 이름이 올바르지 않아요".into());
+        return Err(tr("파일 이름이 올바르지 않아요", "Invalid file name").into());
     }
     let dir = agent_room_core::paths::home().join("Downloads");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
