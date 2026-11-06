@@ -1056,3 +1056,18 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .dash-log .tag { font-size: 10.5px; font-weight: 700; color: var(--work); background: rgba(46, 154, 156, 0.1); border-radius: 5px; padding: 1px 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-log .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-log li.bad .txt { color: var(--bad); font-weight: 600; }
+
+/* name tags over walking pets: opaque, dark text, a little pointer to the pet, whole-pixel positions */
+.nametag { padding: 2px 8px 2px 4px; font-size: 12px; line-height: 16px; font-weight: 600; background: #fffdf8; color: var(--ink);
+  border: 1.5px solid var(--tag); box-shadow: 0 1px 0 color-mix(in srgb, var(--tag) 45%, transparent), 0 3px 8px rgba(58, 40, 50, 0.22);
+  margin-top: -5px; -webkit-font-smoothing: antialiased; }
+.nametag::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 7px; height: 7px; background: #fffdf8;
+  border-right: 1.5px solid var(--tag); border-bottom: 1.5px solid var(--tag); transform: translateX(-50%) rotate(45deg); }
+.nametag .tag-project { color: var(--ink); font-weight: 800; }
+.nametag span { color: var(--ink); font-weight: 600; }
+.nametag b + span { color: color-mix(in srgb, var(--tag) 75%, var(--ink)); font-weight: 700; }
+.nametag small { color: var(--ink-soft); font-weight: 700; }
+.nametag.on { background: #fff6e0; }
+.nametag.on::after { background: #fff6e0; }
+.nametag.urgent::after { background: #fff1d6; }
+.nametag.settled { opacity: 0.72; }
