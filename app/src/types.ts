@@ -3,7 +3,7 @@ export type AgentKind = 'claude' | 'codex' | 'demo';
 export type AgentState =
   | 'idle' | 'starting' | 'planning' | 'reading' | 'editing' | 'running'
   | 'testing' | 'waiting' | 'completed' | 'error' | 'disconnected';
-export type Activity = 'think' | 'plan' | 'search' | 'read' | 'web' | 'edit' | 'run' | 'test' | 'delegate' | 'ask' | 'other';
+export type Activity = 'think' | 'plan' | 'search' | 'read' | 'web' | 'edit' | 'run' | 'test' | 'delegate' | 'ask' | 'desktop' | 'other';
 export type Connection = 'live' | 'stale' | 'ended' | 'lost';
 
 export interface PlanItem { text: string; status: string }

@@ -84,7 +84,60 @@ pub(crate) fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
         (Notice::NeedsApproval, true) => (format!("{project} · {tool} needs approval"), format!("{agent} is waiting for you to approve {tool}.")),
         (Notice::NeedsInput, true) => (format!("{project} · Waiting for you"), format!("{agent} is waiting for your answer.")),
     };
+    if matches!(n, Notice::NeedsApproval | Notice::NeedsInput) {
+        WAITING_SENT.lock().unwrap().push((s.key.clone(), title.clone()));
+    }
     let _ = app.notification().builder().title(title).body(body).show();
+}
+
+/// Approval and input notices sent per session (session key, title). Once the session stops
+/// waiting (answered in the terminal, in the app or anywhere else) they are taken back out of the
+/// Notification Center, so an old "승인 필요" doesn't sit there after it was dealt with.
+static WAITING_SENT: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+pub(crate) fn clear_answered(app: &AppHandle, s: &Snapshot) {
+    if s.waiting.is_some() {
+        return;
+    }
+    let titles: Vec<String> = {
+        let mut sent = WAITING_SENT.lock().unwrap();
+        if !sent.iter().any(|(k, _)| k == &s.key) {
+            return;
+        }
+        let (gone, kept): (Vec<_>, Vec<_>) = sent.drain(..).partition(|(k, _)| k == &s.key);
+        *sent = kept;
+        gone.into_iter().map(|(_, t)| t).collect()
+    };
+    #[cfg(target_os = "macos")]
+    let _ = app.run_on_main_thread(move || unsafe { mac_remove_delivered(&titles) });
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, titles);
+}
+
+/// Removes this app's delivered notifications with these titles (the notification plugin posts
+/// them through NSUserNotificationCenter in this process).
+#[cfg(target_os = "macos")]
+unsafe fn mac_remove_delivered(titles: &[String]) {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    let Some(cls) = AnyClass::get(c"NSUserNotificationCenter") else { return };
+    let center: *mut AnyObject = msg_send![cls, defaultUserNotificationCenter];
+    if center.is_null() {
+        return;
+    }
+    let list: *mut AnyObject = msg_send![center, deliveredNotifications];
+    let count: usize = if list.is_null() { 0 } else { msg_send![list, count] };
+    for i in 0..count {
+        let note: *mut AnyObject = msg_send![list, objectAtIndex: i];
+        let title: *mut AnyObject = msg_send![note, title];
+        if title.is_null() {
+            continue;
+        }
+        let utf8: *const std::ffi::c_char = msg_send![title, UTF8String];
+        if !utf8.is_null() && titles.iter().any(|t| t.as_bytes() == std::ffi::CStr::from_ptr(utf8).to_bytes()) {
+            let _: () = msg_send![center, removeDeliveredNotification: note];
+        }
+    }
 }
 
 /// One more notification for a request that has waited `renotify_min` minutes (once per request).

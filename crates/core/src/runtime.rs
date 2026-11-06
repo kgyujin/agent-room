@@ -88,11 +88,14 @@ const SHELLS: &[&str] = &["sh", "bash", "zsh", "dash", "fish", "env", "nu", "pws
 
 pub struct ProcWatch {
     sys: System,
+    /// when each watched process started: a pid is reused once its process exits, and a new process
+    /// under the same number must not keep an ended session alive
+    born: std::collections::HashMap<u32, u64>,
 }
 
 impl Default for ProcWatch {
     fn default() -> Self {
-        Self { sys: System::new() }
+        Self { sys: System::new(), born: Default::default() }
     }
 }
 
@@ -112,6 +115,7 @@ impl ProcWatch {
             let p = self.sys.process(pid)?;
             let name = p.name().to_string_lossy().to_ascii_lowercase();
             if !SHELLS.contains(&name.as_str()) {
+                self.born.insert(pid.as_u32(), p.start_time());
                 return Some(pid.as_u32());
             }
             pid = p.parent()?;
@@ -119,8 +123,14 @@ impl ProcWatch {
         None
     }
 
+    /// The process is running and is the same one that was first seen under this pid.
     pub fn alive(&mut self, pid: u32) -> bool {
-        self.refresh_one(Pid::from_u32(pid))
+        if !self.refresh_one(Pid::from_u32(pid)) {
+            self.born.remove(&pid);
+            return false;
+        }
+        let start = self.sys.process(Pid::from_u32(pid)).map_or(0, |p| p.start_time());
+        *self.born.entry(pid).or_insert(start) == start
     }
 
     /// The app the agent runs inside (Terminal, iTerm, VS Code, the Claude or Codex app…): the
@@ -255,6 +265,18 @@ fn outer_app(exe: &std::path::Path) -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_reused_pid_is_not_the_same_process() {
+        let mut w = ProcWatch::default();
+        let me = std::process::id();
+        assert!(w.alive(me));
+        assert!(w.alive(me));
+        // the same number, but a process that started at another time
+        *w.born.get_mut(&me).unwrap() += 1;
+        assert!(!w.alive(me));
+        assert!(!w.alive(u32::MAX - 7));
+    }
 
     #[test]
     fn host_app_is_the_outermost_bundle() {

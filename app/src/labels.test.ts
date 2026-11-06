@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from './types';
-import { fmtAgo, fmtTokens, setTokenUnit, fmtDuration, fmtUntil, paceNote, sessionNames, shortName, windowLabel } from './labels';
+import { doingLabel, fmtAgo, fmtTokens, setTokenUnit, fmtDuration, fmtUntil, paceNote, sessionNames, shortName, stateLabel, windowLabel } from './labels';
 
 const snap = (key: string, project: string, cwd: string) => ({ key, project, cwd }) as unknown as Snapshot;
 
@@ -18,6 +18,14 @@ describe('formatting', () => {
     expect(fmtUntil(40 * 60_000)).toBe('40분 후');
     expect(fmtUntil(190 * 60_000)).toBe('3시간 10분 후');
     expect(fmtUntil(53 * 3600_000)).toBe('2일 5시간 후');
+  });
+});
+
+describe('screen work', () => {
+  it('reads as using the screen, not as a command', () => {
+    const s = { connection: 'live', state: 'running', activity: 'desktop', tool: 'Bash', detail: 'agent-desktop click' } as unknown as Snapshot;
+    expect(stateLabel(s)).toBe('화면 사용 중');
+    expect(doingLabel(s)).toBe('화면 사용 중 · agent-desktop cli…');
   });
 });
 

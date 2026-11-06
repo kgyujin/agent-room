@@ -98,6 +98,8 @@ export function behaviorFor(s: Snapshot, now: number, restVariant: string, napAf
     case 'editing':
       return { ...base, key: 'type', spot: 'desk', seq: TYPE, screen: 'code' };
     case 'running':
+      // working the user's own screen: at the desk, eyes on the monitor
+      if (s.activity === 'desktop') return { ...base, key: 'desktop', spot: 'desk', seq: TYPE, screen: 'read' };
       return { ...base, key: 'operate', spot: 'bench', seq: OPERATE, bubble: 'gear', rig: 'run' };
     case 'testing': {
       if (s.tool === null && s.lastTest) {

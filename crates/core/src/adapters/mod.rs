@@ -66,7 +66,20 @@ const TEST_SUBCOMMANDS: &[(&str, &str)] = &[
     ("playwright", "test"), ("npx", "jest"), ("npx", "vitest"), ("npx", "playwright"), ("bunx", "vitest"), ("rake", "test"),
 ];
 
-/// Decides whether a shell command is a test run, by fixed rules.
+/// MCP servers that work the user's own screen: their tools read or click in the apps the user has open
+const DESKTOP_SERVERS: &[&str] = &["agent-desktop", "computer-use", "computer_use", "claude-in-chrome"];
+
+/// What an MCP tool does, from its server's name (`mcp__<server>__<tool>`), with "server/tool" as detail.
+pub fn mcp_activity(tool: &str) -> (Activity, Option<String>) {
+    let mut parts = tool.trim_start_matches("mcp__").splitn(2, "__");
+    let server = parts.next().unwrap_or("");
+    let name = parts.next().unwrap_or("");
+    let lower = server.to_ascii_lowercase();
+    let act = if DESKTOP_SERVERS.iter().any(|d| lower.contains(d)) { Activity::Desktop } else { Activity::Other };
+    (act, Some(format!("{server}/{name}")))
+}
+
+/// Decides whether a shell command is a test run or works the screen (agent-desktop), by fixed rules.
 pub fn classify_command(cmd: &str) -> Activity {
     let lower = cmd.to_ascii_lowercase();
     for seg in lower.split(['&', ';', '|', '\n']) {
@@ -76,6 +89,10 @@ pub fn classify_command(cmd: &str) -> Activity {
         }
         let prog = basename(toks[0]);
         let prog = prog.as_str();
+        // agent-desktop reads and operates the apps on this screen, run directly or through npx/bunx
+        if prog == "agent-desktop" || (["npx", "bunx", "pnpx"].contains(&prog) && toks.get(1).is_some_and(|t| basename(t) == "agent-desktop")) {
+            return Activity::Desktop;
+        }
         if TEST_RUNNERS.contains(&prog) {
             return Activity::Test;
         }
@@ -107,6 +124,18 @@ pub fn command_summary(cmd: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn screen_work_is_its_own_activity() {
+        assert_eq!(classify_command("agent-desktop click @s8f3k2p9:e8"), Activity::Desktop);
+        assert_eq!(classify_command("cd x && npx agent-desktop snapshot --app Finder -i"), Activity::Desktop);
+        assert_eq!(classify_command("/opt/homebrew/bin/agent-desktop type @s1:e2 --stdin"), Activity::Desktop);
+        assert_eq!(classify_command("npx vitest"), Activity::Test);
+        assert_eq!(classify_command("echo agent-desktop"), Activity::Run);
+        assert_eq!(mcp_activity("mcp__agent-desktop__desktop_click"), (Activity::Desktop, Some("agent-desktop/desktop_click".into())));
+        assert_eq!(mcp_activity("mcp__claude-in-chrome__navigate").0, Activity::Desktop);
+        assert_eq!(mcp_activity("mcp__github__create_pull_request").0, Activity::Other);
+    }
 
     #[test]
     fn test_commands_are_detected() {

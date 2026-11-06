@@ -87,6 +87,9 @@ function remembered(): Partial<Record<Snapshot['agent'], RateLimits>> {
 /** Account usage that shows even when no session here reported it (the desktop app, VS Code, or
  *  before Agent Room started): Codex's from its newest log, Claude's from the account when that is
  *  turned on (the backend asks at most every 5 minutes). Asked once a minute, kept like any other report. */
+/** why the last ask of the Claude account got no usage, null once it answers */
+export let claudeAccountWhy: 'login' | 'expired' | 'failed' | null = null;
+
 export function useAccountLimits() {
   useEffect(() => {
     const keep = (agent: 'claude' | 'codex') => (l: RateLimits | null) => {
@@ -99,7 +102,7 @@ export function useAccountLimits() {
     };
     const read = () => {
       void backend.codexLimits().then(keep('codex')).catch(() => {});
-      void backend.claudeLimits().then(keep('claude')).catch(() => {});
+      void backend.claudeLimits().then((r) => { claudeAccountWhy = r.why; keep('claude')(r.limits); }).catch(() => {});
     };
     read();
     const t = setInterval(read, 60_000);

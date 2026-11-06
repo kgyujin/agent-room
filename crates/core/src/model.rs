@@ -63,6 +63,8 @@ pub enum Activity {
     Test,
     Delegate,
     Ask,
+    /// operating the user's desktop or browser (agent-desktop, Claude in Chrome, computer use)
+    Desktop,
     Other,
 }
 
@@ -74,7 +76,7 @@ impl Activity {
             Activity::Edit => AgentState::Editing,
             Activity::Test => AgentState::Testing,
             Activity::Ask => AgentState::Waiting,
-            Activity::Run | Activity::Delegate | Activity::Other => AgentState::Running,
+            Activity::Run | Activity::Delegate | Activity::Desktop | Activity::Other => AgentState::Running,
         }
     }
 }

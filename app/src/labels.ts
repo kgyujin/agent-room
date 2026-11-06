@@ -14,7 +14,7 @@ export function stateLabel(s: Snapshot): string {
     case 'planning': return s.activity === 'plan' ? L('계획 수립 중', 'Planning') : L('작업 분석 중', 'Thinking');
     case 'reading': return s.activity === 'search' ? L('파일 검색 중', 'Searching files') : s.activity === 'web' ? L('웹 자료 확인 중', 'Checking the web') : L('파일 확인 중', 'Reading files');
     case 'editing': return L('코드 작성 중', 'Writing code');
-    case 'running': return s.activity === 'delegate' ? L('하위 작업 실행 중', 'Running a subtask') : L('명령어 실행 중', 'Running a command');
+    case 'running': return s.activity === 'delegate' ? L('하위 작업 실행 중', 'Running a subtask') : s.activity === 'desktop' ? L('화면 사용 중', 'Using your screen') : L('명령어 실행 중', 'Running a command');
     case 'testing':
       if (s.tool === null && s.lastTest) return s.lastTest.ok === true ? L('테스트 통과', 'Tests passed') : s.lastTest.ok === false ? L('테스트 실패', 'Tests failed') : L('테스트 종료', 'Tests ended');
       return L('테스트 실행 중', 'Running tests');
@@ -40,7 +40,7 @@ export function doingLabel(s: Snapshot): string | null {
       case 'planning': return s.activity === 'plan' ? L('계획 세우는 중', 'Planning') : L('생각하는 중', 'Thinking');
       case 'reading': return s.activity === 'search' ? L('찾아보는 중', 'Searching') : s.activity === 'web' ? L('웹 확인 중', 'On the web') : L('파일 읽는 중', 'Reading');
       case 'editing': return L('코드 수정 중', 'Editing');
-      case 'running': return s.activity === 'delegate' ? L('하위 작업 중', 'Subtask') : L('명령 실행 중', 'Running');
+      case 'running': return s.activity === 'delegate' ? L('하위 작업 중', 'Subtask') : s.activity === 'desktop' ? L('화면 사용 중', 'On your screen') : L('명령 실행 중', 'Running');
       case 'testing': return s.tool === null && s.lastTest ? (s.lastTest.ok === false ? L('테스트 실패', 'Tests failed') : L('테스트 끝', 'Tests done')) : L('테스트 중', 'Testing');
       case 'waiting': return s.waiting?.kind === 'approval' ? L('승인 필요', 'Needs approval') : L('답변 기다림', 'Waiting for you');
       case 'completed': return L('완료', 'Done');
@@ -70,7 +70,7 @@ export function stateTone(s: Snapshot): 'work' | 'wait' | 'ok' | 'bad' | 'calm' 
 }
 
 const ACT = (): Record<Activity, string> => ({
-  think: L('분석', 'Think'), plan: L('계획', 'Plan'), search: L('검색', 'Search'), read: L('읽기', 'Read'), web: L('웹', 'Web'), edit: L('편집', 'Edit'), run: L('실행', 'Run'), test: L('테스트', 'Test'), delegate: L('하위 작업', 'Subtask'), ask: L('질문', 'Ask'), other: L('도구', 'Tool'),
+  think: L('분석', 'Think'), plan: L('계획', 'Plan'), search: L('검색', 'Search'), read: L('읽기', 'Read'), web: L('웹', 'Web'), edit: L('편집', 'Edit'), run: L('실행', 'Run'), test: L('테스트', 'Test'), delegate: L('하위 작업', 'Subtask'), ask: L('질문', 'Ask'), desktop: L('화면', 'Screen'), other: L('도구', 'Tool'),
 });
 
 export function activityLabel(a: Activity | null): string {
