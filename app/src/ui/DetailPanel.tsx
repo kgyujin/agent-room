@@ -2,7 +2,7 @@ import type { Snapshot, TimelineEntry } from '../types';
 import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, timelineText } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
-import { Overview } from './Overview';
+import { isActive, Overview, userTodo } from './Overview';
 import { UsageBoard } from './Usage';
 
 export type Tab = 'overview' | 'usage' | 'timeline' | 'tasks' | 'session';
@@ -12,6 +12,8 @@ const PER_SESSION: Tab[] = ['timeline', 'tasks', 'session'];
 
 export function DetailPanel(props: {
   width: number;
+  /** wide window: every section at once instead of tabs */
+  dashboard?: boolean;
   s: Snapshot | null;
   sessions: Snapshot[];
   onSelect: (k: string) => void;
@@ -24,6 +26,7 @@ export function DetailPanel(props: {
   onForget?: () => void;
 }) {
   const { s, tab, setTab } = props;
+  if (props.dashboard) return <Dashboard {...props} />;
   return (
     <aside className="panel" style={{ width: props.width }}>
       <header>
@@ -52,6 +55,67 @@ export function DetailPanel(props: {
         {s && tab === 'timeline' && <Timeline entries={props.timeline} />}
         {s && tab === 'tasks' && <Tasks s={s} />}
         {s && tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
+      </div>
+    </aside>
+  );
+}
+
+/** full-screen panel: headline numbers, then 현황 and 사용량 side by side, then the selected session */
+function Dashboard(props: Parameters<typeof DetailPanel>[0]) {
+  const { s, sessions, now } = props;
+  const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
+  const stats: [string, number, string][] = [
+    ['내 차례', live.filter((x) => userTodo(x, now)).length, 'todo'],
+    ['작업 중', live.filter((x) => isActive(x) && !userTodo(x, now)).length, 'work'],
+    ['열린 세션', live.length, 'all'],
+    ['완료한 요청', sessions.reduce((a, x) => a + x.completedTurns, 0), 'done'],
+    ['수정한 파일', sessions.reduce((a, x) => a + x.filesEdited.length, 0), 'files'],
+  ];
+  return (
+    <aside className="panel dash" style={{ width: props.width }}>
+      <header>
+        <h3 className="dash-title">대시보드</h3>
+        <button className="tool" onClick={props.onClose} aria-label="패널 닫기" title="패널 닫기">
+          <Icon name="close" />
+        </button>
+      </header>
+      <div className="panel-body dash-body">
+        <div className="dash-stats">
+          {stats.map(([label, n, id]) => (
+            <div key={id} className={`dash-stat st-${id}`}><b>{n}</b><small>{label}</small></div>
+          ))}
+        </div>
+        <div className="dash-grid">
+          <section className="dash-card">
+            <h4 className="dash-h">현황</h4>
+            <Overview sessions={sessions} now={now} selected={s?.key ?? null} onSelect={props.onSelect} showLimits={false} />
+          </section>
+          <section className="dash-card">
+            <h4 className="dash-h">사용량</h4>
+            <div className="pad">{props.showLimits ? <UsageBoard sessions={sessions} now={now} /> : <p className="muted small">한도 표시가 꺼져 있어요.</p>}</div>
+          </section>
+        </div>
+        {s && (
+          <>
+            <div className="pn-who dash-who">
+              <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
+              <b>{s.project ?? '프로젝트 미확인'}</b>
+              <span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span>
+            </div>
+            <div className="dash-grid">
+              <section className="dash-card">
+                <h4 className="dash-h">작업</h4>
+                <Tasks s={s} />
+                <h4 className="dash-h">세션</h4>
+                <SessionInfo s={s} now={now} onForget={props.onForget} />
+              </section>
+              <section className="dash-card">
+                <h4 className="dash-h">타임라인</h4>
+                <Timeline entries={props.timeline} />
+              </section>
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );
