@@ -15,7 +15,7 @@ from PIL import Image
 
 PAL = {
     'ink': '#2a2230', 'ink2': '#5a4652',                      # the critters' own outline colour
-    'wd': '#5e3c30', 'h0': '#86583c', 'h1': '#b27a4f', 'h2': '#d29d67', 'h3': '#e7be88', 'h4': '#f4dbab',   # wood outline + honey wood
+    'h0': '#86583c', 'h1': '#b27a4f', 'h2': '#d29d67', 'h3': '#e7be88', 'h4': '#f4dbab',   # honey wood
     's0': '#4b6d57', 's1': '#6f9474', 's2': '#9cbb93', 's3': '#c4dab6', 's4': '#e2edd8',   # sage
     'c0': '#d6cab5', 'c1': '#eae1ce', 'c2': '#f7f2e6', 'c3': '#fffdf6',                    # cream
     'r0': '#b6626e', 'r1': '#dc8e95', 'r2': '#efb7b4', 'r3': '#f9dcd6',                    # rose
@@ -341,7 +341,7 @@ def chalk_col(u, z, u0, w, z0, h, done=3):
     if not (u0 <= u < u0 + w and z0 <= z < z0 + h):
         return None
     if u < u0 + .5 or u >= u0 + w - .5 or z < z0 + .5 or z >= z0 + h - .5:
-        return 'ink'
+        return 'h0'
     if u < u0 + 1.5 or u >= u0 + w - 1.5 or z >= z0 + h - 1.5:
         return 'h1'
     if z < z0 + 2:
@@ -360,12 +360,12 @@ def peg_col(u, z, u0, w, z0, h):
     if not (u0 <= u < u0 + w and z0 <= z < z0 + h):
         return None
     if u < u0 + .5 or u >= u0 + w - .5 or z < z0 + .5 or z >= z0 + h - .5:
-        return 'ink'
+        return 'h0'
     for tu, col, ln in ((u0 + 3, 'g2', 7), (u0 + 6, 'r1', 6), (u0 + 9, 'b1', 5), (u0 + 12, 'g1', 7), (u0 + 15, 'y1', 4)):
         if tu <= u < tu + 1 and z0 + h - 2 - ln <= z < z0 + h - 2:
             return col
         if tu - .5 <= u < tu + 1.5 and z0 + h - 3 <= z < z0 + h - 2:
-            return 'ink'
+            return 'h0'
     if (u - u0) % 2 < .5 and (z - z0) % 2 < 1:
         return 'h1'
     return 'h3'
@@ -507,7 +507,7 @@ def shell():
 
 
 # ---------------------------------------------------------------- furniture
-# Furniture follows the reference pieces: dark cocoa outline, lit top edge, plank seams and nail
+# Furniture follows the reference pieces: a soft outline in the piece's own darkest tone (like the window and door frames), lit top edge, plank seams and nail
 # dots on wood, seams and buttons on cloth. Bands are 1 unit (or half a unit across a wall-facing
 # face) so every line lands on whole pixels in both cameras.
 def plank_top(y0, ly, light='h3', seam='h2', edge='h4'):
@@ -548,12 +548,12 @@ def desk_piece(x, y):
         return 'h2'
     box(c, x + 9, y, 0, 4, 8, 9, 'h3', drawers, 'h1')
     box(c, x, y, 9, 14, 8, 2, plank_top(y, 8),
-        lambda u, z: 'h3' if z >= 10 else ('wd' if (u - x) % 4 < .5 and u > x + 1 else 'h2'), 'h1')
+        lambda u, z: 'h3' if z >= 10 else ('h0' if (u - x) % 4 < .5 and u > x + 1 else 'h2'), 'h1')
     box(c, x + 3, y + 2, 11, 6, 4, 1, 'g2', 'g1', 'g1')          # laptop base
     face_front(c, x + 3, x + 9, y + 2, 12, 17,
                lambda u, z: 'g2' if (u < x + 3.5 or u >= x + 8.5 or z < 12.6 or z >= 16.5) else 'n0')
     box(c, x + 11, y + 4, 11, 2, 2, 2, 'c3', lambda u, z: 'r1' if 12 <= z < 13 else 'c2', 'c1')   # mug
-    return c.outline('wd')
+    return c.outline('h0')
 
 
 SCREEN_STATES = ['off', 'idle', 'err', 'ok', 'wait', 'code0', 'code1', 'code2', 'code3', 'read0', 'read1']
@@ -598,7 +598,7 @@ def chair_piece(x, y, col):
     box(c, x, y, 3, 5, 5, 2, lambda a, b: lo if (math.floor(a) == x + 2 and math.floor(b) == y + 2) else
         (mid if (a < x + 1 or b < y + 1 or a >= x + 4 or b >= y + 4) else hi),
         lambda u, z: mid if z >= 4 else lo, lo)
-    return c.outline('wd')
+    return c.outline('h0')
 
 
 def shelf_piece():
@@ -628,7 +628,7 @@ def shelf_piece():
         return bc if fz - 1 < bh else 'h0'
     box(c, x0, y0, 0, lx, ly, lz, plank_top(y0, ly), front,
         lambda v, z: 'h2' if z >= lz - 1 else ('h0' if (z - 1) % 7.5 < 1 and z > 2 else 'h1'))
-    return c.outline('wd')
+    return c.outline('h0')
 
 
 RIG_STATES = ['rig_idle', 'rig_run0', 'rig_run1', 'rig_run2', 'rig_pass', 'rig_fail']
@@ -642,11 +642,11 @@ def bench_piece():
     box(c, x, y, 3, 16, 8, 1, plank_top(y, 8), 'h2', 'h1')
     box(c, x + 2, y + 2, 4, 5, 4, 2, lambda a, b: 'b3' if b < y + 3 else 'b2', lambda u, z: 'c3' if 5 <= z < 6 and u < x + 6 else 'b1', 'b0')
     box(c, x, y, 9, 16, 8, 2, plank_top(y, 8),
-        lambda u, z: 'h3' if z >= 10 else ('wd' if (u - x) % 4 < .5 and u > x + 1 else 'h2'), 'h1')
+        lambda u, z: 'h3' if z >= 10 else ('h0' if (u - x) % 4 < .5 and u > x + 1 else 'h2'), 'h1')
     box(c, x + 1, y + 1, 11, 9, 5, 7, 's3', 's2', 's1')          # mint test meter
     face_front(c, x + 2, x + 9.5, y + 6, 13, 17, k('n0'))
     box(c, x + 12, y + 3, 11, 1, 1, 3, 'w1', 'w1', 'w0')         # flask
-    return c.outline('wd')
+    return c.outline('h0')
 
 
 def rig_overlay(state):
@@ -697,7 +697,7 @@ def sofa_piece():
     box(c, x + 3, y + 11, 5, 6, 3, 1,
         lambda a, b: 'r1' if (math.floor(a) % 2 and math.floor(b) % 2) else ('r2' if (math.floor(a) + math.floor(b)) % 2 else 'c3'),
         lambda u, z: 'c3' if (u * 2) % 2 < 1 else 'r2', 'r2')                           # folded throw
-    return c.outline('wd')
+    return c.outline('s0')
 
 
 def tea_piece():
@@ -724,7 +724,7 @@ def tea_piece():
         lambda u, z: 'b1' if 6 <= z < 7 else 'c2', 'c1')                                # teapot
     face_top(c, x + 3, y + 3, x + 4, y + 4, 8, k('b1'))                                 # lid knob
     box(c, x + 5, y + 1, 5, 1, 1, 1, 'c3', 'r1', 'r0')                                   # cup
-    return c.outline('wd')
+    return c.outline('h0')
 
 
 BEANBAG = ['.....OOOOOOOOOO.....', '...OOHHHHHHHHYYOO...', '..OHHHWWHHYYYYYYYO..', '.OHHWWHYYYYYYYYYYYO.',
@@ -735,7 +735,7 @@ FIDDLE = ['.....OO..........', '....OLLO..OOO....', '...OLLMLO.OLLO...', '...OLM
           '.....OLLOD.OOLLLO', '....OLMLOD...OOO.', '....OLLMLOD......', '.....OOOOD.......', '.........D.......',
           '....OOOOOOOOO....', '...OBBBBBBBBBO...', '...OBWBWBWBWBO...', '...OWBWBWBWBWO...', '...OBWBWBWBWBO...',
           '....OWBWBWBWO....', '....OOOOOOOOO....']
-FIDDLE = FIDDLE[:15] + [r.replace('O', 'P') for r in FIDDLE[15:]]   # leaves outlined in deep green, the pot in cocoa
+FIDDLE = FIDDLE[:15] + [r.replace('O', 'P') for r in FIDDLE[15:]]   # leaves outlined in deep sage, the pot in wood brown
 
 
 def sprite_piece(rows, cm, wx, wy):
@@ -761,10 +761,10 @@ def pieces():
     out.append(('sofa', sofa_piece(), floor_y(SOFA[0] + 9, SOFA[1] + 18), [SOFA[0], SOFA[1], SOFA[0] + 9, SOFA[1] + 18]))
     out.append(('table', tea_piece(), floor_y(TEA[0] + 7, TEA[1] + 7), [TEA[0], TEA[1], TEA[0] + 7, TEA[1] + 7]))
     bx, by = BEAN[0] + 2, BEAN[1] + 2
-    out.append(('beanbag', sprite_piece(BEANBAG, {'O': 'wd', 'H': 'y2', 'W': 'c3', 'Y': 'y1', 'D': 'y0'}, bx, by), floor_y(bx, by) - 2,
+    out.append(('beanbag', sprite_piece(BEANBAG, {'O': 'h0', 'H': 'y2', 'W': 'c3', 'Y': 'y1', 'D': 'y0'}, bx, by), floor_y(bx, by) - 2,
                 [BEAN[0], BEAN[1], BEAN[0] + 4, BEAN[1] + 4]))
     for i, (px, py) in enumerate(PLANTS):
-        out.append((f'plant{i}', sprite_piece(FIDDLE, {'O': 'g0', 'P': 'wd', 'L': 's2', 'M': 's1', 'D': 'h0', 'B': 'h2', 'W': 'h3'}, px, py),
+        out.append((f'plant{i}', sprite_piece(FIDDLE, {'O': 's0', 'P': 'h0', 'L': 's2', 'M': 's1', 'D': 'h0', 'B': 'h2', 'W': 'h3'}, px, py),
                     floor_y(px, py), [px - 2, py - 2, px + 2, py + 2]))
     return out
 
