@@ -106,6 +106,7 @@ fn publish(app: &AppHandle, u: Update) {
     if let Some(n) = u.notice {
         notify(app, &u.snapshot, n);
     }
+    clear_answered(app, &u.snapshot);
     if let Some(l) = &u.snapshot.limits {
         notify_low_limits(app, &u.snapshot, l);
     }

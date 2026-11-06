@@ -1,7 +1,7 @@
 //! OpenAI Codex CLI hooks -> common events.
 //! Reference: https://developers.openai.com/codex/hooks
 
-use super::{base_event, basename, classify_command, command_summary, s};
+use super::{base_event, basename, classify_command, command_summary, mcp_activity, s};
 use crate::model::{Activity, AgentKind, EvKind, NormEvent, PlanItem};
 use serde_json::Value;
 
@@ -30,12 +30,7 @@ pub fn tool_activity(tool: &str, input: &Value) -> (Activity, Option<String>) {
         "list_dir" | "grep_files" | "glob" | "search" => (Activity::Search, s(input, "pattern").map(String::from)),
         "spawn_agent" | "send_input" | "wait" => (Activity::Delegate, None),
         "request_user_input" => (Activity::Ask, None),
-        t if t.starts_with("mcp__") => {
-            let mut parts = t.trim_start_matches("mcp__").splitn(2, "__");
-            let server = parts.next().unwrap_or("");
-            let name = parts.next().unwrap_or("");
-            (Activity::Other, Some(format!("{server}/{name}")))
-        }
+        t if t.starts_with("mcp__") => mcp_activity(t),
         _ => (Activity::Other, None),
     }
 }

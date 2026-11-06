@@ -44,7 +44,8 @@ export interface Backend {
   /** the language the menu bar menu and notifications use */
   setUiLang(en: boolean): Promise<void>;
   codexLimits(): Promise<RateLimits | null>;
-  claudeLimits(): Promise<RateLimits | null>;
+  /** Claude's usage from the account; `why` says why there is none (not signed in, token expired, request failed) */
+  claudeLimits(): Promise<{ limits: RateLimits | null; why: 'login' | 'expired' | 'failed' | null }>;
   hooksStatus(): Promise<HookStatus[]>;
   hooksInstall(agent: string): Promise<HookStatus>;
   hooksUninstall(agent: string): Promise<HookStatus>;
@@ -236,7 +237,7 @@ function previewBackend(): Backend {
     setTzOffset: async () => {},
     setUiLang: async () => {},
     codexLimits: async () => null,
-    claudeLimits: async () => null,
+    claudeLimits: async () => ({ limits: null, why: null }),
     setRoomOnly: async () => undefined,
     hooksStatus: async () => [
       { agent: 'claude', configPath: '~/.claude/settings.json', agentDetected: true, installed: 'none', hookBinaryPresent: false, notes: [], backups: [] },

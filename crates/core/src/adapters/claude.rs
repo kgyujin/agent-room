@@ -1,7 +1,7 @@
 //! Claude Code hooks -> common events.
 //! Reference: https://code.claude.com/docs/en/hooks
 
-use super::{base_event, basename, classify_command, command_summary, s};
+use super::{base_event, basename, classify_command, command_summary, mcp_activity, s};
 use crate::model::{Activity, AgentKind, EvKind, NormEvent, PlanItem};
 use serde_json::Value;
 
@@ -30,12 +30,7 @@ pub fn tool_activity(tool: &str, input: &Value) -> (Activity, Option<String>) {
         "TodoWrite" | "TaskCreate" | "TaskUpdate" | "TaskList" | "TaskGet" | "EnterPlanMode" | "ExitPlanMode" => (Activity::Plan, None),
         "Task" | "Agent" => (Activity::Delegate, s(input, "subagent_type").or_else(|| s(input, "description")).map(String::from)),
         "AskUserQuestion" => (Activity::Ask, None),
-        t if t.starts_with("mcp__") => {
-            let mut parts = t.trim_start_matches("mcp__").splitn(2, "__");
-            let server = parts.next().unwrap_or("");
-            let name = parts.next().unwrap_or("");
-            (Activity::Other, Some(format!("{server}/{name}")))
-        }
+        t if t.starts_with("mcp__") => mcp_activity(t),
         _ => (Activity::Other, None),
     }
 }
