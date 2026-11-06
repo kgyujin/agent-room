@@ -3,7 +3,7 @@
 // list, usage limits, sessions and the picked session each get one cell of a grid that fills the height.
 // Everything shown comes from hook events, the agents' local usage logs and their local
 // CLAUDE.md / AGENTS.md files; nothing calls a model.
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, ORIGIN_LABEL, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
@@ -25,6 +25,50 @@ export const DASH_CARDS = [
   ['sessions', '세션', 'Sessions'],
   ['picked', '선택한 세션', 'Picked session'],
 ] as const;
+
+/** what a card drops, first group first and the last item of a group first, until the rest fits
+ * without scrolling: the usage share and pace notes, then the weekly rows, then list rows */
+const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
+
+/** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
+function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [cut, setCut] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.querySelectorAll('.fit-off').forEach((x) => x.classList.remove('fit-off'));
+      let n = 0;
+      for (const sel of FIT_DROP) {
+        // columns (map, board) lose their last items in turn, so no column empties while another is full
+        const cols = new Map<Element, Element[]>();
+        for (const x of el.querySelectorAll(sel)) {
+          const c = x.closest('.dmap-col, .dboard-col') ?? el;
+          cols.set(c, [...(cols.get(c) ?? []), x]);
+        }
+        while (el.scrollHeight > el.clientHeight + 1) {
+          const longest = [...cols.values()].reduce((a, c) => (c.length > a.length ? c : a), [] as Element[]);
+          const x = longest.pop();
+          if (!x) break;
+          x.classList.add('fit-off');
+          n++;
+        }
+      }
+      setCut(n);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return (
+    <section className={`dash-card ${cls}`} style={style}>
+      <h4 className="dash-h">{title}{cut > 0 && <button className="link dp-whole" onClick={onWhole}>{L('전체 보기', 'Show all')}</button>}</h4>
+      <div className="dp-scroll" ref={ref}>{children}</div>
+    </section>
+  );
+}
 
 export function DashboardPage(props: {
   sessions: Snapshot[];
@@ -62,9 +106,7 @@ export function DashboardPage(props: {
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
   const canOpen = (s: Snapshot) => IN_TAURI && !s.isDemo;
-  const card = (cls: string, title: React.ReactNode, body: React.ReactNode, style?: React.CSSProperties) => (
-    <section className={`dash-card ${cls}`} style={style}><h4 className="dash-h">{title}</h4><div className="dp-scroll">{body}</div></section>
-  );
+  const [whole, setWhole] = useState<(typeof DASH_CARDS)[number][0] | null>(null);
   const split = props.split !== undefined;
   const cards: Record<(typeof DASH_CARDS)[number][0], () => [string, React.ReactNode, React.ReactNode]> = {
     map: () => ['g-map', <>{L('에이전트 지도', 'Agent map')} <span className="pn-count">{live.length}</span></>, <AgentMap sessions={sessions} now={now} selected={selected?.key ?? null} onPick={pick} onOpen={props.onOpen} />],
@@ -116,9 +158,17 @@ export function DashboardPage(props: {
         {shown.map(([id], i) => {
           const [cls, title, body] = cards[id]();
           const last = i === shown.length - 1 && rest > 0;
-          return <Fragment key={id}>{card(last ? `${cls} dp-last` : cls, title, body, last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined)}</Fragment>;
+          return <FitCard key={id} cls={last ? `${cls} dp-last` : cls} title={title} style={last ? ({ '--span': cols - rest + 1 } as React.CSSProperties) : undefined} onWhole={() => setWhole(id)}>{body}</FitCard>;
         })}
       </div>
+      {whole && !props.hidden.includes(whole) && (
+        <div className="dp-over" onClick={() => setWhole(null)}>
+          <section className={`dash-card ${cards[whole]()[0]}`} onClick={(e) => e.stopPropagation()}>
+            <h4 className="dash-h">{cards[whole]()[1]}<button className="link dp-open" onClick={() => setWhole(null)}>{L('닫기', 'Close')}</button></h4>
+            <div className="dp-scroll">{cards[whole]()[2]}</div>
+          </section>
+        </div>
+      )}
       {todayOpen && (
         <div className="dp-over">
           <section className="dash-card">
@@ -215,7 +265,7 @@ function TaskBoard({ sessions, now, onPick }: { sessions: Snapshot[]; now: numbe
             {c.cards.map((k) => (
               <div key={k.key} className="dboard-card" onClick={() => onPick(k.s.key)}>
                 <p>{k.text}</p>
-                <span className="tag"><AgentMark agent={k.s.isDemo ? 'demo' : k.s.agent} size={12} />{names[k.s.key]}</span>
+                <span className="tag"><AgentMark agent={k.s.isDemo ? 'demo' : k.s.agent} size={12} /><span className="nm">{names[k.s.key]}</span></span>
               </div>
             ))}
           </section>
@@ -257,14 +307,6 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
   const d = daySummary(day, h, now);
   const usd = d.tokens ? estCost(d.tokens, cost) : null;
   const md = dayMarkdown(d, fmtTokens, usd);
-  const nums: [string, string][] = [
-    [L('끝낸 요청', 'Requests done'), String(d.turns)],
-    [L('테스트', 'Tests'), L(`통과 ${d.testsOk} · 실패 ${d.testsFail}`, `${d.testsOk} passed · ${d.testsFail} failed`)],
-    [L('승인·답변 요청', 'Approvals and questions'), String(d.asks)],
-    [L('고친 파일', 'Files edited'), String(d.files)],
-    [L('토큰', 'Tokens'), d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'],
-    ...(usd !== null ? [[L('추정 비용', 'Estimated cost'), fmtUsd(usd)] as [string, string]] : []),
-  ];
   const save = async () => {
     try { const at = await backend.saveReport(reportName(d.from), md); setSaved(L(`${at}에 저장했어요`, `Saved to ${at}`)); } catch (e) { setSaved(`${L('저장하지 못했어요', "Couldn't save")}: ${String(e)}`); }
   };
@@ -273,11 +315,40 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
   };
   return (
     <div className="dtoday">
-      <div className="dash-stats">
-        {nums.map(([k, v]) => <div key={k} className="dash-stat"><small>{k}</small><b>{v}</b></div>)}
+      <div className="dt-tiles">
+        <Tile k={L('끝낸 요청', 'Requests done')} v={d.turns} />
+        <div className={`dt-tile ${d.testsOk + d.testsFail ? '' : 'zero'}`}>
+          <small>{L('테스트', 'Tests')}</small>
+          <div className="dt-tests"><b className="ok">{d.testsOk}</b><span>{L('통과', 'passed')}</span><b className={d.testsFail ? 'bad' : ''}>{d.testsFail}</b><span>{L('실패', 'failed')}</span></div>
+        </div>
+        <Tile k={L('승인·답변 요청', 'Approvals and questions')} v={d.asks} />
+        <Tile k={L('고친 파일', 'Files edited')} v={d.files} />
+        <div className={`dt-tile ${d.tokens ? '' : 'zero'}`}>
+          <small>{L('토큰', 'Tokens')}</small>
+          <b>{d.tokens ? fmtTokens(d.tokens.claude + d.tokens.codex) : '—'}</b>
+          {d.tokens && d.tokens.claude + d.tokens.codex > 0 && (
+            <span className="dt-split" title={`Claude Code ${fmtTokens(d.tokens.claude)} · Codex ${fmtTokens(d.tokens.codex)}`}>
+              <i className="a-claude" style={{ flex: d.tokens.claude }} /><i className="a-codex" style={{ flex: d.tokens.codex }} />
+            </span>
+          )}
+        </div>
+        {usd !== null && <div className="dt-tile"><small>{L('추정 비용', 'Estimated cost')}</small><b>{fmtUsd(usd)}</b></div>}
       </div>
-      <h4 className="dash-h">{L('보고서 미리보기', 'Report preview')} <small className="muted">{L('저장하기 전에 확인하세요. 프로젝트 이름과 파일 이름이 들어가요.', 'Check it before saving. It includes project and file names.')}</small></h4>
-      <pre className="dtoday-md">{md}</pre>
+      <h4 className="dash-h">{L('세션별', 'By session')} <span className="pn-count">{d.sessions.length}</span></h4>
+      {d.sessions.length ? (
+        <ul className="dt-sess">
+          {d.sessions.map((x, i) => (
+            <li key={`${x.project}-${i}`}>
+              <div className="dt-sess-top"><b>{x.project}</b><small>{x.agent}</small><span>{L(`요청 ${x.turns}회 · 파일 ${x.files.length}개`, `${x.turns} requests · ${x.files.length} files`)}</span></div>
+              {x.files.length > 0 && <div className="dt-files">{x.files.slice(0, 8).map((f) => <code key={f}>{f.split('/').pop()}</code>)}{x.files.length > 8 && <small>+{x.files.length - 8}</small>}</div>}
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted small">{L('오늘 받은 이벤트가 아직 없어요.', 'No events yet today.')}</p>}
+      <details className="dt-md">
+        <summary>{L('보고서 원문 (Markdown)', 'Report text (Markdown)')} <small className="muted">{L('저장·복사하면 이 내용이 들어가요. 프로젝트와 파일 이름이 포함돼요.', 'This is what gets saved or copied. It includes project and file names.')}</small></summary>
+        <pre className="dtoday-md">{md}</pre>
+      </details>
       <div className="dtoday-act">
         <button className="btn primary" onClick={() => void save()}>{IN_TAURI ? L('다운로드 폴더에 저장', 'Save to Downloads') : L('Markdown 받기', 'Get Markdown')}</button>
         <button className="btn" onClick={() => void copy()}>{L('복사', 'Copy')}</button>
@@ -285,6 +356,10 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
       </div>
     </div>
   );
+}
+
+function Tile({ k, v }: { k: string; v: number }) {
+  return <div className={`dt-tile ${v ? '' : 'zero'}`}><small>{k}</small><b>{v}</b></div>;
 }
 
 /** a past day's timeline, from the history kept on this computer */
@@ -315,7 +390,7 @@ function PastDays({ days, now }: { days: number; now: number }) {
           <li key={`${l.key}-${l.entry.id}-${l.entry.at}`} className={`k-${l.entry.kind} ${l.entry.ok === false ? 'bad' : l.entry.ok === true ? 'ok' : ''}`}>
             <i />
             <time>{fmtClock(l.entry.at)}</time>
-            <span className="tag"><AgentMark agent={l.agent === 'demo' ? 'demo' : (l.agent as 'claude' | 'codex')} size={11} />{l.project ?? AGENT_NAME[l.agent as 'claude'] ?? l.agent}</span>
+            <span className="tag"><AgentMark agent={l.agent === 'demo' ? 'demo' : (l.agent as 'claude' | 'codex')} size={11} /><span className="nm">{l.project ?? AGENT_NAME[l.agent as 'claude'] ?? l.agent}</span></span>
             <span className="txt">{timelineText(l.entry)}</span>
           </li>
         ))}
