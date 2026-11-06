@@ -12,6 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux
       - name: Linux deps for Tauri
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
       - uses: actions/setup-node@v4
@@ -24,6 +27,8 @@ jobs:
         working-directory: app
       - run: npx tsc --noEmit
         working-directory: app
+      - run: npm test
+        working-directory: app
       - name: Build hook sidecar + app crate
         working-directory: app
         run: |
@@ -31,9 +36,25 @@ jobs:
           mkdir -p dist
           cargo build -p agent-room-app
 
+  # the screens in a real browser (preview data): page errors, a dashboard that needs scrolling
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npx playwright install --with-deps chromium
+        working-directory: app
+      - run: npm run build && npm run ui-check
+        working-directory: app
+
   macos:
     runs-on: macos-latest
-    needs: test
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

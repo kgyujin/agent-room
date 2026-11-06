@@ -9,6 +9,7 @@ import { trayFrames } from './game/trayFrames';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
+import { DashboardPage } from './ui/DashboardPage';
 import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
@@ -22,8 +23,6 @@ import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } fr
 const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
 const PANEL_MIN_VW = 900;
-/** from this window width (a full screen) the panel turns into a dashboard showing every section at once */
-const DASH_MIN_VW = 1280;
 /** room-only window width limits for resizing it with the scroll wheel (CSS px) */
 const ROOM_ONLY_MIN_W = 300;
 const ROOM_ONLY_MAX_W = 1200;
@@ -113,6 +112,11 @@ export default function App() {
   const [welcomeClosed, setWelcomeClosed] = useState(() => { try { return localStorage.getItem('welcomeClosed') === '1'; } catch { return false; } });
   const closeWelcome = () => { setWelcomeClosed(true); try { localStorage.setItem('welcomeClosed', '1'); } catch { /* storage unavailable */ } };
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
+  // dashboard views: beside the room ('split') or filling the window ('full'), any window size
+  const [dashView, setDashView] = useState<'off' | 'split' | 'full'>(() => {
+    try { const v = localStorage.getItem('dashView'); return v === '1' || v === 'full' ? 'full' : v === 'split' ? 'split' : 'off'; } catch { return 'off'; }
+  });
+  useEffect(() => { try { localStorage.setItem('dashView', dashView); } catch { /* storage unavailable */ } }, [dashView]);
   // open: the pane to show ('last' = the one used last time)
   const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
   const [detailTab, setDetailTab] = useState<Tab>('overview');
@@ -133,9 +137,11 @@ export default function App() {
   const compact = mini || vw < 560;
   // narrow window: the session tabs move under the room
   const tabsBelow = compact && !mini && !office && settings.showTabs && list.length > 0;
-  const panelOpen = settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW;
-  const dashboard = panelOpen && vw >= DASH_MIN_VW;
-  const panelW = dashboard ? Math.min(900, Math.round(vw * 0.5)) : PANEL_W;
+  // the split dashboard takes the panel's place (wider), leaving the room at least 480px on the left
+  const dashSplit = dashView === 'split' && !mini && !office && vw >= PANEL_MIN_VW;
+  const dashPage = (dashView === 'full' || (dashView === 'split' && !dashSplit && !office)) && !mini;
+  const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
+  const panelW = dashSplit ? Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480)) : PANEL_W;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -186,14 +192,15 @@ export default function App() {
   // load timeline for the selected session when the panel needs it
   const asking = useRef(new Set<string>());
   useEffect(() => {
-    if (!panelOpen) return;
-    // the dashboard's activity log needs every session's log; the tabbed panel only the selected one
-    const keys = dashboard ? list.map((x) => x.key) : selected ? [selected.key] : [];
+    const page = dashPage || dashSplit;
+    if (!panelOpen && !page) return;
+    // the dashboards' activity log needs every session's log; the tabbed panel only the selected one
+    const keys = page ? list.map((x) => x.key) : selected ? [selected.key] : [];
     for (const k of keys.filter((k) => !timelines[k] && !asking.current.has(k))) {
       asking.current.add(k);
       backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
     }
-  }, [selected?.key, panelOpen, dashboard, list, timelines]);
+  }, [selected?.key, panelOpen, dashPage, dashSplit, mini, list, timelines]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {
@@ -543,7 +550,7 @@ export default function App() {
   const demoShown = selected?.isDemo ?? false;
 
   return (
-    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
+    <div className={`app ${compact ? 'mini' : ''} ${mini ? 'room-only' : ''} ${hovered ? 'hovered' : ''} ${IS_MAC && IN_TAURI ? 'mac' : ''} ${dashPage ? 'dash-open' : ''} theme-${themeFor(settings.theme)}`} style={mini && !settingsOpen ? undefined : backdropStyle(settings)} onPointerDown={() => soundRef.current.unlock()}
       onMouseMove={mini ? (e) => pointAt.current([e.clientX, e.clientY]) : undefined} onMouseLeave={mini ? () => setHovered(false) : undefined}>
       <canvas ref={canvasRef} className="room" onClick={onCanvasClick} onMouseDown={onCanvasDown} onWheel={onWheel} onDoubleClick={onCanvasDouble}
         title={furnTip ?? undefined} onMouseMove={(e) => {
@@ -598,16 +605,14 @@ export default function App() {
         </div>
       )}
 
-      {panelOpen && (
+      {panelOpen && !dashSplit && (
         <DetailPanel
           width={panelW}
-          dashboard={dashboard}
           s={selected}
           sessions={list}
           onSelect={setPinned}
           showLimits={settings.showLimits}
           timeline={selected ? timelines[selected.key] ?? [] : []}
-          timelines={timelines}
           tab={detailTab}
           setTab={setDetailTab}
           now={now}
@@ -622,9 +627,11 @@ export default function App() {
         {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
+        {!mini && <ToolBtn icon="monitor" label="대시보드 보기" on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}
         {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
+          else if (dashSplit) setDashView('off');
           else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
         }} />}
         {!mini && <ToolBtn icon="eye" label={office ? 'HUD 보이기' : '사무실만 보기'} on={office} onClick={() => setOffice(!office)} />}
@@ -634,6 +641,22 @@ export default function App() {
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
       </div>
+
+      {(dashPage || dashSplit) && (
+        <DashboardPage
+          sessions={list}
+          timelines={timelines}
+          selected={selected}
+          now={now}
+          onSelect={setPinned}
+          onOpen={openApp}
+          split={dashSplit ? panelW : undefined}
+          onToggleSplit={vw >= PANEL_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
+          onRoom={() => setDashView('off')}
+          onSettings={() => setSettingsOpen('last')}
+          mac={IS_MAC && IN_TAURI}
+        />
+      )}
 
       {settingsOpen && (
         <SettingsModal
@@ -685,7 +708,7 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
       const a = (scene.current?.anchors() ?? []).filter((p) => !fewRef.current || p.key === selRef.current || needsYou(sessRef.current[p.key]));
       // nudge tags up so neighbours never cover each other (compact tags are ~40 x 22 css px)
       // the selected tag and tags waiting on the user also show the project name, so they are about as wide as a full tag
-      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current || p.key === selRef.current, shortRef.current);
+      const w = (p: Anchor) => tagWidth(sessRef.current[p.key], fullRef.current ? 'full' : p.key === selRef.current ? 'sel' : 'min', shortRef.current);
       const placed: Anchor[] = [];
       for (const p of [...a].sort((u, v) => v.y - u.y)) {
         while (placed.some((q) => Math.abs(q.x - p.x) < (w(p) + w(q)) / 2 && Math.abs(q.y - p.y) < TAG_H)) p.y -= TAG_H;
@@ -727,18 +750,18 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
         return (
           <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} title={`${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n눌러서 이 세션 열기'}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
-            {/* which pet is which: the project by default; what it does joins it when picked or with full tags
-                (the ring under the pet and the dot already show the state) */}
-            {full || selected === a.key ? (
+            {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
+                the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}
+            {full ? (
               <>
                 <b className="tag-project">{tagName(s)}</b>
                 {doing && <span>{doing}</span>}
               </>
             ) : (
-              <span>{tagName(s)}</span>
+              <span>{tagName(s, selected === a.key ? 14 : 8)}</span>
             )}
             <i className={`dot tone-${tone}`} />
-            {prog && (full || selected === a.key) && <small>{prog.done}/{prog.total}</small>}
+            {prog && full && <small>{prog.done}/{prog.total}</small>}
           </button>
         );
       })}
@@ -747,20 +770,21 @@ function NameTags({ scene, sessions, now, selected, onSelect, hidden, full, few,
 }
 
 /** height of a name tag in CSS px (it is drawn above its anchor point) */
-const TAG_H = 26;
+const TAG_H = 22;
 const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
 /** project name on a tag, cut to keep tags small */
-const tagName = (s: Snapshot) => {
+const tagName = (s: Snapshot, max = 14) => {
   const n = s.project ?? AGENT_NAME[s.agent];
-  return n.length > 14 ? n.slice(0, 13) + '…' : n;
+  return n.length > max ? n.slice(0, max - 1) + '…' : n;
 };
 
 /** rough CSS width of a name tag, so neighbours can be moved apart before they are drawn */
-function tagWidth(s: Snapshot | undefined, withProject: boolean, short: boolean): number {
-  if (!s) return 40;
-  const text = withProject ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s);
-  let w = 40;
-  for (const ch of text) w += ch.charCodeAt(0) > 255 ? 12 : 7.2;
+function tagWidth(s: Snapshot | undefined, mode: 'full' | 'sel' | 'min', short: boolean): number {
+  if (!s) return 34;
+  const text = mode === 'full' ? `${tagName(s)} ${tagLabel(s, short) ?? ''}` : tagName(s, mode === 'sel' ? 14 : 8);
+  const big = mode !== 'min';
+  let w = big ? 40 : 34;
+  for (const ch of text) w += ch.charCodeAt(0) > 255 ? (big ? 12 : 11) : big ? 7.2 : 6.4;
   return Math.min(w, 260);
 }
 

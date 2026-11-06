@@ -1,6 +1,6 @@
 // Thin layer over Tauri IPC. Outside Tauri (plain browser, used only for design
 // previews), a static preview backend is used and the UI labels itself as a preview.
-import type { CharacterFile, SoundFile, HookStatus, Overview, RateLimits, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
+import type { MemoryFile, CharacterFile, SoundFile, HookStatus, Overview, RateLimits, Settings, Snapshot, TimelineEntry, Update, UsageHistory } from './types';
 
 export const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -54,6 +54,8 @@ export interface Backend {
   doubleClickMs(): Promise<number>;
   /** tokens per local day, recent rate and streaks, read from the agents' local logs */
   usageHistory(days: number): Promise<UsageHistory>;
+  /** CLAUDE.md / AGENTS.md the agents load (global and per session folder), read-only */
+  memoryFiles(): Promise<MemoryFile[]>;
   getSettings(): Promise<Settings>;
   saveSettings(s: Settings): Promise<void>;
   dataDir(): Promise<string>;
@@ -92,6 +94,7 @@ const tauriBackend: Backend = {
   focusAgent: (key) => tauriInvoke('focus_agent', { key }),
   doubleClickMs: () => tauriInvoke('double_click_ms'),
   usageHistory: (days) => tauriInvoke('usage_history', { tzOffsetMin: -new Date().getTimezoneOffset(), days }),
+  memoryFiles: () => tauriInvoke('memory_files'),
   getSettings: () => tauriInvoke('get_settings'),
   saveSettings: (settings) => tauriInvoke('save_settings', { settings }),
   dataDir: () => tauriInvoke('data_dir'),
@@ -209,6 +212,10 @@ function previewBackend(): Backend {
         recentClaude: 1_300_000, recentCodex: 240_000, streakLongest: 6, streakCurrent: 5,
       };
     },
+    memoryFiles: async () => [
+      { label: '전역 · Claude Code', path: '~/.claude/CLAUDE.md', truncated: false, content: '# 미리보기용 예시\n\n- 한국어로 답하기\n- 커밋은 작게 나누지 말 것\n' },
+      { label: 'cozy-project · AGENTS.md', path: '/demo/cozy-project/AGENTS.md', truncated: false, content: '# cozy-project\n\n테스트는 `npm test`로 돌립니다.\n' },
+    ],
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
     dataDir: async () => '~/.agent-room',

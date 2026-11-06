@@ -611,6 +611,50 @@ fn get_timeline(state: tauri::State<Shared>, key: String) -> Vec<TimelineEntry> 
     state.store.lock().unwrap().timeline(&key)
 }
 
+/// One instructions/memory file the agents read (CLAUDE.md, AGENTS.md), shown read-only on the dashboard.
+#[derive(serde::Serialize)]
+struct MemoryFile {
+    label: String,
+    path: String,
+    content: String,
+    truncated: bool,
+}
+
+/// The instruction files Claude Code and Codex load: the user's global ones and, for each known
+/// session, the ones in its project folder. Read-only, local, nothing is sent anywhere.
+#[tauri::command]
+fn memory_files(state: tauri::State<Shared>) -> Vec<MemoryFile> {
+    const MAX: usize = 200 * 1024;
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut add = |label: String, path: std::path::PathBuf| {
+        let key = path.display().to_string();
+        if !seen.insert(key.clone()) {
+            return;
+        }
+        let Ok(bytes) = std::fs::read(&path) else { return };
+        let truncated = bytes.len() > MAX;
+        let content = String::from_utf8_lossy(&bytes[..bytes.len().min(MAX)]).into_owned();
+        out.push(MemoryFile { label, path: key, content, truncated });
+    };
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = std::path::Path::new(&home);
+        add("전역 · Claude Code".into(), home.join(".claude/CLAUDE.md"));
+        add("전역 · Codex".into(), home.join(".codex/AGENTS.md"));
+    }
+    let mut cwds: Vec<String> = state.store.lock().unwrap().snapshots().into_iter().filter_map(|s| s.cwd).collect();
+    cwds.sort();
+    cwds.dedup();
+    for cwd in cwds {
+        let dir = std::path::Path::new(&cwd);
+        let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| cwd.clone());
+        for f in ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md"] {
+            add(format!("{name} · {f}"), dir.join(f));
+        }
+    }
+    out
+}
+
 #[tauri::command]
 fn remove_session(app: AppHandle, key: String) {
     let u = app.state::<Shared>().store.lock().unwrap().remove(&key);
@@ -1668,7 +1712,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_overview, get_timeline, remove_session, hooks_status, hooks_install, hooks_uninstall, hooks_restore,
             hooks_remove_all, focus_agent, double_click_ms, usage_history, demo_start, demo_stop, get_settings, save_settings, data_dir, list_characters, set_tray_frames, save_character, replace_character, rename_character, remove_character, list_sounds, save_sound, remove_sound, quit_app,
-            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits
+            tray_action, island_layout, notch_size, set_room_only, codex_limits, claude_limits, memory_files
         ])
         .setup(|app| {
             let handle = app.handle().clone();
