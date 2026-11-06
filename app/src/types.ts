@@ -136,3 +136,5 @@ export interface SoundFile { event: string; bytes: number[] }
 export interface DayTokens { day: number; claude: number; codex: number }
 /** token use from the agents' local logs (usage counters only) */
 export interface UsageHistory { days: DayTokens[]; recentClaude: number; recentCodex: number; streakLongest: number; streakCurrent: number }
+
+export interface MemoryFile { label: string; path: string; content: string; truncated: boolean }

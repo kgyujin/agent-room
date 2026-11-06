@@ -125,7 +125,7 @@ function Dashboard(props: Parameters<typeof DetailPanel>[0]) {
   );
 }
 
-function Timeline({ entries }: { entries: TimelineEntry[] }) {
+export function Timeline({ entries }: { entries: TimelineEntry[] }) {
   if (!entries.length) return <p className="muted pad">아직 기록된 활동이 없어요. 앱이 실행된 뒤 받은 이벤트만 보여요.</p>;
   return (
     <ol className="timeline">
@@ -140,7 +140,7 @@ function Timeline({ entries }: { entries: TimelineEntry[] }) {
   );
 }
 
-function Tasks({ s }: { s: Snapshot }) {
+export function Tasks({ s }: { s: Snapshot }) {
   const prog = progressOf(s);
   return (
     <div className="pad">
@@ -186,7 +186,7 @@ function Tasks({ s }: { s: Snapshot }) {
   );
 }
 
-function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?: () => void }) {
+export function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; onForget?: () => void }) {
   const groups: [string, [string, string][]][] = [
     ['세션', [
       ['에이전트', AGENT_NAME[s.agent] + (s.isDemo ? ' (데모)' : '')],

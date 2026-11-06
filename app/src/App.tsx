@@ -9,6 +9,7 @@ import { trayFrames } from './game/trayFrames';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { DetailPanel, type Tab } from './ui/DetailPanel';
+import { DashboardPage } from './ui/DashboardPage';
 import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
 import { Welcome } from './ui/Welcome';
@@ -113,6 +114,9 @@ export default function App() {
   const [welcomeClosed, setWelcomeClosed] = useState(() => { try { return localStorage.getItem('welcomeClosed') === '1'; } catch { return false; } });
   const closeWelcome = () => { setWelcomeClosed(true); try { localStorage.setItem('welcomeClosed', '1'); } catch { /* storage unavailable */ } };
   useEffect(() => { try { localStorage.setItem('officeView', office ? '1' : '0'); } catch { /* storage unavailable */ } }, [office]);
+  // dashboard view: the whole window shows the dashboard page instead of the room (any window size)
+  const [dashPage, setDashPage] = useState(() => { try { return localStorage.getItem('dashView') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('dashView', dashPage ? '1' : '0'); } catch { /* storage unavailable */ } }, [dashPage]);
   // open: the pane to show ('last' = the one used last time)
   const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
   const [detailTab, setDetailTab] = useState<Tab>('overview');
@@ -186,14 +190,15 @@ export default function App() {
   // load timeline for the selected session when the panel needs it
   const asking = useRef(new Set<string>());
   useEffect(() => {
-    if (!panelOpen) return;
-    // the dashboard's activity log needs every session's log; the tabbed panel only the selected one
-    const keys = dashboard ? list.map((x) => x.key) : selected ? [selected.key] : [];
+    const page = dashPage && !mini;
+    if (!panelOpen && !page) return;
+    // the dashboards' activity log needs every session's log; the tabbed panel only the selected one
+    const keys = dashboard || page ? list.map((x) => x.key) : selected ? [selected.key] : [];
     for (const k of keys.filter((k) => !timelines[k] && !asking.current.has(k))) {
       asking.current.add(k);
       backend.timeline(k).then((t) => setTimelines((p) => (p[k] ? p : { ...p, [k]: t }))).finally(() => asking.current.delete(k));
     }
-  }, [selected?.key, panelOpen, dashboard, list, timelines]);
+  }, [selected?.key, panelOpen, dashboard, dashPage, mini, list, timelines]);
 
   // ---------------------------------------------------------------- scene
   useEffect(() => {
@@ -622,6 +627,7 @@ export default function App() {
         {!compact && !office && !mini && settings.showLimits && vw - (panelOpen ? panelW : 0) >= 1000 && (
           <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
         )}
+        {!mini && <ToolBtn icon="monitor" label="대시보드로 보기" onClick={() => setDashPage(true)} />}
         {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label="작업 정보 패널" on={panelOpen} onClick={() => {
           // the office-only view hides the panel, so asking for the panel leaves that view
           if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
@@ -634,6 +640,21 @@ export default function App() {
         <ToolBtn icon={settings.sfx ? 'sound' : 'mute'} label={settings.sfx ? '효과음 끄기' : '효과음 켜기'} on={settings.sfx} onClick={() => saveSettings({ ...settings, sfx: !settings.sfx })} />
         <ToolBtn icon="gear" label="설정" onClick={() => setSettingsOpen('last')} />
       </div>
+
+      {dashPage && !mini && (
+        <DashboardPage
+          sessions={list}
+          timelines={timelines}
+          selected={selected}
+          now={now}
+          onSelect={setPinned}
+          onOpen={openApp}
+          onForget={selected && (selected.connection === 'ended' || selected.connection === 'lost') ? () => backend.removeSession(selected.key) : undefined}
+          onRoom={() => setDashPage(false)}
+          onSettings={() => setSettingsOpen('last')}
+          mac={IS_MAC && IN_TAURI}
+        />
+      )}
 
       {settingsOpen && (
         <SettingsModal

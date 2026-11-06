@@ -84,35 +84,53 @@ const FILTERS: [Filter, string, (e: TimelineEntry) => boolean][] = [
   ['done', '완료', (e) => e.kind === 'turn_complete'],
 ];
 
-/** one log across all sessions, newest first */
-export function ActivityLog({ sessions, timelines, onSelect }: { sessions: Snapshot[]; timelines: Record<string, TimelineEntry[]>; onSelect: (k: string) => void }) {
+/** one log across all sessions, newest first; a row opens to show everything the event carried */
+export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { sessions: Snapshot[]; timelines: Record<string, TimelineEntry[]>; onSelect: (k: string) => void; compact?: boolean; tall?: boolean }) {
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  // paused: the list stays as it was so a row can be read while events keep arriving
+  const [frozen, setFrozen] = useState<{ e: TimelineEntry; s: Snapshot }[] | null>(null);
   const names = sessionNames(sessions);
-  const all = useMemo(() => sessions.flatMap((s) => (timelines[s.key] ?? []).map((e) => ({ e, s }))).sort((a, b) => b.e.at - a.e.at), [sessions, timelines]);
+  const liveRows = useMemo(() => sessions.flatMap((s) => (timelines[s.key] ?? []).map((e) => ({ e, s }))).sort((a, b) => b.e.at - a.e.at), [sessions, timelines]);
+  const all = frozen ?? liveRows;
   const test = FILTERS.find((f) => f[0] === filter)![2];
   const needle = q.trim().toLowerCase();
-  const shown = all.filter(({ e, s }) => test(e) && (!needle || `${timelineText(e)} ${names[s.key] ?? ''}`.toLowerCase().includes(needle))).slice(0, 200);
+  const shown = all.filter(({ e, s }) => test(e) && (!needle || `${timelineText(e)} ${names[s.key] ?? ''}`.toLowerCase().includes(needle))).slice(0, compact ? 12 : 300);
   return (
-    <div className="dash-log">
-      <div className="dash-chips">
-        {FILTERS.map(([id, label, f]) => (
-          <button key={id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>
-            {label}<span>{all.filter(({ e }) => f(e)).length}</span>
+    <div className={`dash-log ${tall ? 'tall' : ''}`}>
+      {!compact && (
+        <div className="dash-chips">
+          {FILTERS.map(([id, label, f]) => (
+            <button key={id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>
+              {label}<span>{all.filter(({ e }) => f(e)).length}</span>
+            </button>
+          ))}
+          <input type="search" placeholder="기록 검색" value={q} onChange={(ev) => setQ(ev.target.value)} />
+          <button className={`live ${frozen ? '' : 'on'}`} onClick={() => setFrozen(frozen ? null : liveRows)} title={frozen ? '다시 실시간으로' : '목록 멈추기'}>
+            <i />{frozen ? '멈춤' : '실시간'}
           </button>
-        ))}
-        <input type="search" placeholder="기록 검색" value={q} onChange={(ev) => setQ(ev.target.value)} />
-      </div>
+        </div>
+      )}
       {shown.length ? (
         <ol>
           {shown.map(({ e, s }) => {
             const bad = FILTERS[1][2](e);
+            const id = `${s.key}-${e.id}`;
             return (
-              <li key={`${s.key}-${e.id}`} className={`${bad ? 'bad' : e.ok === true || e.kind === 'turn_complete' ? 'ok' : ''} k-${e.kind}`} onClick={() => onSelect(s.key)}>
-                <i />
-                <time>{fmtClock(e.at)}</time>
-                <span className="tag">{names[s.key]}</span>
-                <span className="txt" title={timelineText(e)}>{timelineText(e)}</span>
+              <li key={id} className={`${bad ? 'bad' : e.ok === true || e.kind === 'turn_complete' ? 'ok' : ''} k-${e.kind} ${open === id ? 'open' : ''}`}>
+                <div className="row" onClick={() => (compact ? onSelect(s.key) : setOpen(open === id ? null : id))}>
+                  <i />
+                  <time>{fmtClock(e.at)}</time>
+                  <span className="tag">{names[s.key]}</span>
+                  <span className="txt" title={timelineText(e)}>{timelineText(e)}</span>
+                </div>
+                {open === id && (
+                  <div className="more">
+                    <pre>{JSON.stringify({ 시각: new Date(e.at).toLocaleString('ko-KR'), 종류: e.kind, 활동: e.activity, 도구: e.tool, 내용: e.detail, 결과: e.ok, 세션: s.project, 에이전트: s.agent, 경로: s.cwd }, null, 2)}</pre>
+                    <button className="link" onClick={() => onSelect(s.key)}>이 세션 보기</button>
+                  </div>
+                )}
               </li>
             );
           })}
