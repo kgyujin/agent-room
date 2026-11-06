@@ -174,8 +174,15 @@ impl ProcWatch {
 pub fn agent_of(name: &str, exe: &str) -> Option<AgentKind> {
     let n = name.to_ascii_lowercase();
     let e = exe.to_ascii_lowercase();
+    // An app's own window process is `…/X.app/Contents/MacOS/X` with a capitalised name. The CLIs the
+    // desktop apps now ship as bundles keep the lowercase binary name (`…/claude.app/Contents/MacOS/claude`
+    // in Claude's Code tab, `…/CodexCLI.app/Contents/MacOS/codex` inside ChatGPT), so the case decides.
     if e.contains(".app/contents/macos/") {
-        return None;
+        let file = exe.replace('\\', "/");
+        let file = file.rsplit('/').next().unwrap_or("");
+        if file != "claude" && file != "codex" {
+            return None;
+        }
     }
     let file = e.rsplit('/').next().unwrap_or("");
     let file = file.strip_suffix(".exe").unwrap_or(file);
@@ -218,6 +225,12 @@ fn host_from_ps(table: &str, pid: u32) -> Option<std::path::PathBuf> {
 /// `/Applications/Visual Studio Code.app` from `/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/…`
 fn outer_app(exe: &std::path::Path) -> Option<std::path::PathBuf> {
     let s = exe.to_str()?;
+    // The Claude desktop app runs its Code tab's CLI as a bundle of its own
+    // (`~/Library/Application Support/Claude/claude-code/<ver>/…/claude.app/Contents/MacOS/claude`).
+    // That bundle is not a window anyone can bring up; the app hosting it is further up the parents.
+    if s.contains("/Library/Application Support/") {
+        return None;
+    }
     let end = s.find(".app/")? + 4;
     Some(std::path::PathBuf::from(&s[..end]))
 }
@@ -232,6 +245,20 @@ mod tests {
         assert_eq!(outer_app(Path::new("/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)")).as_deref(), Some(Path::new("/Applications/Visual Studio Code.app")));
         assert_eq!(outer_app(Path::new("/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal")).as_deref(), Some(Path::new("/System/Applications/Utilities/Terminal.app")));
         assert_eq!(outer_app(Path::new("/Users/kim/.local/share/claude/versions/2.0.1")), None);
+        // the Code tab's CLI bundle is not the host; the Claude app above it is
+        assert_eq!(outer_app(Path::new("/Users/kim/Library/Application Support/Claude/claude-code/2.1.317/91184d3d9ba3/claude.app/Contents/MacOS/claude")), None);
+        assert_eq!(outer_app(Path::new("/Applications/Claude.app/Contents/Helpers/disclaimer")).as_deref(), Some(Path::new("/Applications/Claude.app")));
+        // Codex inside the ChatGPT app
+        assert_eq!(outer_app(Path::new("/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex")).as_deref(), Some(Path::new("/Applications/ChatGPT.app")));
+    }
+
+    #[test]
+    fn host_app_of_the_claude_desktop_code_tab() {
+        let ps = "    1     0 /sbin/launchd\n\
+                  80224     1 /Applications/Claude.app/Contents/MacOS/Claude\n\
+                  81292 80224 /Applications/Claude.app/Contents/Helpers/disclaimer\n\
+                  81293 81292 /Users/kim/Library/Application Support/Claude/claude-code/2.1.317/91184d3d9ba3/claude.app/Contents/MacOS/claude\n";
+        assert_eq!(host_from_ps(ps, 81293).as_deref(), Some(std::path::Path::new("/Applications/Claude.app")));
     }
 
     #[test]
@@ -253,6 +280,10 @@ mod tests {
         // the Codex app's server, which also runs scheduled tasks
         assert_eq!(agent_of("codex", "/Applications/Codex.app/Contents/Resources/codex"), Some(AgentKind::Codex));
         assert_eq!(agent_of("Codex", "/Applications/Codex.app/Contents/MacOS/Codex"), None);
+        // the CLIs the desktop apps ship as bundles of their own
+        assert_eq!(agent_of("claude", "/Users/kim/Library/Application Support/Claude/claude-code/2.1.317/91184d3d9ba3/claude.app/Contents/MacOS/claude"), Some(AgentKind::Claude));
+        assert_eq!(agent_of("codex", "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"), Some(AgentKind::Codex));
+        assert_eq!(agent_of("ChatGPT", "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"), None);
         assert_eq!(agent_of("node", "/usr/local/bin/node"), None);
         assert_eq!(agent_of("claudette", "/usr/bin/claudette"), None);
     }

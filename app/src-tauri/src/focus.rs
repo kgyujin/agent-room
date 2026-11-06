@@ -35,7 +35,8 @@ pub fn reach(host: &Path, codex: bool, session_id: &str, desktop: Option<&str>, 
         "Terminal" if tty.is_some() => Reach::Tab { app: "Terminal", tty: tty.unwrap() },
         "iTerm" | "iTerm2" if tty.is_some() => Reach::Tab { app: "iTerm2", tty: tty.unwrap() },
         // thread ids are uuids; anything else is not put in a link
-        "Codex" if codex && is_uuid(session_id) => Reach::Link(format!("codex://threads/{session_id}")),
+        // the Codex app now ships inside the ChatGPT app, which takes the same codex:// links
+        "Codex" | "ChatGPT" if codex && is_uuid(session_id) => Reach::Link(format!("codex://threads/{session_id}")),
         // the desktop app opens one Code-tab session by its own id (not the CLI's session id), the
         // link its Dock menu uses too
         "Claude" if !codex && desktop.is_some_and(is_desktop_id) => Reach::Link(format!("claude://code/continue?session={}", desktop.unwrap())),
@@ -149,6 +150,8 @@ mod tests {
         assert_eq!(reach(Path::new("/Applications/Cursor.app"), false, "x", None, None, false), Reach::App);
         assert_eq!(reach(Path::new("/Applications/Codex.app"), true, id, None, None, true), Reach::Link(format!("codex://threads/{id}")));
         assert_eq!(reach(Path::new("/Applications/Codex.app"), true, "../evil", None, None, true), Reach::App);
+        assert_eq!(reach(Path::new("/Applications/ChatGPT.app"), true, id, None, None, true), Reach::Link(format!("codex://threads/{id}")));
+        assert_eq!(reach(Path::new("/Applications/ChatGPT.app"), false, id, None, None, true), Reach::App);
         let local = "local_0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
         assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, Some(local), None, true), Reach::Link(format!("claude://code/continue?session={local}")));
         assert_eq!(reach(Path::new("/Applications/Claude.app"), false, id, Some("local_a&b"), None, true), Reach::App);
