@@ -27,8 +27,8 @@ export const DASH_CARDS = [
 ] as const;
 
 /** what a card drops, first group first and the last item of a group first, until the rest fits
- * without scrolling: the usage share and pace notes, then the weekly rows, then list rows */
-const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
+ * without scrolling: the usage share and pace notes, the weekly rows, edited files, then list rows */
+const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-row ~ .lc-row', '.files li', '.dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
 
 /** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
 function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
@@ -55,7 +55,9 @@ function FitCard({ cls, title, style, onWhole, children }: { cls: string; title:
           n++;
         }
       }
-      setCut(n);
+      // a short cell also hides card details by CSS (map activity and buttons, the session filters)
+      const squeezed = [...el.querySelectorAll('.dmap-doing, .dmap-meta, .dash-chips')].some((x) => getComputedStyle(x).display === 'none');
+      setCut(n + (squeezed ? 1 : 0));
     };
     fit();
     const ro = new ResizeObserver(fit);
