@@ -237,7 +237,7 @@ def grid_at(grid, u, z, u0, ztop):
 
 
 def window_grid(w, h):
-    """wooden casement with a cross mullion, streaked glass and a gathered lace curtain on the left"""
+    """wooden casement with a cross mullion, clear glass and a gathered lace curtain on the left"""
     g = [['h2'] * w for _ in range(h)]
     for j in range(h):
         for i in range(w):
@@ -263,13 +263,6 @@ def window_grid(w, h):
                 g[j][i] = 'h0'
             else:
                 g[j][i] = GLASS
-    # two short diagonal glints per pane
-    for pi, pj in ((x0 + 2, y0 + 2), (mx + 3, y0 + 2), (x0 + 2, my + 3), (mx + 3, my + 3)):
-        for d in range(4):
-            for t in (0, 1):
-                i, j = pi + 3 - d + t, pj + d
-                if g[j][i] is GLASS:
-                    g[j][i] = 'b3'
     # curtain: straight under the rod, tied back at the middle, flaring to a lace hem
     tie = y0 + (y1 - y0) // 2 + 2
     for j in range(2, h - 1):
