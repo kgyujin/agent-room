@@ -326,3 +326,14 @@
 .dshare li { display: inline-flex; gap: 6px; align-items: center; }
 .dshare li.sum { margin-left: auto; color: var(--ink-soft); }
 .dshare li small:empty { display: none; }
+
+/* usage card: the 14-day bars take whatever height is left under the rings (never a blank band) */
+.dp-one .g-use .dp-scroll { display: flex; flex-direction: column; }
+.dp-one .g-use .dshare { flex: 1 1 auto; min-height: 0; padding: 10px 16px 14px; gap: 4px; }
+.dp-one .g-use .ubars { flex: 1 1 auto; height: auto; min-height: 22px; max-height: 110px; }
+.dp-one .g-use .dshare ul { flex-wrap: nowrap; gap: 12px; white-space: nowrap; overflow: hidden; }
+.dp-one .g-use .dshare li { min-width: 0; }
+@container (max-width: 330px) { .dp-one .g-use .dshare li.sum { display: none; } }
+/* the picked-session card: a section whose rows all dropped goes away with its header */
+.dp-one .timeline:not(:has(li:not(.fit-off))) { display: none; }
+.dp-one .pn-sec:has(.files):not(:has(.files li:not(.fit-off))) { display: none; }
