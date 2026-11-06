@@ -1,0 +1,115 @@
+/* ------------------------------------------------ soft UI pass (2026-11): calm surfaces like the Korean
+   finance and lifestyle apps (Toss, Banksalad, KakaoPay): white cards with a hairline and a soft blurred
+   shadow instead of thick two-tone frames, filled controls instead of outlined ones, round status dots,
+   one accent per theme. The room art and its pixel rules are untouched; only the HTML around it changes. */
+:root {
+  --r-lg: 16px;
+  --r-md: 12px;
+  --r-sm: 9px;
+  --edge: color-mix(in srgb, var(--ink) 9%, transparent);
+  --fill: color-mix(in srgb, var(--ink) 5.5%, transparent);
+  --fill-2: color-mix(in srgb, var(--ink) 9%, transparent);
+  --lift: 0 1px 2px rgba(40, 24, 30, 0.05), 0 8px 24px -8px rgba(40, 24, 30, 0.16);
+  --lift-hi: 0 2px 4px rgba(40, 24, 30, 0.06), 0 18px 40px -12px rgba(40, 24, 30, 0.28);
+}
+
+/* surfaces */
+.card, .toolbar, .banner, .banner.preview {
+  background: var(--box);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift);
+}
+.card { padding: 0; }
+.toolbar { border-radius: 14px; padding: 4px; }
+.banner { border-radius: 999px; }
+.tab { border: 1px solid var(--edge); box-shadow: none; background: var(--box); }
+.tab.on { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
+.panel { background: var(--box); border: 0; border-left: 1px solid var(--edge); border-radius: 0; box-shadow: -12px 0 32px -16px rgba(40, 24, 30, 0.18); padding: 0; }
+.modal { box-shadow: var(--lift-hi); }
+.modal-bg { background: color-mix(in srgb, var(--ink) 22%, transparent); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.pill { background: var(--box); border: 1px solid var(--edge); box-shadow: var(--lift); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.pill b { font-family: var(--font-body); font-weight: 800; font-size: 13.5px; }
+
+/* buttons: filled, no outline and no hard drop shadow */
+.btn { border: 0; border-radius: var(--r-sm); background: var(--fill); box-shadow: none; color: var(--ink); padding: 7px 13px; font-weight: 600; }
+.btn:hover { background: var(--fill-2); filter: none; }
+.btn.primary { background: var(--accent-strong); color: #fff; box-shadow: 0 4px 12px -6px var(--accent-strong); }
+.btn.primary:hover { background: var(--accent-strong); filter: brightness(1.06); }
+.btn.danger { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad-ink, var(--bad)); border: 0; }
+.tool { border-radius: 10px; color: var(--ink-soft); }
+.tool:hover { background: var(--fill); color: var(--ink); }
+.tool.on { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* segmented tabs (side panel, settings): the picked one is a white chip on a light track */
+.panel nav, .modal nav { background: var(--fill); border-radius: 11px; padding: 3px; }
+.panel nav button.on, .modal nav button.on { background: var(--box); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.1), 0 2px 6px -2px rgba(40, 24, 30, 0.12); color: var(--ink); }
+
+/* fields: a light filled box, a ring only when focused */
+.field select, .field input[type='number'], .num-in, .dash-chips input, .sess-q, input[type='search'], input[type='date'] {
+  border: 1px solid transparent; border-radius: 10px; background-color: var(--fill); color: var(--ink); box-shadow: none; outline: none;
+}
+.field select { padding: 6px 28px 6px 10px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23826c74' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+.field select:focus, .field input:focus, .num-in:focus, .dash-chips input:focus, .sess-q:focus, input[type='search']:focus, input[type='date']:focus {
+  border-color: color-mix(in srgb, var(--accent-strong) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); background-color: var(--box);
+}
+
+/* switches: iOS-like track, white knob, the theme accent when on */
+.toggle i { width: 36px; height: 21px; border: 0; border-radius: 999px; background: var(--fill-2); transition: background 0.15s; }
+.toggle i::after { top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(40, 24, 30, 0.25); transition: left 0.15s; }
+.toggle input:checked + i { background: var(--accent-strong); }
+.toggle input:checked + i::after { left: 17px; background: #fff; }
+
+/* status: round dots, soft tinted chips */
+.pulse { border-radius: 50%; }
+.agent-dot, .tab .dot { border-radius: 50%; }
+.tone-work .pulse, .tone-wait .pulse { animation: pulse 1.4s ease-in-out infinite; }
+.ov .ov-state { padding: 2px 8px; font-weight: 600; }
+
+/* progress bars: thin, rounded, no frame */
+.bar { border: 0; height: 6px; border-radius: 999px; background: var(--fill-2); box-sizing: border-box; }
+.bar i { border-radius: 999px; }
+
+/* checklists and the timeline rail */
+.tasks .box { border: 1.5px solid color-mix(in srgb, var(--ink) 28%, transparent); border-radius: 5px; background: var(--box); box-shadow: none; }
+.tasks .st-completed .box { background: var(--ok); border-color: var(--ok); box-shadow: none; }
+.tasks .st-in_progress .box { background: var(--box); border-color: var(--wait); box-shadow: inset 0 0 0 2.5px var(--box), inset 0 0 0 8px var(--wait); }
+.timeline li { border-bottom: 0; --mk: color-mix(in srgb, var(--ink) 25%, transparent); }
+.timeline li::before { background: var(--edge); }
+.timeline li::after { box-shadow: 0 0 0 3px var(--box); }
+.callout { border: 0; background: var(--fill); }
+
+/* side panel rows and the dock */
+.ov .ov-row { border: 1px solid var(--edge); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.04); border-radius: var(--r-md); }
+.ov .ov-row::before { width: 3px; border-radius: 0 3px 3px 0; top: 10px; bottom: 10px; }
+.dock .hud-grid { border-left: 1px solid var(--edge); }
+
+/* dashboard: borderless cards on the page tone, bigger quiet headings */
+.dash-card { background: var(--box); border: 1px solid var(--edge); border-radius: var(--r-lg); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.04); }
+.dash-stat, .dt-tile, .lc, .dt-sess li { border: 1px solid var(--edge); border-radius: var(--r-md); box-shadow: none; }
+.dash-h { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.dash-stat b { font-weight: 800; letter-spacing: -0.01em; }
+.dash-chips button { border: 0; background: var(--fill); }
+.dash-chips button.on { background: var(--ink); color: var(--box); }
+.dash-log li, .dash-table td, .dash-table th { border-color: var(--edge); }
+.dboard-col { background: var(--fill); border: 0; border-radius: var(--r-md); }
+.dboard-card { border: 0; box-shadow: 0 1px 2px rgba(40, 24, 30, 0.08); border-radius: 10px; }
+.dmap-node { border: 1px solid var(--edge); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.05); }
+.dmap-agent { border-width: 1px; }
+.dash-log .tag, .dboard-card .tag { border: 0; background: var(--fill); color: var(--ink-soft); border-radius: 6px; }
+.dp-turn button { border: 0; box-shadow: 0 1px 2px rgba(40, 24, 30, 0.08); }
+.dp-head .btn { background: var(--box); box-shadow: 0 1px 2px rgba(40, 24, 30, 0.06); border: 1px solid var(--edge); }
+.dp-head .btn:hover { background: var(--fill); }
+
+/* settings: grouped rows on white, quiet section titles */
+.modal.settings .set-main { background: var(--box); }
+.char-add { border: 1px dashed var(--edge); background: var(--fill); }
+.set-rows { border: 0; background: #fff; box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgba(40, 24, 30, 0.04); }
+.set-rows > .field { border-bottom-color: var(--edge); }
+.dash-card, .dash-stat, .dt-tile, .dt-sess li, .lc { background: #fff; }
+
+/* menu bar popover */
+.pop { border: 1px solid var(--edge); border-radius: 14px; }
+.pop-head, .pop-foot { background: var(--box); border-color: var(--edge); }
+.pop-foot button { border: 0; background: var(--fill); border-radius: 9px; padding: 7px 4px; }
+.pop-foot button:hover { background: var(--fill-2); border: 0; }
