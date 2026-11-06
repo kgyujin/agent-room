@@ -525,3 +525,6 @@
   .dp-one .dboard-col h4 em { overflow: visible; text-overflow: clip; white-space: normal; word-break: keep-all; }
 }
 @container (max-width: 400px) { .dp-one .dmap-agent small { display: none; } .dp-one .dmap-agent b { overflow: visible; text-overflow: clip; } }
+/* an empty cell says so in its middle instead of a line stuck to the top left of a blank box */
+.dp-one .dp-scroll:has(> p.muted:only-child) { display: grid; place-items: center; }
+.dp-one .dp-scroll > p.muted:only-child { max-width: 30ch; text-align: center; margin: 0; line-height: 1.6; }
