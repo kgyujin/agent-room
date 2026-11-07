@@ -7,7 +7,7 @@ import { backend, IN_TAURI, win } from '../bridge';
 import { loadAtlas, type Atlas } from '../game/assets';
 import { NAP_AFTER } from '../game/behaviors';
 import { DeskWorld, deskMotion, deskPlan, drawTable, TABLE_H, TABLE_W, type DeskPet, type DeskPlan } from '../game/deskPet';
-import { loadAllSkins, petPool, type Skin } from '../game/skin';
+import { loadAllSkins, type Skin } from '../game/skin';
 import { sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark } from '../ui/icons';
 import { L } from '../i18n';
@@ -19,16 +19,6 @@ const REST_KEY = '__rest';
 const TICK_MS = 1000 / 12;
 /** art px above a pet's head for its bubble and hops */
 const HEAD_ROOM = 20;
-
-/** a session's pet: the one it has in the room, else a steady pick from the user's pets */
-function petFor(key: string, room: Record<string, string>, skins: Record<string, Skin>, pool: string[], taken: Set<string>): string {
-  if (room[key] && skins[room[key]]) return room[key];
-  if (!pool.length) return '';
-  const free = pool.filter((n) => !taken.has(n));
-  const from = free.length ? free : pool;
-  const h = [...key].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
-  return from[h % from.length];
-}
 
 export function Desk() {
   const { list, settings, now } = useLive();
@@ -68,18 +58,17 @@ export function Desk() {
   const scale = Math.min(4, Math.max(2, Math.round(settings?.desktopPetSize ?? 2)));
   const bubbles = settings?.petBubbles ?? true;
 
-  // who is out: every live session, or the menu bar pet alone when nothing runs
-  const shown = useMemo(() => list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost'), [list]);
+  // who is out: the same critters as in the room, wearing the same pets (the room tells which).
+  // A session the room has no critter for yet (it waits a few seconds, and has a desk limit) stays in.
+  const shown = useMemo(() => list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost' && skins[room[s.key]]), [list, room, skins]);
   const byKey = useMemo(() => Object.fromEntries(shown.map((s) => [s.key, s])), [shown]);
   const names = useMemo(() => sessionNames(shown), [shown]);
-  const pool = useMemo(() => petPool(settings?.petPool, Object.keys(skins)), [settings?.petPool, skins]);
   const wear = useMemo(() => {
     const out: Record<string, string> = {};
-    const taken = new Set<string>();
-    for (const s of shown) taken.add((out[s.key] = petFor(s.key, room, skins, pool, taken)));
-    if (!shown.length) out[REST_KEY] = skins[settings?.trayPet ?? ''] ? settings!.trayPet : 'builtin/shiba';
+    for (const s of shown) out[s.key] = room[s.key];
+    if (!shown.length) out[REST_KEY] = skins[room[REST_KEY]] ? room[REST_KEY] : skins[settings?.trayPet ?? ''] ? settings!.trayPet : 'builtin/shiba';
     return out;
-  }, [shown, room, skins, pool, settings?.trayPet]);
+  }, [shown, room, skins, settings?.trayPet]);
 
   // the plan follows the sessions (and the clock, for "just finished" and dozing off)
   useEffect(() => {
