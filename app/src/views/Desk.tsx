@@ -33,6 +33,8 @@ export function Desk() {
   const drag = useRef<{ key: string; x0: number; y0: number; dy: number; moved: boolean; id: number } | null>(null);
   const clicks = useRef<{ key: string; at: number; timer: number } | null>(null);
   const dblMs = useRef(500);
+  /** what each pet's canvas last showed */
+  const drawn = useRef(new Map<string, string>());
 
   useEffect(() => {
     void loadAtlas('iso').then(setAtlas).catch(() => {});
@@ -127,6 +129,9 @@ export function Desk() {
     return () => { window.removeEventListener('mousemove', move); document.removeEventListener('mouseleave', out); };
   }, []);
 
+  // new pictures (a PNG changed) are drawn again even where nothing else moved
+  useEffect(() => drawn.current.clear(), [skins, atlas]);
+
   // 12 frames a second, only while the strip is on screen
   useEffect(() => {
     let last = performance.now();
@@ -154,6 +159,15 @@ export function Desk() {
     const w = worldRef.current;
     const cw = sk.w + 2 * (TABLE_W + 2);
     const ch = sk.h + HEAD_ROOM;
+    const walking = w.walking(p);
+    const [mx, hop, frame] = deskMotion(p, walking);
+    const bubble = Date.now() < p.heartUntil ? 'heart' : p.plan.bubble;
+    const table = p.plan.table && !walking && !p.held && p.lift === 0;
+    // a pet that looks the same as last tick is left alone: no canvas or style writes, so a quiet
+    // strip doesn't make the window server redraw it (Mission Control redraws every window)
+    const sig = [wear[p.key], c.width, Math.round(p.x), Math.round(p.lift), mx, hop, frame, p.dir, table ? p.tick : -1, bubbles && bubble, p.plan.act === 'panic', scale, !!atlas].join();
+    if (drawn.current.get(p.key) === sig) return;
+    drawn.current.set(p.key, sig);
     if (c.width !== cw || c.height !== ch) {
       c.width = cw;
       c.height = ch;
@@ -164,8 +178,6 @@ export function Desk() {
     const g = c.getContext('2d')!;
     g.imageSmoothingEnabled = false;
     g.clearRect(0, 0, cw, ch);
-    const walking = w.walking(p);
-    const [mx, hop, frame] = deskMotion(p, walking);
     const cx = cw >> 1;
     if (atlas && p.lift === 0) atlas.draw(g, 'shadow', cx - 4, ch - 3);
     const img = frame === 'still' ? sk.canvas : sk.walkF?.[frame === 'walk1' ? 1 : 0] ?? sk.canvas;
@@ -177,7 +189,7 @@ export function Desk() {
       g.scale(-1, 1);
     }
     g.drawImage(img, cx - (sk.w >> 1) + (right ? -mx : mx), top);
-    if (p.plan.table && !walking && !p.held && p.lift === 0) {
+    if (table) {
       // the table stands on the side the pet faces
       g.restore();
       g.save();
@@ -188,7 +200,6 @@ export function Desk() {
     }
     g.restore();
     const head = top + (sk.top ?? 0);
-    const bubble = Date.now() < p.heartUntil ? 'heart' : p.plan.bubble;
     // the bubble is centred over the head (its tail on the pet's middle column), 1px above it
     if (atlas && bubbles && bubble && !walking) atlas.draw(g, `bubble_${bubble}`, cx - 6, Math.max(0, head - 14));
     // a sweat drop on the back of the head, whichever way the pet faces

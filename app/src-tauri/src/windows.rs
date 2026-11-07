@@ -36,10 +36,10 @@ pub(crate) fn float_over_menu_bar(win: &WebviewWindow) {
     if ns.is_null() {
         return;
     }
-    // NSStatusWindowLevel = 25; canJoinAllSpaces (1) | stationary (16) | fullScreenAuxiliary (256)
+    // NSStatusWindowLevel = 25; canJoinAllSpaces (1) | transient (8: Mission Control leaves it out instead of redrawing it) | fullScreenAuxiliary (256)
     unsafe {
         let _: () = msg_send![ns, setLevel: 25isize];
-        let _: () = msg_send![ns, setCollectionBehavior: (1usize | 16 | 256)];
+        let _: () = msg_send![ns, setCollectionBehavior: (1usize | 8 | 256)];
     }
 }
 
@@ -594,10 +594,10 @@ pub(crate) fn show_desk(app: &AppHandle, on: bool) {
         if let Ok(ptr) = w.ns_window() {
             let ns = ptr as *mut AnyObject;
             // NSFloatingWindowLevel = 3: over app windows, under the menu bar, the island and menus.
-            // canJoinAllSpaces (1) | stationary (16) | ignoresCycle (64); not over full-screen apps.
+            // canJoinAllSpaces (1) | transient (8: left out of Mission Control) | ignoresCycle (64); not over full-screen apps.
             unsafe {
                 let _: () = msg_send![ns, setLevel: 3isize];
-                let _: () = msg_send![ns, setCollectionBehavior: (1usize | 16 | 64)];
+                let _: () = msg_send![ns, setCollectionBehavior: (1usize | 8 | 64)];
             }
         }
     }
