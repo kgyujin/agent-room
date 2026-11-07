@@ -63,6 +63,8 @@ export function DashboardPage(props: {
   onOpen: (k: string) => void;
   /** takes an ended session off the list */
   onForget?: (k: string) => void;
+  /** show the picked-session card even if settings hide it (a pet was double-clicked for its details) */
+  showPicked?: boolean;
   /** beside the room (a panel of this width) instead of filling the window */
   split?: number;
   /** switches between the two views; null when the window is too narrow to show the room beside it */
@@ -133,7 +135,7 @@ export function DashboardPage(props: {
       {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>{L('세션 열기', 'Open session')}</button>}
     </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /><div className="dp-info"><SessionInfo s={selected} now={now} onForget={props.onForget && (selected.connection === 'ended' || selected.connection === 'lost') ? () => props.onForget!(selected.key) : undefined} /></div></> : <p className="muted pad">{L('세션을 누르면 작업과 타임라인이 여기에 나와요.', 'Pick a session to see its tasks and timeline here.')}</p>],
   };
-  const shown = DASH_CARDS.filter(([id]) => !props.hidden.includes(id));
+  const shown = DASH_CARDS.filter(([id]) => !props.hidden.includes(id) || (id === 'picked' && props.showPicked));
   // rows grow to fill the height; a short last row lets its last card take the rest of the row
   const cols = split ? 2 : 3;
   const rows = Math.max(1, Math.ceil(shown.length / cols));
