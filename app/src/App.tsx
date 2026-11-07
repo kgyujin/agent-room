@@ -304,8 +304,9 @@ export default function App() {
 
   // ended sessions leave the office; live ones each get a desk and a critter. A session gets its
   // critter only after a few seconds: a session that ends right away (a one-shot run an editor
-  // button starts, for example) would otherwise pop in and vanish.
-  const inRoom = list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost' && (s.isDemo || now - s.startedAt >= NEW_SESSION_MS));
+  // button starts, for example) would otherwise pop in and vanish. With the window hidden the clock
+  // stops and nobody sees the room, so sessions go in at once (the desktop pets follow the room).
+  const inRoom = list.filter((s) => s.connection !== 'ended' && s.connection !== 'lost' && (s.isDemo || document.hidden || now - s.startedAt >= NEW_SESSION_MS));
   const inRoomKey = inRoom.map((s) => s.key).join('|');
   useEffect(() => {
     sceneRef.current?.setSessions(inRoom);
