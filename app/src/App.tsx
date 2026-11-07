@@ -640,10 +640,14 @@ export default function App() {
     const t = daySummary(day, null, Date.now());
     void backend.notifyText(L('오늘 요약', 'Today'), L(`끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`, `${t.turns} requests done · tests passed ${t.testsOk}, failed ${t.testsFail} · ${t.files} files edited`));
   }, [now, settings.dailySummary, settings.dailySummaryHour, day]);
+  // a pet double-clicked for its details: the dashboard shows the picked card until it closes
+  const [detailsAsked, setDetailsAsked] = useState(false);
+  useEffect(() => { if (dashView === 'off') setDetailsAsked(false); }, [dashView]);
   const openDetails = (key: string) => {
     setPinned(key);
     if (mini) void toggleMini(false);
     // the picked session's card in the dashboard has its tasks, timeline and details
+    setDetailsAsked(true);
     setOffice(false);
     setDashView(window.innerWidth >= SPLIT_MIN_VW ? 'split' : 'full');
   };
@@ -776,6 +780,7 @@ export default function App() {
           onSelect={setPinned}
           onOpen={openApp}
           onForget={(k) => void backend.removeSession(k)}
+          showPicked={detailsAsked}
           split={dashSplit ? panelW : undefined}
           onToggleSplit={vw >= SPLIT_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
           onRoom={() => setDashView('off')}
