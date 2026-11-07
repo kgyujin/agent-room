@@ -13,7 +13,7 @@ import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards, type SessFilter, type StatId } from './Activity';
 import { userTodo } from './Overview';
 import { fmtTokens, LimitCards, useUsageHistory } from './Usage';
-import { Tasks, Timeline } from './DetailPanel';
+import { SessionInfo, Tasks, Timeline } from './DetailPanel';
 import { ApproveButtons } from './Approve';
 import { dayMarkdown, daySummary, estCost, fmtSpan, fmtUsd, reportName, type DayLog } from '../report';
 import { L } from '../i18n';
@@ -30,7 +30,7 @@ export const DASH_CARDS = [
 
 /** what a card drops, first group first and the last item of a group first, until the rest fits
  * without scrolling: the usage share and pace notes, the weekly rows, edited files, then list rows */
-const FIT_DROP = ['.dshare, .ub-rate', '.lc-pace', '.lc-grid:not(.rings) .lc-row ~ .lc-row', '.files li', '.lane, .dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
+const FIT_DROP = ['.dp-info', '.dshare, .ub-rate', '.lc-pace', '.lc-grid:not(.rings) .lc-row ~ .lc-row', '.files li', '.lane, .dash-log li, .dash-table tbody tr, .dboard-card, .dmap-node, .tasks li, .timeline li, .pn-note'];
 
 /** a dashboard cell: shows what fits its box and offers the whole card when something had to go */
 function FitCard({ cls, title, style, onWhole, children }: { cls: string; title: React.ReactNode; style?: React.CSSProperties; onWhole: () => void; children: React.ReactNode }) {
@@ -61,6 +61,8 @@ export function DashboardPage(props: {
   onSelect: (k: string) => void;
   /** brings the session's own terminal, editor or app to the front */
   onOpen: (k: string) => void;
+  /** takes an ended session off the list */
+  onForget?: (k: string) => void;
   /** beside the room (a panel of this width) instead of filling the window */
   split?: number;
   /** switches between the two views; null when the window is too narrow to show the room beside it */
@@ -129,7 +131,7 @@ export function DashboardPage(props: {
     picked: () => ['g-pick', <>
       {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {sessionNames(sessions)[selected.key] ?? L('세션', 'Session')}</> : L('선택한 세션', 'Picked session')}
       {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>{L('세션 열기', 'Open session')}</button>}
-    </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /></> : <p className="muted pad">{L('세션을 누르면 작업과 타임라인이 여기에 나와요.', 'Pick a session to see its tasks and timeline here.')}</p>],
+    </>, selected ? <><Tasks s={selected} /><Timeline entries={props.timelines[selected.key] ?? []} /><div className="dp-info"><SessionInfo s={selected} now={now} onForget={props.onForget && (selected.connection === 'ended' || selected.connection === 'lost') ? () => props.onForget!(selected.key) : undefined} /></div></> : <p className="muted pad">{L('세션을 누르면 작업과 타임라인이 여기에 나와요.', 'Pick a session to see its tasks and timeline here.')}</p>],
   };
   const shown = DASH_CARDS.filter(([id]) => !props.hidden.includes(id));
   // rows grow to fill the height; a short last row lets its last card take the rest of the row

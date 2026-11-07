@@ -1,66 +1,8 @@
 import type { Snapshot, TimelineEntry } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, chatName, fmtAgo, fmtClock, fmtDuration, stateLabel, stateTone, timelineText } from '../labels';
-import { AgentMark, Icon } from './icons';
+import { AGENT_NAME, ORIGIN_LABEL, chatName, fmtAgo, fmtClock, fmtDuration, timelineText } from '../labels';
+import { Icon } from './icons';
 import { progressOf } from './Hud';
-import { Overview } from './Overview';
-import { UsageBoard } from './Usage';
 import { L } from '../i18n';
-
-export type Tab = 'overview' | 'usage' | 'timeline' | 'tasks' | 'session';
-const TAB_NAME: Record<Tab, string> = {
-  get overview() { return L('현황', 'Overview'); }, get usage() { return L('사용량', 'Usage'); }, get timeline() { return L('타임라인', 'Timeline'); },
-  get tasks() { return L('작업', 'Tasks'); }, get session() { return L('세션', 'Session'); },
-};
-/** tabs about one session; without a selected session only the others show */
-const PER_SESSION: Tab[] = ['timeline', 'tasks', 'session'];
-
-export function DetailPanel(props: {
-  width: number;
-  s: Snapshot | null;
-  sessions: Snapshot[];
-  onSelect: (k: string) => void;
-  showLimits: boolean;
-  timeline: TimelineEntry[];
-  tab: Tab;
-  setTab: (t: Tab) => void;
-  now: number;
-  onClose: () => void;
-  onForget?: () => void;
-}) {
-  const { s, tab, setTab } = props;
-  return (
-    <aside className="panel" style={{ width: props.width }}>
-      <header>
-        <nav>
-          {(Object.keys(TAB_NAME) as Tab[]).filter((t) => s || !PER_SESSION.includes(t)).map((t) => (
-            <button key={t} className={`${tab === t ? 'on' : ''} ${t === PER_SESSION[0] ? 'first-own' : ''}`} onClick={() => setTab(t)}>
-              {TAB_NAME[t]}
-            </button>
-          ))}
-        </nav>
-        <button className="tool" onClick={props.onClose} aria-label={L('패널 닫기', 'Close panel')} title={L('패널 닫기', 'Close panel')}>
-          <Icon name="close" />
-        </button>
-      </header>
-      <div className="panel-body">
-        {/* the last three tabs are about the selected pet: say which one */}
-        {s && PER_SESSION.includes(tab) && (
-          <div className="pn-who">
-            <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-            <b title={chatName(s) ?? ''}>{chatName(s) ?? s.project ?? L('프로젝트 미확인', 'Unknown project')}</b>
-            {chatName(s) && s.project && <small className="muted">{s.project}</small>}
-            <span className={`tone-${stateTone(s)}`}>{stateLabel(s)}</span>
-          </div>
-        )}
-        {(tab === 'overview' || (!s && PER_SESSION.includes(tab))) && <Overview sessions={props.sessions} now={props.now} selected={s?.key ?? null} onSelect={props.onSelect} showLimits={props.showLimits} />}
-        {tab === 'usage' && <div className="pad"><UsageBoard sessions={props.sessions} now={props.now} /></div>}
-        {s && tab === 'timeline' && <Timeline entries={props.timeline} />}
-        {s && tab === 'tasks' && <Tasks s={s} />}
-        {s && tab === 'session' && <SessionInfo s={s} now={props.now} onForget={props.onForget} />}
-      </div>
-    </aside>
-  );
-}
 
 export function Timeline({ entries }: { entries: TimelineEntry[] }) {
   if (!entries.length) return <p className="muted pad">{L('아직 기록된 활동이 없어요. 앱이 실행된 뒤 받은 이벤트만 보여요.', 'No activity yet. Only events received while the app runs show here.')}</p>;

@@ -10,7 +10,6 @@ import { addToDay, daySummary, type DayLog } from './report';
 import type { Overview, Settings, Snapshot, TimelineEntry } from './types';
 import { Hud } from './ui/Hud';
 import { NameTags } from './ui/NameTags';
-import { DetailPanel, type Tab } from './ui/DetailPanel';
 import { DashboardPage } from './ui/DashboardPage';
 import { SessionTabs, StatusPills } from './ui/SessionTabs';
 import { SettingsModal } from './ui/SettingsModal';
@@ -22,9 +21,7 @@ import { applyUiTheme, backdropOf, uiTheme } from './themes';
 import { isEn, L, setLang } from './i18n';
 import { keepOnScreen, placeOnScreen, resizeOnScreen, windowRect, type Rect } from './placement';
 
-const PANEL_W = 330;
 /** below this window width the side panel would squeeze the room, so it stays closed */
-const PANEL_MIN_VW = 900;
 /** the dashboard beside the room needs room for both; narrower windows show it as a full page */
 const SPLIT_MIN_VW = 1180;
 /** room-only window width limits for resizing it with the scroll wheel (CSS px) */
@@ -138,7 +135,6 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem('dashView', dashView); } catch { /* storage unavailable */ } }, [dashView]);
   // open: the pane to show ('last' = the one used last time)
   const [settingsOpen, setSettingsOpen] = useState<null | 'last' | 'agents'>(null);
-  const [detailTab, setDetailTab] = useState<Tab>('overview');
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
   const [vw, setVw] = useState(window.innerWidth);
@@ -164,12 +160,13 @@ export default function App() {
   // the room isn't drawn while the dashboard fills the window (it used to keep animating behind it)
   const roomShownRef = useRef(!dashPage);
   roomShownRef.current = !dashPage;
-  const panelOpen = dashSplit || (settings.panelOpen && !mini && !office && vw >= PANEL_MIN_VW);
+  // the dashboard beside the room is the one side view (it replaced the details panel)
+  const panelOpen = dashSplit;
   const splitW = Math.max(480, Math.min(Math.round(vw * 0.55), vw - 480));
   // beside the dashboard the room is never cropped; when a slightly narrower dashboard (at most
   // 10%) lets the whole room be drawn one step bigger, the dashboard gives up that width
   const roomNeeds = dashSplit ? sceneRef.current?.widthForNextStep(vw - splitW) ?? null : null;
-  const panelW = !dashSplit ? PANEL_W : roomNeeds && vw - roomNeeds >= Math.max(480, splitW * 0.9) ? vw - roomNeeds : splitW;
+  const panelW = roomNeeds && vw - roomNeeds >= Math.max(480, splitW * 0.9) ? vw - roomNeeds : splitW;
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
@@ -201,7 +198,7 @@ export default function App() {
         }),
         await backend.onDetected(setDetected),
         await backend.onTrayEvent('set-mini', () => void toggleRef.current(true)),
-        await backend.onTrayEvent('select-session', (k) => { setPinned(String(k)); setDetailTab('overview'); }),
+        await backend.onTrayEvent('select-session', (k) => setPinned(String(k))),
         await backend.onTrayEvent('open-settings', (tab) => setSettingsOpen(tab === 'agents' ? 'agents' : 'last')),
         await backend.onTrayEvent('check-update', () => checkRef.current()),
         await backend.onTrayEvent('open-dashboard', () => { setOffice(false); void toggleRef.current(false); setDashView(window.innerWidth >= SPLIT_MIN_VW ? 'split' : 'full'); }),
@@ -645,9 +642,10 @@ export default function App() {
   }, [now, settings.dailySummary, settings.dailySummaryHour, day]);
   const openDetails = (key: string) => {
     setPinned(key);
-    setDetailTab('session');
-    if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true });
     if (mini) void toggleMini(false);
+    // the picked session's card in the dashboard has its tasks, timeline and details
+    setOffice(false);
+    setDashView(window.innerWidth >= SPLIT_MIN_VW ? 'split' : 'full');
   };
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     soundRef.current.unlock();
@@ -750,36 +748,14 @@ export default function App() {
         </div>
       )}
 
-      {panelOpen && !dashSplit && (
-        <DetailPanel
-          width={panelW}
-          s={selected}
-          sessions={list}
-          onSelect={setPinned}
-          showLimits={settings.showLimits}
-          timeline={selected ? timelines[selected.key] ?? [] : []}
-          tab={detailTab}
-          setTab={setDetailTab}
-          now={now}
-          onClose={() => saveSettings({ ...settings, panelOpen: false })}
-          onForget={selected && (selected.connection === 'ended' || selected.connection === 'lost') ? () => backend.removeSession(selected.key) : undefined}
-        />
-      )}
-
       <div className={`toolbar ${office ? 'faded' : ''}`} ref={toolbarRef} style={{ right: panelOpen ? panelW + 12 : 12 }}>
         {/* remaining usage for every agent, at the start of the top-right bar (the tabs make room for it) */}
-        {/* with little width left the pills keep the top bar; the panel's 사용량 tab still has the numbers */}
-        {/* only while the panel or the split dashboard is open: with both closed the top bar stays bare */}
+        {/* with little width left the pills keep the top bar; the dashboard's usage card still has the numbers */}
+        {/* only while the split dashboard is open: with it closed the top bar stays bare */}
         {panelOpen && !compact && !office && !mini && settings.showLimits && vw - panelW >= 1000 && (
-          <UsageStrip sessions={list} now={now} onOpen={vw >= PANEL_MIN_VW ? () => { setDetailTab('usage'); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); } : undefined} />
+          <UsageStrip sessions={list} now={now} />
         )}
         {!mini && <ToolBtn icon="monitor" label={L('대시보드 보기', 'Dashboard')} on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}
-        {!mini && vw >= PANEL_MIN_VW && <ToolBtn icon="panel" label={L('작업 정보 패널', 'Details panel')} on={panelOpen} onClick={() => {
-          // the office-only view hides the panel, so asking for the panel leaves that view
-          if (office) { setOffice(false); if (!settings.panelOpen) void saveSettings({ ...settings, panelOpen: true }); }
-          else if (dashSplit) setDashView('off');
-          else void saveSettings({ ...settings, panelOpen: !settings.panelOpen });
-        }} />}
         {!mini && <ToolBtn icon="eye" label={office ? L('HUD 보이기', 'Show HUD') : L('HUD 숨기기', 'Hide HUD')} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? L('창으로 보기', 'Window') : L('방만 띄우기', 'Room only')} on={mini} onClick={() => toggleMini()} />
         <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? L('대각선으로 보기', 'Isometric view') : L('탑다운으로 보기', 'Top-down view')} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
@@ -799,6 +775,7 @@ export default function App() {
           now={now}
           onSelect={setPinned}
           onOpen={openApp}
+          onForget={(k) => void backend.removeSession(k)}
           split={dashSplit ? panelW : undefined}
           onToggleSplit={vw >= SPLIT_MIN_VW ? () => setDashView(dashSplit ? 'full' : 'split') : null}
           onRoom={() => setDashView('off')}
