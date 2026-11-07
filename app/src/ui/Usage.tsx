@@ -105,7 +105,7 @@ function noLimitsWhy(agent: 'claude' | 'codex', sessions: Snapshot[], accountLim
   const seen = sessions.some((s) => !s.isDemo && s.agent === agent);
   if (agent === 'claude' && accountLimits === false) return { text: L("'Claude 계정에서 받아오기'를 켜면 데스크톱 앱·VS Code 세션의 한도도 보여요.", "Turn on 'Get from the Claude account' to see limits for desktop app and VS Code sessions too."), fix: true };
   if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'login') return { text: L('이 Mac에서 Claude Code에 로그인하면 계정 한도도 보여요.', 'Sign in to Claude Code on this Mac to see account limits too.') };
-  if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'expired') return { text: L('로그인이 만료됐어요. Claude Code를 한 번 실행하면 다시 보여요.', 'The sign-in expired. Run Claude Code once and it shows again.') };
+  if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'expired') return { text: L('사용량을 받아올 터미널 Claude Code 로그인이 오래됐어요. 터미널에서 claude 를 한 번 실행하면 갱신돼요. 연결 문제는 아니에요.', 'The terminal Claude Code sign-in used to get usage is out of date. Run claude in a terminal once to renew it. The connection is fine.') };
   if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'failed') return { text: L('계정에서 한도를 받아오지 못했어요. 잠시 뒤 다시 시도해요.', "Couldn't get limits from the account. Trying again shortly.") };
   if (!seen) return { text: L(`${NAME[agent]} 세션이 아직 없어요. 세션이 응답하면 보여요.`, `No ${NAME[agent]} session yet. Limits show once one replies.`) };
   return { text: agent === 'claude' ? L('다음 응답부터 보여요. Pro·Max 요금제만 한도가 있어요.', 'Shows from the next reply. Only Pro and Max plans have limits.') : L('다음 응답부터 보여요.', 'Shows from the next reply.') };
