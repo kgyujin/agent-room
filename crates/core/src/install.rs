@@ -211,6 +211,13 @@ pub fn status(t: Target) -> HookStatus {
         Ok(Some(doc)) => {
             let n = count_ours(&doc, t.events());
             let status_line = t != Target::Claude || doc.get("statusLine").is_some_and(is_ours);
+            // say what is missing, so "다시 연결 필요" isn't a guess
+            if n > 0 && n < t.events().len() {
+                notes.push(format!("연결 항목 {}개 중 {n}개만 설정 파일에 남아 있습니다.", t.events().len()));
+            }
+            if n > 0 && !status_line {
+                notes.push("상태 표시줄(statusLine)이 다른 명령으로 바뀌었습니다.".into());
+            }
             if n == 0 { "none" } else if n == t.events().len() && status_line { "full" } else { "partial" }
         }
         Ok(None) => "none",

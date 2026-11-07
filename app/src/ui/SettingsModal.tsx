@@ -697,6 +697,9 @@ const NAMES = { claude: 'Claude Code', codex: 'OpenAI Codex CLI' };
 function noteText(n: string): string {
   if (n.includes('/hooks')) return L('Codex는 처음 한 번 허락이 필요해요. Codex에서 /hooks 를 입력하고 agent-room-hook 을 승인해 주세요.', 'Codex asks once before it runs a new connection. In Codex, type /hooks and approve agent-room-hook.');
   if (n.includes('hooks = false')) return L('Codex 설정(~/.codex/config.toml)에서 이 기능이 꺼져 있어요. [features] 아래 hooks = false 를 true 로 바꿔 주세요.', 'This feature is turned off in Codex settings (~/.codex/config.toml). Under [features], change hooks = false to true.');
+  const part = n.match(/(\d+)개 중 (\d+)개만/);
+  if (part) return L(`설정 파일에 연결 항목 ${part[1]}개 중 ${part[2]}개만 남아 있어요. 다른 프로그램이 설정을 고쳤을 수 있어요. 다시 연결하면 채워져요.`, `Only ${part[2]} of ${part[1]} connection entries are left in the settings file; another program may have edited it. Reconnecting fills them in.`);
+  if (n.includes('statusLine')) return L('Claude Code의 상태 표시줄 설정이 다른 명령으로 바뀌어서 남은 사용량을 받지 못해요. 다시 연결하면 그 명령은 그대로 보이게 두고 사용량만 함께 받아요.', "Claude Code's status line was changed to another command, so usage left can't come through. Reconnecting keeps that command showing and gets usage alongside it.");
   return n;
 }
 
