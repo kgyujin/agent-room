@@ -1,11 +1,10 @@
-// "현황" tab: every session at a glance, sorted by what needs the user first.
-// Everything shown comes from hook events; the only derived number is the remaining-time
-// estimate, which is labelled as one and only appears once a plan step has finished.
+// Session and usage helpers shared by the dashboard, island and popover. Everything comes from
+// hook events; the only derived number is the remaining-time estimate, labelled as one.
 import { useEffect } from 'react';
 import { backend } from '../bridge';
 import type { LimitWindow, RateLimits, Snapshot } from '../types';
-import { doingLabel, fmtAgo, fmtDuration, fmtUntil, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
-import { AgentMark, Icon } from './icons';
+import { fmtAgo, fmtUntil, windowLabel } from '../labels';
+import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 import { L } from '../i18n';
 
@@ -38,45 +37,6 @@ export function etaMs(s: Snapshot, now: number): number | null {
   const t = turnMs(s, now);
   if (!p || !t || t < 60_000 || p.done < 1 || p.done >= p.total || !isActive(s) || userTodo(s, now)) return null;
   return (t / p.done) * (p.total - p.done);
-}
-
-/** sessions grouped by what they need: the user's turn first, then work, then the quiet ones */
-export function Overview({ sessions, now, selected, onSelect, showLimits = true, limitsFirst = false }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; showLimits?: boolean; limitsFirst?: boolean }) {
-  const live = sessions.filter((s) => s.connection !== 'ended' && s.connection !== 'lost');
-  const names = sessionNames(live);
-  // the longest-waiting first
-  const todo = live.filter((s) => userTodo(s, now)).sort((a, b) => userTodo(a, now)!.since - userTodo(b, now)!.since);
-  const work = live.filter((s) => isActive(s) && !userTodo(s, now));
-  const done = live.filter((s) => !isActive(s) && s.state === 'completed' && s.connection === 'live');
-  const quiet = live.filter((s) => !todo.includes(s) && !work.includes(s) && !done.includes(s));
-  const groups = [
-    { id: 'todo', label: L('내 차례', 'Your turn'), list: todo, empty: L('기다리는 에이전트가 없어요', 'No agent is waiting for you') },
-    { id: 'work', label: L('작업 중', 'Working'), list: work },
-    { id: 'done', label: L('완료', 'Done'), list: done },
-    { id: 'quiet', label: L('쉬는 중', 'Resting'), list: quiet },
-  ];
-  return (
-    <div className="ov">
-      {showLimits && limitsFirst && <Limits sessions={sessions} now={now} />}
-      {!live.length && <p className="muted small ov-none">{L('지금 일하는 에이전트가 없어요. Claude Code나 Codex가 작업을 시작하면 여기에 나타나요.', 'No agent is working right now. Claude Code or Codex shows up here when it starts.')}</p>}
-      {live.length > 0 && groups.map((g) => (g.list.length || g.empty) && (
-        <section key={g.id} className={`ov-group g-${g.id} ${g.list.length ? '' : 'empty'}`}>
-          <h4><i className="ov-dot" />{g.label}<span className="pn-count">{g.list.length || ''}</span></h4>
-          {g.list.length ? (
-            <ul className="ov-list">
-              {g.list.map((s) => (
-                <li key={s.key}>
-                  <AgentRow s={s} name={names[s.key]} now={now} on={selected === s.key} onClick={() => onSelect(s.key)} todo={userTodo(s, now)} slim={g.id === 'done' || g.id === 'quiet'} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted small ov-none">{g.empty}</p>
-          )}
-        </section>
-      ))}
-    </div>
-  );
 }
 
 const LIMITS_KEY = 'lastLimits';
@@ -194,71 +154,5 @@ export function LimitBar({ w, now }: { w: LimitWindow; now: number }) {
       <b>{left}%</b>
       <span className="ov-lim-reset">{resetShort}</span>
     </div>
-  );
-}
-
-function AgentRow({ s, name, now, on, onClick, todo, slim }: { s: Snapshot; name: string; now: number; on: boolean; onClick: () => void; todo: { text: string; since: number } | null; slim: boolean }) {
-  const prog = progressOf(s);
-  const step = s.plan.find((p) => p.status === 'in_progress');
-  const t = turnMs(s, now);
-  const eta = etaMs(s, now);
-  const tone = stateTone(s);
-  const busy = isActive(s);
-  // the pill already says what it does; the line under it names only the file or command
-  const doing = busy ? doingLabel(s)?.split(' · ')[1] ?? null : null;
-  if (slim)
-    return (
-      <button className={`ov-row slim ${on ? 'on' : ''} t-${tone}`} onClick={onClick} title={`${name}${s.cwd ? `\n${s.cwd}` : ''}`}>
-        <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} />
-        <span className="ov-proj">{name}</span>
-        <span className={`ov-state tone-${tone}`}>{stateLabel(s)}</span>
-        <span className="ov-since">{fmtAgo(now - s.lastEventAt)}</span>
-      </button>
-    );
-  return (
-    <button className={`ov-row ${busy ? '' : 'quiet'} ${on ? 'on' : ''} t-${tone}`} onClick={onClick} title={`${name}${s.cwd ? `\n${s.cwd}` : ''}`}>
-      {todo && (
-        <div className="ov-ask">
-          <Icon name="bell" />
-          <b>{todo.text}</b>
-          <span>{fmtAgo(now - todo.since)}</span>
-        </div>
-      )}
-      <div className="ov-top">
-        <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
-        <span className="ov-proj">{name}</span>
-        {/* a "내 차례" card already says what is asked in the line above */}
-        {!todo && (
-          <span className={`ov-state tone-${tone}`}>
-            <i className="pulse" />
-            {stateLabel(s)}
-          </span>
-        )}
-      </div>
-      {doing && <div className="ov-doing">{doing}</div>}
-      {busy ? (
-        <div className="ov-meta">
-          {prog ? (
-            <>
-              <span className="ov-bar"><i style={{ width: `${(prog.done / prog.total) * 100}%` }} /></span>
-              <span className="ov-n">{prog.done}/{prog.total}</span>
-            </>
-          ) : <span className="ov-fill" />}
-          {t !== null && <span className="ov-time"><Icon name="clock" />{fmtDuration(t)}</span>}
-          {eta !== null && <span className="ov-eta" title={L('끝난 단계의 평균 시간으로 계산한 추정치예요', 'Estimated from the average time of the finished steps')}>{L(`약 ${Math.max(1, Math.round(eta / 60000))}분 남음`, `about ${Math.max(1, Math.round(eta / 60000))} min left`)}</span>}
-        </div>
-      ) : (
-        <div className="ov-meta quiet">
-          {t !== null && <span>{L('소요', 'Took')} {fmtDuration(t)}</span>}
-          <span>{L('마지막 활동', 'Last active')} {fmtAgo(now - s.lastEventAt)}</span>
-        </div>
-      )}
-      {busy && (step || s.subagents > 0) && (
-        <div className="ov-step">
-          {step && <><Icon name="play" /><span>{step.text}</span></>}
-          {s.subagents > 0 && <em>{L('하위 에이전트', 'Subagents')} {s.subagents}</em>}
-        </div>
-      )}
-    </button>
   );
 }

@@ -28,69 +28,6 @@ export function useUsageHistory(days: number): UsageHistory | null {
 
 export { fmtTokens };
 
-const dayLabel = (day: number) => {
-  const d = new Date(day * 86_400_000);
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-};
-
-export function UsageBoard({ sessions, now, days = 30 }: { sessions: Snapshot[]; now: number; days?: number }) {
-  const h = useUsageHistory(days);
-  return (
-    <div className="ub">
-      <section className="ub-card">
-        <TokenChart h={h} />
-      </section>
-      <section className="ub-card">
-        <h4>{L('에이전트 한도', 'Agent limits')}</h4>
-        <LimitCards sessions={sessions} now={now} />
-      </section>
-      <section className="ub-card">
-        <h4>{L('최근 10분', 'Last 10 minutes')} <span className="pn-count">{h ? `${fmtTokens(h.recentClaude + h.recentCodex)} ${L('토큰', 'tokens')}` : ''}</span></h4>
-        <Rate h={h} />
-      </section>
-      <section className="ub-card ub-streak">
-        <div><b>{h?.streakLongest ?? 0}</b><span>{L('일', 'days')}</span><small>{L('가장 오래 연속 사용', 'Longest streak')}</small></div>
-        <div><b>{h?.streakCurrent ?? 0}</b><span>{L('일', 'days')}</span><small>{L('지금 연속 사용', 'Current streak')}</small></div>
-      </section>
-      <p className="pn-note">{L('토큰은 각 에이전트가 이 컴퓨터에 남긴 로그의 사용량 숫자만 더한 값이에요. 이때 대화 내용은 읽지 않아요.', 'Tokens add up only the usage numbers in the logs each agent keeps on this computer. Counting them reads no conversation text.')}</p>
-    </div>
-  );
-}
-
-function TokenChart({ h }: { h: UsageHistory | null }) {
-  const [hover, setHover] = useState<number | null>(null);
-  if (!h) return <p className="pn-note">{L('로그에서 사용량을 모으는 중…', 'Reading usage from the logs…')}</p>;
-  const total = h.days.reduce((a, d) => a + d.claude + d.codex, 0);
-  const active = h.days.filter((d) => d.claude + d.codex > 0).length;
-  const best = h.days.reduce((m, d) => (d.claude + d.codex > m.claude + m.codex ? d : m), h.days[0]);
-  const max = Math.max(1, ...h.days.map((d) => d.claude + d.codex));
-  const shown = hover !== null ? h.days[hover] : null;
-  return (
-    <>
-      <div className="ub-head">
-        <h4>{L('토큰 사용량', 'Token usage')} <span className="ub-sub">{L(`최근 ${h.days.length}일`, `last ${h.days.length} days`)}</span></h4>
-        <span className="ub-legend"><i className="a-claude" />Claude <i className="a-codex" />Codex</span>
-      </div>
-      <div className="ub-stats">
-        <div><b>{fmtTokens(total)}</b><small>{L(`합계 · ${active}일 사용`, `total · ${active} active days`)}</small></div>
-        <div><b>{best && best.claude + best.codex ? fmtTokens(best.claude + best.codex) : '—'}</b><small>{L('가장 많은 날', 'Busiest day')}{best && best.claude + best.codex ? ` · ${dayLabel(best.day)}` : ''}</small></div>
-        <div className="ub-pick">
-          {shown ? <><b>{fmtTokens(shown.claude + shown.codex)}</b><small>{dayLabel(shown.day)} · Claude {fmtTokens(shown.claude)} · Codex {fmtTokens(shown.codex)}</small></> : <><b>{fmtTokens(h.days[h.days.length - 1].claude + h.days[h.days.length - 1].codex)}</b><small>{L('오늘', 'Today')}</small></>}
-        </div>
-      </div>
-      <div className="ub-chart" onMouseLeave={() => setHover(null)}>
-        {h.days.map((d, i) => (
-          <div key={d.day} className={`ub-col ${hover === i ? 'on' : ''}`} onMouseEnter={() => setHover(i)}>
-            <i className="a-codex" style={{ height: `${(d.codex / max) * 100}%` }} />
-            <i className="a-claude" style={{ height: `${(d.claude / max) * 100}%` }} />
-          </div>
-        ))}
-      </div>
-      <div className="ub-axis"><span>{dayLabel(h.days[0].day)}</span><span>{dayLabel(h.days[h.days.length - 1].day)}</span></div>
-    </>
-  );
-}
-
 /** one card per agent: each limit window with what is left and when it resets */
 export function LimitCards({ sessions, now, dark, ring, accountLimits, onSettings }: { sessions: Snapshot[]; now: number; dark?: boolean; /** each window as a ring gauge (the dashboard) */ ring?: boolean; accountLimits?: boolean; onSettings?: () => void }) {
   return (
@@ -156,23 +93,6 @@ function LimitCard({ agent, l, now, ring, why, onSettings }: { agent: 'claude' |
       ) : (
         <p className="lc-none">{why.text}{why.fix && onSettings && <> <button className="link" onClick={onSettings}>{L('설정 열기', 'Open settings')}</button></>}</p>
       )}
-    </div>
-  );
-}
-
-function Rate({ h }: { h: UsageHistory | null }) {
-  const rows = [['claude', h?.recentClaude ?? 0], ['codex', h?.recentCodex ?? 0]] as const;
-  const max = Math.max(1, ...rows.map((r) => r[1]));
-  return (
-    <div className="ub-rate">
-      {rows.map(([a, n]) => (
-        <div key={a} className="ub-rate-row">
-          <AgentMark agent={a} size={14} />
-          <span>{NAME[a]}</span>
-          <span className={`lc-bar a-${a}`}><i style={{ width: `${(n / max) * 100}%` }} /></span>
-          <b>{fmtTokens(Math.round(n / 10))}/{L('분', 'min')}</b>
-        </div>
-      ))}
     </div>
   );
 }
