@@ -177,7 +177,8 @@ export class Scene {
       m.skin = from[Math.floor(Math.random() * from.length)] ?? '';
       inRoom.add(m.skin);
     }
-    const by = Object.fromEntries(this.mates.filter((m) => m.session && m.skin).map((m) => [m.key, m.skin]));
+    // the resting critter goes out as '__rest', so the desktop pet resting alone wears it too
+    const by = Object.fromEntries(this.mates.filter((m) => m.skin).map((m) => [m.key, m.skin]));
     const sig = JSON.stringify(by);
     if (sig !== this.lastSkins) {
       this.lastSkins = sig;

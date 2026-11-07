@@ -193,6 +193,14 @@ h4 { margin: 16px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04
 
 /* room-only: transparent window around the room; status and controls appear on hover */
 html.room-only, html.room-only body, html.room-only #root { background: transparent; }
+/* a small room: the controls keep their full size and wrap into rows inside the window,
+   along the bottom so the status line above stays readable */
+.app.room-only .toolbar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 16px); }
+.app.room-only .tool { flex: none; }
+@media (max-width: 260px) {
+  .app.room-only .toolbar { top: auto; bottom: 8px; }
+  .app.room-only .toolbar .tb-sep { display: none; }
+}
 
 /* night theme: slightly dimmer UI */
 .theme-night .card, .theme-night .panel, .theme-night .toolbar { background: rgba(251, 242, 230, 0.9); }
