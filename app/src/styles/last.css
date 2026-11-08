@@ -78,3 +78,4 @@
 .dt-md summary::-webkit-details-marker { display: none; }
 .dt-md summary::before { content: '▸'; color: var(--ink-soft); transition: transform 0.15s; }
 .dt-md[open] summary::before { transform: rotate(90deg); }
+.dash-chips button.sess-clear { color: var(--bad-ink); }

@@ -3,12 +3,12 @@
 // filter chips and search. Everything comes from hook events and the agents' local usage logs.
 import { useMemo, useState } from 'react';
 import type { Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, fmtAgo, fmtClock, fmtDuration, sessionNames, stateLabel, stateTone, timelineText } from '../labels';
+import { AGENT_NAME, fmtAgo, fmtClock, sessionNames, stateLabel, stateTone, timelineText } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
 import { isActive, userTodo } from './Overview';
 import { fmtTokens } from './Usage';
-import { estCost, fmtUsd } from '../report';
+import { daySummary, estCost, fmtSpan, fmtUsd, type DayLog } from '../report';
 import { isEn, L } from '../i18n';
 
 /** "+27%" against the previous period; null when there is nothing to compare with */
@@ -37,7 +37,7 @@ const STAT_ICON = { todo: 'bell', work: 'bolt', done: 'check', today: 'note', we
 export type StatId = 'todo' | 'work' | 'done' | 'today' | 'week';
 
 /** onOpen: a card opens the view behind its number (the sessions it counts, today's summary, usage) */
-export function StatCards({ sessions, now, h, cost, onOpen }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; cost?: { claude: number; codex: number }; onOpen?: (id: StatId) => void }) {
+export function StatCards({ sessions, now, h, day, cost, onOpen }: { sessions: Snapshot[]; now: number; h: UsageHistory | null; day: DayLog | null; cost?: { claude: number; codex: number }; onOpen?: (id: StatId) => void }) {
   const live = sessions.filter((x) => x.connection !== 'ended' && x.connection !== 'lost');
   const days = h?.days ?? [];
   const today = days.length ? sum(days.slice(-1)) : 0;
@@ -46,13 +46,15 @@ export function StatCards({ sessions, now, h, cost, onOpen }: { sessions: Snapsh
   const prevWeek = sum(days.slice(-14, -7));
   const last = days[days.length - 1];
   const usd = last ? estCost(last, cost) : null;
+  // today's counts, the same ones the card opens (sessions keep counting since they started, across days)
+  const d = daySummary(day, h, now);
   // small trend lines: daily totals of the last two weeks, and the rolling 7-day total over the same days
   const daily = days.slice(-14).map((d) => d.claude + d.codex);
   const weekly = days.length >= 7 ? days.slice(-14).map((_, i, a) => sum(days.slice(Math.max(0, days.length - a.length + i - 6), days.length - a.length + i + 1))) : [];
   const cards: { id: StatId; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend>; spark?: number[] }[] = [
     { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인·답변 기다림', 'Waiting for you') },
     { id: 'work', label: L('작업 중', 'Working'), value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: L(`열린 세션 ${live.length}개`, `${live.length} open sessions`) },
-    { id: 'done', label: L('완료한 요청', 'Requests done'), value: String(sessions.reduce((a, x) => a + x.completedTurns, 0)), sub: L(`수정한 파일 ${sessions.reduce((a, x) => a + x.filesEdited.length, 0)}개`, `${sessions.reduce((a, x) => a + x.filesEdited.length, 0)} files edited`) },
+    { id: 'done', label: L('오늘 완료한 요청', 'Requests done today'), value: String(d.turns), sub: L(`수정한 파일 ${d.files}개`, `${d.files} files edited`) },
     { id: 'today', label: L('오늘 토큰', 'Tokens today'), value: h ? fmtTokens(today) : '—', sub: h ? `${L('어제', 'Yesterday')} ${fmtTokens(yday)}${usd !== null ? ` · ${L('추정', 'est.')} ${fmtUsd(usd)}` : ''}` : L('불러오는 중', 'Loading'), tr: trend(today, yday), spark: daily },
     { id: 'week', label: L('최근 7일 토큰', 'Tokens, last 7 days'), value: h ? fmtTokens(week) : '—', sub: h ? `${L('그 전 7일', 'The 7 before')} ${fmtTokens(prevWeek)}` : L('불러오는 중', 'Loading'), tr: trend(week, prevWeek), spark: weekly },
   ];
@@ -75,7 +77,8 @@ export function StatCards({ sessions, now, h, cost, onOpen }: { sessions: Snapsh
 export type SessFilter = 'all' | 'todo' | 'work' | 'rest';
 const SESS_FILTERS = (): [SessFilter, string][] => [['all', L('전체', 'All')], ['todo', L('내 차례', 'Your turn')], ['work', L('작업 중', 'Working')], ['rest', L('쉬는 중', 'Resting')]];
 
-export function SessionTable({ sessions: all, now, selected, onSelect, filter = 'all' }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; filter?: SessFilter }) {
+/** onOpen: a double-click brings the session's terminal, editor or app to the front; onForget takes ended sessions off the list */
+export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, onForget, filter = 'all' }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; onOpen?: (s: Snapshot) => void; onForget?: (keys: string[]) => void; filter?: SessFilter }) {
   const [f, setF] = useState<SessFilter>(filter);
   const [q, setQ] = useState('');
   if (!all.length) return <p className="muted small pad">{L('아직 세션이 없어요.', 'No sessions yet.')}</p>;
@@ -83,14 +86,16 @@ export function SessionTable({ sessions: all, now, selected, onSelect, filter = 
   const kind = (s: Snapshot): SessFilter => (userTodo(s, now) ? 'todo' : isActive(s) ? 'work' : 'rest');
   const query = q.trim().toLowerCase();
   const sessions = all.filter((s) => (f === 'all' || kind(s) === f) && (!query || `${names[s.key]} ${s.project ?? ''} ${s.cwd ?? ''} ${AGENT_NAME[s.agent]} ${s.title ?? ''} ${s.chatTitle ?? ''}`.toLowerCase().includes(query)));
+  const ended = all.filter((s) => s.connection === 'ended' || s.connection === 'lost');
   return (
     <>
-    {all.length > 3 && (
+    {(all.length > 3 || (onForget && ended.length > 0)) && (
       <div className="dash-chips">
         {SESS_FILTERS().map(([id, label]) => (
           <button key={id} className={f === id ? 'on' : ''} onClick={() => setF(id)}>{label}<span>{id === 'all' ? all.length : all.filter((s) => kind(s) === id).length}</span></button>
         ))}
         <input type="search" className="sess-q" placeholder={L('프로젝트·경로·에이전트', 'Project, path, agent')} value={q} onChange={(e) => setQ(e.target.value)} />
+        {onForget && ended.length > 0 && <button className="sess-clear" onClick={() => onForget(ended.map((s) => s.key))} title={L('끝났거나 연결이 끊긴 세션을 목록에서 지워요', 'Takes ended and lost sessions off the list')}>{L('끝난 세션 지우기', 'Clear ended')}<span>{ended.length}</span></button>}
       </div>
     )}
     {!sessions.length && <p className="muted small pad">{L('맞는 세션이 없어요.', 'No matching sessions.')}</p>}
@@ -102,11 +107,11 @@ export function SessionTable({ sessions: all, now, selected, onSelect, filter = 
         {sessions.map((s) => {
           const p = progressOf(s);
           return (
-            <tr key={s.key} className={`${selected === s.key ? 'on' : ''} tone-row-${stateTone(s)}`} onClick={() => onSelect(s.key)}>
+            <tr key={s.key} className={`${selected === s.key ? 'on' : ''} tone-row-${stateTone(s)}`} onClick={() => onSelect(s.key)} onDoubleClick={onOpen && (() => onOpen(s))} title={onOpen ? L('두 번 누르면 세션 열기', 'Double-click to open the session') : undefined}>
               <td><span className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={`${names[s.key]}${s.cwd ? `\n${s.cwd}` : ''}`}>{names[s.key]}</b></span></td>
               <td><span className={`st-badge tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
-              <td className="num opt2">{fmtDuration(now - s.startedAt)}</td>
+              <td className="num opt2">{fmtSpan(now - s.startedAt)}</td>
               <td className="num opt">{s.completedTurns}</td>
               <td className="num opt">{s.filesEdited.length}</td>
               <td className="num">{fmtAgo(now - s.lastEventAt)}</td>

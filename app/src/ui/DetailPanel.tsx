@@ -1,5 +1,6 @@
 import type { Snapshot, TimelineEntry } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, chatName, fmtAgo, fmtClock, fmtDuration, timelineText } from '../labels';
+import { AGENT_NAME, ORIGIN_LABEL, chatName, fmtAgo, fmtClock, timelineText } from '../labels';
+import { fmtSpan } from '../report';
 import { Icon } from './icons';
 import { progressOf } from './Hud';
 import { L } from '../i18n';
@@ -77,7 +78,7 @@ export function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; on
     ]],
     [L('시간', 'Time'), [
       [L('시작', 'Started'), `${fmtClock(s.startedAt)}${s.startExact ? '' : L(' (처음 본 시각)', ' (first seen)')}`],
-      [L('경과', 'Elapsed'), fmtDuration(now - s.startedAt)],
+      [L('경과', 'Elapsed'), fmtSpan(now - s.startedAt)],
       [L('마지막 활동', 'Last active'), fmtAgo(now - s.lastEventAt)],
     ]],
     [L('상태', 'State'), [

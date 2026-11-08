@@ -85,14 +85,19 @@ const MARK: Record<'claude' | 'codex' | 'demo', string[]> = {
   demo: ['.ppppppppppp.', 'ppppppppppppp', 'ppppppppppppp', 'ppppwpppppppp', 'ppppwwppppppp', 'PPPPwwwPPPPPP', 'PPPPwwwwPPPPP', 'PPPPwwwPPPPPP', 'PPPPwwPPPPPPP', 'PPPPwPPPPPPPP', 'PPPPPPPPPPPPP', 'PPPPPPPPPPPPP', '.PPPPPPPPPPP.'],
 };
 const MARK_TITLE = { claude: 'Claude Code', codex: 'Codex', get demo() { return L('데모', 'Demo'); } };
+// one path per colour (a few nodes instead of one rect per pixel: the lists show dozens of marks)
+const MARK_PATHS = Object.fromEntries(Object.entries(MARK).map(([agent, rows]) => {
+  const d: Record<string, string> = {};
+  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.') d[c] = (d[c] ?? '') + `M${x} ${y}h1v1h-1z`; }));
+  return [agent, Object.entries(d)];
+})) as Record<'claude' | 'codex' | 'demo', [string, string][]>;
 
 /** small square badge that tells the agents apart without words */
 export function AgentMark({ agent, size = 14 }: { agent: 'claude' | 'codex' | 'demo'; size?: number }) {
-  const rows = MARK[agent];
   return (
     <svg className="agent-mark" width={size} height={size} viewBox="0 0 13 13" shapeRendering="crispEdges" role="img" aria-label={MARK_TITLE[agent]}>
       <title>{MARK_TITLE[agent]}</title>
-      {rows.flatMap((r, y) => [...r].map((c, x) => (c === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={PAL[c]} />)))}
+      {MARK_PATHS[agent].map(([c, d]) => <path key={c} d={d} fill={PAL[c]} />)}
     </svg>
   );
 }

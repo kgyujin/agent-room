@@ -75,7 +75,10 @@
 @media (max-height: 560px), (max-width: 860px) {
   .dpage:not(.split) .dp-one { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-rows: auto; overflow-y: auto; }
   .dpage:not(.split) .dp-one > .dash-card { height: 300px; grid-column: auto; }
-  .dpage:not(.split) .dp-one .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* five numbers on two full rows (three, then two wider) instead of a hole at the end */
+  .dpage:not(.split) .dp-one .dash-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .dpage:not(.split) .dp-one .dash-stat { grid-column: span 2; }
+  .dpage:not(.split) .dp-one .dash-stat:nth-child(n + 4) { grid-column: span 3; }
 }
 @media (max-width: 620px) { .dpage:not(.split) .dp-one { grid-template-columns: 1fr; } }
 @media (max-height: 560px) {
