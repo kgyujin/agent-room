@@ -126,6 +126,7 @@ def from_rows(rows, pal):
 
 # ---------------------------------------------------------------- build
 import cottage
+import furniture as handmade
 
 
 def cropped(cv):
@@ -148,7 +149,14 @@ def build(camera):
     sprites['room'] = (r, 0, 0)
     furniture = []
     for name, cv, base, box in sorted(cottage.pieces(), key=lambda p: p[2]):
-        sprites[name] = cropped(cv)
+        s, dx, dy = cropped(cv)
+        im = handmade.drawn(name)
+        if im is not None:
+            # the hand-drawn piece takes the box-built one's place: same frame, same spot
+            assert im.size == (s.w, s.h), (name, im.size, (s.w, s.h))
+            s.im = im
+            s.px = s.im.load()
+        sprites[name] = (s, dx, dy)
         furniture.append({'name': name, 'base': base, 'box': box})
     for i, (x, y) in enumerate(cottage.DESKS):
         for st in cottage.SCREEN_STATES:
