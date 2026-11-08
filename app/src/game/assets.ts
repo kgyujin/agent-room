@@ -3,8 +3,6 @@ export interface Frame { x: number; y: number; w: number; h: number; dx: number;
 /** `box`: floor area the piece covers in world units [x0, y0, x1, y1] (x runs down-right, y down-left) */
 export interface Piece { name: string; base: number; box?: [number, number, number, number] }
 export interface Layout {
-  /** how the room is seen: 'iso' = the diagonal view, 'top' = top-down; both atlases share one room layout */
-  camera?: RoomView;
   scene: { w: number; h: number };
   /** furniture sprites in draw order; `base` = screen y of the piece's front edge (for depth sorting) */
   furniture: Piece[];
@@ -27,7 +25,6 @@ export interface Layout {
   clock?: { x: number; y: number; r: number };
 }
 export type Facing = 'dr' | 'dl' | 'ur' | 'ul';
-export type RoomView = 'iso' | 'top';
 
 export class Atlas {
   constructor(public img: HTMLImageElement, public frames: Record<string, Frame>, public layout: Layout) {}
@@ -59,8 +56,8 @@ export class Atlas {
   }
 }
 
-export async function loadAtlas(view: RoomView = 'iso'): Promise<Atlas> {
-  const stem = view === 'top' ? '/assets/atlas-top' : '/assets/atlas';
+export async function loadAtlas(): Promise<Atlas> {
+  const stem = '/assets/atlas-top';
   const [json, img] = await Promise.all([
     fetch(`${stem}.json`).then((r) => r.json()),
     new Promise<HTMLImageElement>((res, rej) => {

@@ -107,30 +107,9 @@ export class Scene {
     return span;
   }
 
-  /** switch to the same room seen by another camera: every pet keeps its spot */
-  setAtlas(atlas: Atlas) {
-    this.atlas = atlas;
-    this.desks = atlas.layout.desks;
-    this.alpha = null;
-    this.span = this.fitSky();
-    for (const m of this.mates) {
-      const spot = m.actor.spot in atlas.layout.nodes ? m.actor.spot : `sofa${m.slot}`;
-      const old = m.actor;
-      m.actor = new Actor(m.agent, atlas.layout, spot);
-      // a frozen (stale) behavior never re-arrives, so carry the pose and seat height over
-      if (!old.walking) Object.assign(m.actor, { frame: old.frame, flip: old.flip, lr: old.lr, z: old.z });
-      this.applyBehavior(m);
-    }
-    this.resize();
-  }
-
   /** how many sessions get a pet (one per desk); the rest are only in the lists */
   get capacity() {
     return this.desks;
-  }
-
-  get view() {
-    return this.atlas.layout.camera ?? 'iso';
   }
 
   setTheme(t: Theme) {
@@ -286,18 +265,11 @@ export class Scene {
     if (seat !== a.y + 0.5) return seat;
     const o = this.atlas.layout.wallOrigin;
     if (!o) return seat;
-    // the feet back in world units (see tools/art/cottage.py for both cameras)
+    // the feet back in world units (see tools/art/cottage.py, 'top' camera)
     let wx: number;
     let wy: number;
-    if (this.atlas.layout.camera === 'top') {
-      wx = (a.x + 0.5 - o[0]) / 2;
-      wy = (a.y + 0.5 - o[1]) / 2;
-    } else {
-      const u = (a.x + 0.5 - o[0]) / 2;        // x - y
-      const v = a.y + 0.5 - o[1];              // x + y
-      wx = (u + v) / 2;
-      wy = (v - u) / 2;
-    }
+    wx = (a.x + 0.5 - o[0]) / 2;
+    wy = (a.y + 0.5 - o[1]) / 2;
     let lo = -Infinity;
     let hi = Infinity;
     for (const f of this.atlas.layout.furniture) {
@@ -638,7 +610,7 @@ export class Scene {
     const key = `${Math.floor(d.getTime() / 1000)}`;
     if (key === this.skyKey) return;
     this.skyKey = key;
-    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN, this.atlas.layout.windowWalls, this.atlas.layout.wallOrigin, this.atlas.layout.camera), 0, 0);
+    this.sky.getContext('2d')!.putImageData(paintSky(wb, this.span, d, this.tickN, this.atlas.layout.windowWalls, this.atlas.layout.wallOrigin), 0, 0);
   }
 
   private screenFrame(desk: number, b: Behavior | null): string {

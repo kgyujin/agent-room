@@ -37,7 +37,7 @@ export function Desk() {
   const drawn = useRef(new Map<string, string>());
 
   useEffect(() => {
-    void loadAtlas('iso').then(setAtlas).catch(() => {});
+    void loadAtlas().then(setAtlas).catch(() => {});
     void backend.doubleClickMs().then((ms) => (dblMs.current = Math.min(800, Math.max(200, ms)))).catch(() => {});
     void backend.petSkins().then(setRoom).catch(() => {});
     const off = backend.onTrayEvent('pet-skins', (m) => setRoom(m as Record<string, string>));
