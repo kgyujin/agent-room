@@ -70,10 +70,10 @@ export function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; on
   const groups: [string, [string, string][]][] = [
     [L('세션', 'Session'), [
       [L('에이전트', 'Agent'), AGENT_NAME[s.agent] + (s.isDemo ? L(' (데모)', ' (demo)') : '')],
-      [L('대화', 'Chat'), chatName(s) ?? '—'],
-      [L('프로젝트', 'Project'), s.project ?? '—'],
-      [L('경로', 'Path'), s.cwd ?? '—'],
-      [L('모델', 'Model'), s.model ?? '—'],
+      [L('대화', 'Chat'), chatName(s) ?? L('없음', 'None')],
+      [L('프로젝트', 'Project'), s.project ?? L('없음', 'None')],
+      [L('경로', 'Path'), s.cwd ?? L('없음', 'None')],
+      [L('모델', 'Model'), s.model ?? L('없음', 'None')],
       ...(s.origin ? [[L('시작한 곳', 'Started from'), ORIGIN_LABEL[s.origin]] as [string, string]] : []),
     ]],
     [L('시간', 'Time'), [

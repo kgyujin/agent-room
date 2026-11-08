@@ -24,7 +24,7 @@
   --hair: rgba(122, 86, 70, 0.16);
   --accent: #ff9b7a;
   --accent-soft: #ffe6dc;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', 'Segoe UI', sans-serif;
+  --font-ui: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
   --font-pixel: 'Galmuri11', var(--font-ui);
   --font-body: var(--font-ui);
   --font-display: var(--font-pixel);
@@ -33,6 +33,9 @@
   color: var(--ink);
   color-scheme: light;
 }
+
+/* Pretendard (SIL OFL 1.1): bundled so Korean text looks the same on every Mac */
+@font-face { font-family: 'Pretendard Variable'; src: url('../../node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2') format('woff2-variations'); font-weight: 45 920; font-display: swap; }
 
 /* Galmuri (SIL OFL 1.1): Korean pixel font, crisp at 12px multiples */
 @font-face { font-family: 'Galmuri11'; src: url('../../node_modules/galmuri/dist/Galmuri11.woff2') format('woff2'); font-weight: 400; }

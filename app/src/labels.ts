@@ -26,12 +26,18 @@ export function stateLabel(s: Snapshot): string {
 }
 
 /** Short "what it is doing right now" for the tag over a pet, with the file or command when known
- *  ("코드 수정 · Room.tsx", "테스트 중 · npm test"); null while it rests. */
+ *  ("코드 수정 중 (Room.tsx)", "테스트 중 (npm test)"); null while it rests. */
 /** a finished turn still shows as "완료" on the pet and the island for `sec` seconds (setting; 0 = until the next turn), then reads as idle */
 export const justDone = (s: Snapshot, now: number, sec = 60) => s.state === 'completed' && (!sec || now - (s.turnEndedAt ?? s.lastEventAt) < sec * 1000);
 
 export function doingLabel(s: Snapshot): string | null {
-  if (s.connection === 'stale') return L('응답 없음', 'Not responding');
+  const p = doingParts(s);
+  return p ? (p.detail ? `${p.what} (${p.detail})` : p.what) : null;
+}
+
+/** doingLabel in two parts: the state words and the file or command (when known) */
+export function doingParts(s: Snapshot): { what: string; detail: string | null } | null {
+  if (s.connection === 'stale') return { what: L('응답 없음', 'Not responding'), detail: null };
   if (s.connection !== 'live') return null;
   const what = ((): string | null => {
     switch (s.state) {
@@ -53,7 +59,7 @@ export function doingLabel(s: Snapshot): string | null {
   // files show just their name; commands show as they are
   const file = s.state === 'reading' || s.state === 'editing';
   const d = !busy || !s.detail ? '' : file ? s.detail.split(/[\\/]/).pop()!.trim() : s.detail.trim();
-  return d ? `${what} · ${d.length > 18 ? d.slice(0, 17) + '…' : d}` : what;
+  return { what, detail: d ? (d.length > 18 ? d.slice(0, 17) + '…' : d) : null };
 }
 
 export function stateTone(s: Snapshot): 'work' | 'wait' | 'ok' | 'bad' | 'calm' | 'muted' {
@@ -78,15 +84,15 @@ export function activityLabel(a: Activity | null): string {
 }
 
 export function timelineText(e: TimelineEntry): string {
-  const d = e.detail ? ` · ${e.detail}` : '';
+  const d = e.detail ? ` (${e.detail})` : '';
   switch (e.kind) {
     case 'session_start': return L('세션 시작', 'Session started');
     case 'session_end': return L('세션 종료', 'Session ended');
     case 'turn_start': return L('새 요청 처리 시작', 'New request');
-    case 'tool': return `${activityLabel(e.activity)} — ${e.tool ?? ''}${d}`;
-    case 'tool_fail': return `${L('실패', 'Failed')} — ${e.tool ?? ''}${d}`;
+    case 'tool': return `${activityLabel(e.activity)} ${e.tool ?? ''}${d}`;
+    case 'tool_fail': return `${L('실패', 'Failed')} ${e.tool ?? ''}${d}`;
     case 'test': return `${e.ok === true ? L('테스트 통과', 'Tests passed') : e.ok === false ? L('테스트 실패', 'Tests failed') : L('테스트 종료(결과 미제공)', 'Tests ended (no result)')}${d}`;
-    case 'approval': return `${L('승인 요청', 'Approval asked')} — ${e.tool ?? L('도구', 'tool')}${d}`;
+    case 'approval': return `${L('승인 요청', 'Approval asked')} ${e.tool ?? L('도구', 'tool')}${d}`;
     case 'input': return `${L('입력 요청', 'Input asked')}${d}`;
     case 'turn_complete': return L('작업 완료', 'Done');
     case 'turn_failed': return `${L('오류로 중단', 'Stopped by an error')}${d}`;
@@ -162,8 +168,8 @@ export const chatName = (s: Snapshot): string | null => s.title ?? s.chatTitle ?
 
 /**
  * One name per session, used everywhere (tags over the pets, tabs, lists): its chat name when it has
- * one, else its folder. Folder twins are told apart by the parent folder ("web-app · wt-2");
- * otherwise twins get a number in the order they started ("web · 2").
+ * one, else its folder. Folder twins are told apart by the parent folder ("web-app (wt-2)");
+ * otherwise twins get a number in the order they started ("web 2").
  */
 export function sessionNames(list: Snapshot[]): Record<string, string> {
   const base = (s: Snapshot) => chatName(s) ?? s.project ?? L('프로젝트', 'project');
@@ -174,9 +180,9 @@ export function sessionNames(list: Snapshot[]): Record<string, string> {
     if (twins.length < 2) { out[s.key] = base(s); continue; }
     const p = parent(s);
     const own = !chatName(s) && p !== null && twins.filter((o) => parent(o) === p).length === 1;
-    if (own) { out[s.key] = `${base(s)} · ${p}`; continue; }
+    if (own) { out[s.key] = `${base(s)} (${p})`; continue; }
     const order = [...twins].sort((x, y) => (x.startedAt ?? 0) - (y.startedAt ?? 0) || x.key.localeCompare(y.key));
-    out[s.key] = `${base(s)} · ${order.indexOf(s) + 1}`;
+    out[s.key] = `${base(s)} ${order.indexOf(s) + 1}`;
   }
   return out;
 }

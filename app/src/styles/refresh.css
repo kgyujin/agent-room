@@ -131,7 +131,7 @@
 .pp-state b { flex: none; font-weight: 600; color: var(--ink); }
 .pp-state em { flex: 1; min-width: 0; font-style: normal; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-g:not(:has(.pp-rowwrap:not(.fit-off))) { display: none; }
-.pp-state em::before { content: '·'; margin-right: 6px; }
+.pp-state em { margin-left: 6px; }
 .pp-g-todo .pp-state b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pp-more { border: 0; background: var(--fill); }
 .pp-more:hover { background: var(--fill-2); color: var(--ink); }

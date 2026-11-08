@@ -188,7 +188,7 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
     // agents waiting for the user, so the menu bar stays short
     let waiting = sessions.iter().filter(|s| s.connection == agent_room_core::session::Connection::Live && matches!(s.state, AgentState::Waiting | AgentState::Error)).count();
     let title = (waiting > 0).then(|| waiting.to_string());
-    let tooltip = summary.unwrap_or_else(|| tr("Agent Room · 연결된 에이전트 없음", "Agent Room · no agents connected").into());
+    let tooltip = summary.unwrap_or_else(|| tr("Agent Room (연결된 에이전트 없음)", "Agent Room (no agents connected)").into());
     // hooks send several events a second while an agent works; the native menu is rebuilt only
     // when something it shows changed (it was rebuilt on every event)
     static SHOWN: Mutex<String> = Mutex::new(String::new());
@@ -208,7 +208,7 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
 }
 
 fn menu_label(s: &Snapshot) -> String {
-    format!("{}:{} · {} — {}", s.key, agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s))
+    format!("{}:{} {}, {}", s.key, agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s))
 }
 
 pub(crate) fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Result<Menu<tauri::Wry>> {
@@ -220,7 +220,7 @@ pub(crate) fn build_menu(app: &AppHandle, sessions: &[Snapshot]) -> tauri::Resul
         menu.append(&MenuItem::with_id(app, "none", tr("연결된 에이전트 없음", "No agents connected"), false, None::<&str>)?)?;
     }
     for s in sessions.iter().take(8) {
-        let label = format!("{} · {} — {}", agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s));
+        let label = format!("{} {}, {}", agent_label(s), s.project.clone().unwrap_or_else(|| "?".into()), state_label(s));
         menu.append(&MenuItem::with_id(app, format!("session:{}", s.key), label, true, None::<&str>)?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;

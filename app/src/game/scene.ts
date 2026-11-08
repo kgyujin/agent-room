@@ -2,7 +2,6 @@
 // buffer and scales it up by an integer factor (crisp pixels, very cheap).
 // Runs at 12 fps when focused, 4 fps when unfocused (the window is then only glanced at), and stops when hidden.
 // One critter per session (up to one per desk), each with its own desk and screen.
-import { stateTone } from '../labels';
 import type { Snapshot } from '../types';
 import { Actor } from './actor';
 import type { Atlas } from './assets';
@@ -18,10 +17,6 @@ interface Spark { x: number; y: number; t: number }
 
 /** what a shared spot falls back to when another critter is already there */
 const SHARED = new Set(['shelf', 'board', 'bench', 'window', 'plantcorner', 'center', 'coffee', 'beanbag']);
-
-/** floor ring under a pet by state, so who works, who waits for you and what broke reads at a glance */
-// the same values as the --work / --wait / --bad / --ok tokens in styles.css
-const RING: Partial<Record<ReturnType<typeof stateTone>, string>> = { work: '#2e9a9c', wait: '#d9922e', bad: '#d0504b', ok: '#3f9e57' };
 
 interface Mate {
   key: string;
@@ -438,33 +433,6 @@ export class Scene {
     hand(min / 60, c.r - 1.5, '#4a3a5c');
   }
 
-  /** pixel ellipse on the floor (or the seat) under a pet; waiting and errors blink */
-  private ring(g: CanvasRenderingContext2D, m: Mate, ox: number, oy: number) {
-    if (!m.session) return;
-    const tone = stateTone(m.session);
-    // "done" only rings while the pet celebrates, not for the whole time the tag says 완료
-    if (tone === 'ok' && m.actor.current?.key !== 'done') return;
-    const col = RING[tone];
-    if (!col || ((tone === 'wait' || tone === 'bad') && Math.floor(this.tickN / 6) % 2)) return;
-    const f = m.actor.feet();
-    const cx = ox + Math.round(f.x);
-    const cy = oy + Math.round(f.y);
-    g.fillStyle = col;
-    // two pixels thick; the floor is drawn 2:1, so the ring is twice as wide as deep
-    for (const [rx, ry] of [[11, 5], [10, 4]]) {
-      for (let x = -rx; x <= rx; x++) {
-        const h = Math.round(ry * Math.sqrt(1 - (x / rx) ** 2));
-        g.fillRect(cx + x, cy - h, 1, 1);
-        g.fillRect(cx + x, cy + h, 1, 1);
-      }
-      for (let y = -ry; y <= ry; y++) {
-        const w = Math.round(rx * Math.sqrt(1 - (y / ry) ** 2));
-        g.fillRect(cx - w, cy + y, 1, 1);
-        g.fillRect(cx + w, cy + y, 1, 1);
-      }
-    }
-  }
-
   private burst(m: Mate) {
     for (let i = 0; i < 6; i++) m.sparks.push({ x: (Math.random() - 0.5) * 26, y: -10 - Math.random() * 18, t: 0 });
   }
@@ -524,7 +492,7 @@ export class Scene {
       },
     }));
     for (const m of this.mates) {
-      items.push({ y: this.depthOf(m.actor), draw: () => { this.ring(g, m, ox, oy); m.actor.draw(g, A, ox, oy, this.skins[m.skin]); } });
+      items.push({ y: this.depthOf(m.actor), draw: () => { m.actor.draw(g, A, ox, oy, this.skins[m.skin]); } });
     }
     items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 

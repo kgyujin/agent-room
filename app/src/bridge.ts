@@ -274,8 +274,8 @@ function previewBackend(): Backend {
     },
     openMemoryFile: async () => undefined,
     memoryFiles: async () => [
-      { label: L('전역 · Claude Code', 'Global · Claude Code'), path: '~/.claude/CLAUDE.md', truncated: false, content: L('# 미리보기용 예시\n\n## 말투\n\n- 한국어로 답하기\n- 결론부터 말하기\n\n## 커밋\n\n- 커밋은 작게 나누지 말 것\n- 커밋 메시지는 영어로\n\n## 테스트\n\n- 고친 뒤 테스트를 꼭 돌리기\n', '# Preview example\n\n## Tone\n\n- Answer in English\n- Lead with the answer\n\n## Commits\n\n- Keep commits coarse\n- Write commit messages in English\n\n## Tests\n\n- Always run the tests after a change\n') },
-      { label: 'cozy-project · AGENTS.md', path: '/demo/cozy-project/AGENTS.md', truncated: false, content: L('# cozy-project\n\n테스트는 `npm test`로 돌립니다.\n', '# cozy-project\n\nRun the tests with `npm test`.\n') },
+      { label: L('전역 (Claude Code)', 'Global (Claude Code)'), path: '~/.claude/CLAUDE.md', truncated: false, content: L('# 미리보기용 예시\n\n## 말투\n\n- 한국어로 답하기\n- 결론부터 말하기\n\n## 커밋\n\n- 커밋은 작게 나누지 말 것\n- 커밋 메시지는 영어로\n\n## 테스트\n\n- 고친 뒤 테스트를 꼭 돌리기\n', '# Preview example\n\n## Tone\n\n- Answer in English\n- Lead with the answer\n\n## Commits\n\n- Keep commits coarse\n- Write commit messages in English\n\n## Tests\n\n- Always run the tests after a change\n') },
+      { label: 'cozy-project (AGENTS.md)', path: '/demo/cozy-project/AGENTS.md', truncated: false, content: L('# cozy-project\n\n테스트는 `npm test`로 돌립니다.\n', '# cozy-project\n\nRun the tests with `npm test`.\n') },
     ],
     getSettings: async () => settings,
     saveSettings: async (s) => { settings = s; },
@@ -295,7 +295,8 @@ function previewBackend(): Backend {
     listCharacters: async () => (window as { __previewCharacters?: CharacterFile[] }).__previewCharacters ?? [],
     setTrayFrames: async () => {},
     setPetSkins: async () => {},
-    petSkins: async () => ({}),
+    // the desktop pets wear the room's pets; the preview hands out the built-in ones in order
+    petSkins: async () => Object.fromEntries(first.map((s, i) => [s.key, `builtin/${['shiba', 'penguin', 'cat', 'hamster', 'rabbit', 'frog', 'chick'][i % 7]}`])),
     charactersChanged: async () => {},
     saveCharacter: async (name, bytes) => {
       const w = window as { __previewCharacters?: CharacterFile[] };

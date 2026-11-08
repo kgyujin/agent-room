@@ -29,10 +29,10 @@ export function useUsageHistory(days: number): UsageHistory | null {
 export { fmtTokens };
 
 /** one card per agent: each limit window with what is left and when it resets */
-export function LimitCards({ sessions, now, dark, ring, accountLimits, onSettings }: { sessions: Snapshot[]; now: number; dark?: boolean; /** each window as a ring gauge (the dashboard) */ ring?: boolean; accountLimits?: boolean; onSettings?: () => void }) {
+export function LimitCards({ sessions, now, dark, ring, accountLimits, onSettings, agents = AGENTS }: { sessions: Snapshot[]; now: number; dark?: boolean; /** each window as a ring gauge (the dashboard) */ ring?: boolean; accountLimits?: boolean; onSettings?: () => void; /** which agents get a card (all by default) */ agents?: readonly ('claude' | 'codex')[] }) {
   return (
     <div className={`lc-grid ${dark ? 'dark' : ''} ${ring ? 'rings' : ''}`}>
-      {AGENTS.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} ring={ring} why={noLimitsWhy(a, sessions, accountLimits)} onSettings={onSettings} />)}
+      {agents.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} ring={ring} why={noLimitsWhy(a, sessions, accountLimits)} onSettings={onSettings} />)}
     </div>
   );
 }
@@ -40,12 +40,12 @@ export function LimitCards({ sessions, now, dark, ring, accountLimits, onSetting
 /** why a limit card is empty, so the user knows whether to wait or change something */
 function noLimitsWhy(agent: 'claude' | 'codex', sessions: Snapshot[], accountLimits?: boolean): { text: string; fix?: boolean } {
   const seen = sessions.some((s) => !s.isDemo && s.agent === agent);
-  if (agent === 'claude' && accountLimits === false) return { text: L("'Claude 계정에서 받아오기'를 켜면 데스크톱 앱·VS Code 세션의 한도도 보여요.", "Turn on 'Get from the Claude account' to see limits for desktop app and VS Code sessions too."), fix: true };
+  if (agent === 'claude' && accountLimits === false) return { text: L("'Claude 계정에서 받아오기'를 켜면 데스크톱 앱과 VS Code 세션의 한도도 보여요.", "Turn on 'Get from the Claude account' to see limits for desktop app and VS Code sessions too."), fix: true };
   if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'login') return { text: L('이 Mac에서 Claude Code에 로그인하면 계정 한도도 보여요.', 'Sign in to Claude Code on this Mac to see account limits too.') };
   if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'expired') return { text: L('사용량을 받아올 터미널 Claude Code 로그인이 오래됐어요. 터미널에서 claude 를 한 번 실행하면 갱신돼요. 연결 문제는 아니에요.', 'The terminal Claude Code sign-in used to get usage is out of date. Run claude in a terminal once to renew it. The connection is fine.') };
   if (agent === 'claude' && accountLimits !== false && claudeAccountWhy === 'failed') return { text: L('계정에서 한도를 받아오지 못했어요. 잠시 뒤 다시 시도해요.', "Couldn't get limits from the account. Trying again shortly.") };
   if (!seen) return { text: L(`${NAME[agent]} 세션이 아직 없어요. 세션이 응답하면 보여요.`, `No ${NAME[agent]} session yet. Limits show once one replies.`) };
-  return { text: agent === 'claude' ? L('다음 응답부터 보여요. Pro·Max 요금제만 한도가 있어요.', 'Shows from the next reply. Only Pro and Max plans have limits.') : L('다음 응답부터 보여요.', 'Shows from the next reply.') };
+  return { text: agent === 'claude' ? L('다음 응답부터 보여요. Pro와 Max 요금제만 한도가 있어요.', 'Shows from the next reply. Only Pro and Max plans have limits.') : L('다음 응답부터 보여요.', 'Shows from the next reply.') };
 }
 
 /** what is left of one window as a ring with the percentage inside */
@@ -83,7 +83,7 @@ function LimitCard({ agent, l, now, ring, why, onSettings }: { agent: 'claude' |
             );
           return (
             <div key={w.minutes} className={`lc-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`}>
-              <span className="lc-name">{w.minutes <= 300 ? `${L('세션', 'Session')} · ${windowLabel(w.minutes)}` : windowLabel(w.minutes)}</span>
+              <span className="lc-name">{w.minutes <= 300 ? `${L('세션', 'Session')} (${windowLabel(w.minutes)})` : windowLabel(w.minutes)}</span>
               <span className={`lc-bar a-${agent}`}><i style={{ width: `${left}%` }} /></span>
               <div className="lc-foot"><b>{L(`${left}% 남음`, `${left}% left`)}</b><small>{reset}</small></div>
               {paceNote(w, l.at) && <small className="lc-pace">{paceNote(w, l.at)}</small>}

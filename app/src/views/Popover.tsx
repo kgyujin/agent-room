@@ -5,7 +5,7 @@ import { ApproveButtons } from '../ui/Approve';
 import { useEffect, useRef, useState } from 'react';
 import { useFit } from '../ui/fit';
 import { backend } from '../bridge';
-import { chatName, doingLabel, fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
+import { chatName, doingParts, fmtAgo, fmtUntil, paceNote, sessionNames, stateLabel, stateTone, windowLabel } from '../labels';
 import type { Snapshot } from '../types';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { fmtTokens, useUsageHistory } from '../ui/Usage';
@@ -62,7 +62,7 @@ export function Popover() {
                 ))}
               </section>
             ))}
-            {more > 0 && <button className="pp-more" onClick={() => act('open')}>{L(`+${more}개 더 · 방에서 보기`, `+${more} more · see the room`)}</button>}
+            {more > 0 && <button className="pp-more" onClick={() => act('open')}>{L(`${more}개 더 있어요. 방에서 보기`, `${more} more. See the room`)}</button>}
           </>
         ) : (
           <div className="pp-empty">
@@ -96,7 +96,7 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
             l.windows.map((w) => {
               const left = Math.max(0, Math.min(100, Math.round(100 - w.usedPct)));
               return (
-                <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={[w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '', paceNote(w, l.at) ?? ''].filter(Boolean).join(' · ') || undefined}>
+                <span key={w.minutes} className={`pp-win ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={[w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '', paceNote(w, l.at) ?? ''].filter(Boolean).join('\n') || undefined}>
                   {/* running low: when it comes back matters more than which window it is */}
                   <small>{left <= 30 && w.resetsAt && w.resetsAt > now ? fmtUntil(w.resetsAt - now) : windowLabel(w.minutes)}</small>
                   <i className={`lc-bar a-${a}`}><i style={{ width: `${left}%` }} /></i>
@@ -112,7 +112,7 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
       {today && (
         <div className="pp-today">
           {L('오늘', 'Today')} <b>{fmtTokens(today.claude + today.codex)}</b> {L('토큰', 'tokens')}
-          {h && h.recentClaude + h.recentCodex > 0 && <> · {L('최근 10분', 'last 10 min')} <b>{fmtTokens(Math.round((h.recentClaude + h.recentCodex) / 10))}</b>/{L('분', 'min')}</>}
+          {h && h.recentClaude + h.recentCodex > 0 && <>, {L('최근 10분 동안 분당', 'last 10 min')} <b>{fmtTokens(Math.round((h.recentClaude + h.recentCodex) / 10))}</b>{L('', '/min')}</>}
         </div>
       )}
     </section>
@@ -123,13 +123,11 @@ function UsageBlock({ sessions, now }: { sessions: Snapshot[]; now: number }) {
 function Row({ s, name, now, onClick }: { s: Snapshot; name: string; now: number; onClick: (inRoom: boolean) => void }) {
   const todo = userTodo(s, now);
   const tone = stateTone(s);
-  // "코드 작성 중 · Room.tsx": the state in bold, then the file or command it is on (or the folder, when the name is the chat's)
-  const doing = doingLabel(s);
-  const cut = doing?.indexOf(' · ') ?? -1;
+  // the state in bold, then the file or command it is on (or the folder, when the name is the chat's)
   const what = stateLabel(s); // the same words as the dashboard and the room
-  const detail = (doing && cut >= 0 ? doing.slice(cut + 3) : null) ?? (chatName(s) ? s.project : null);
+  const detail = doingParts(s)?.detail ?? (chatName(s) ? s.project : null);
   return (
-    <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n${L('⌥ 클릭: 방에서 보기', '⌥-click: see it in the room')}`}>
+    <button className={`pp-row t-${tone}`} onClick={(e) => onClick(e.altKey)} title={`${s.cwd ?? ''}\n${L('⌥를 누른 채 클릭하면 방에서 보여요', 'Option-click to see it in the room')}`}>
       <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={16} />
       <span className="pp-main">
         <span className="pp-top"><span className="pp-name">{name}</span><span className="pp-ago">{fmtAgo(now - (todo?.since ?? s.lastEventAt))}</span></span>

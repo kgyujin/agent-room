@@ -129,7 +129,7 @@ export function SettingsModal(props: {
         </aside>
         <section className="set-main">
           <header>
-            <h3>{query ? L(`'${q.trim()}' 찾기 · ${hits}개`, `'${q.trim()}' · ${hits} found`) : pane.label}</h3>
+            <h3>{query ? L(`'${q.trim()}' 검색 결과 ${hits}개`, `${hits} found for '${q.trim()}'`) : pane.label}</h3>
             {!query && resetKeys.length > 0 && <button className={`btn small set-reset ${resetAsk ? 'ask' : ''}`} onClick={reset}>{resetAsk ? L('한 번 더 누르면 기본값으로', 'Click again to reset') : L('기본값으로', 'Reset to defaults')}</button>}
             <button className="tool" onClick={props.onClose} aria-label={L('닫기', 'Close')}><Icon name="close" /></button>
           </header>
@@ -140,7 +140,7 @@ export function SettingsModal(props: {
                   <AutostartToggle />
                 </Group>
                 <Group title={L('모양', 'Look')}>
-                  <Field label="언어 · Language">
+                  <Field label="언어 (Language)">
                     <select value={s.language ?? 'auto'} onChange={(e) => set('language', e.target.value as Settings['language'])}>
                       <option value="auto">{L('시스템 언어 따라', 'Follow the system')}</option>
                       <option value="ko">한국어</option>
@@ -169,19 +169,19 @@ export function SettingsModal(props: {
                   </Field>
                 </Group>
                 <Group title={L('사용량', 'Usage')}>
-                  <Toggle label={L('남은 사용량 보이기', 'Show usage left')} hint={L('5시간·주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요', 'Shows the 5-hour and weekly limits in the main window, menu bar and island')} v={s.showLimits} on={(v) => set('showLimits', v)} />
-                  {s.showLimits && <Toggle label={L('Claude 계정에서 받아오기', 'Get from the Claude account')} hint={L('데스크톱 앱·VS Code 세션의 한도도 보여요. 키체인의 Claude Code 로그인으로 Anthropic에만 묻고, 저장하지 않아요', 'Limits for desktop app and VS Code sessions too. Asks only Anthropic, with the Claude Code login in the Keychain, and stores nothing')} sub v={s.claudeAccountLimits ?? true} on={(v) => set('claudeAccountLimits', v)} />}
+                  <Toggle label={L('남은 사용량 보이기', 'Show usage left')} hint={L('5시간 한도와 주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요', 'Shows the 5-hour and weekly limits in the main window, menu bar and island')} v={s.showLimits} on={(v) => set('showLimits', v)} />
+                  {s.showLimits && <Toggle label={L('Claude 계정에서 받아오기', 'Get from the Claude account')} hint={L('데스크톱 앱과 VS Code 세션의 한도도 보여요. 키체인의 Claude Code 로그인으로 Anthropic에만 묻고, 저장하지 않아요', 'Limits for desktop app and VS Code sessions too. Asks only Anthropic, with the Claude Code login in the Keychain, and stores nothing')} sub v={s.claudeAccountLimits ?? true} on={(v) => set('claudeAccountLimits', v)} />}
                   <Field label={L('토큰 단위', 'Token units')} hint={L('토큰 수를 어떻게 줄여 쓸지 골라요', 'How token counts are shortened')}>
                     <select value={s.tokenUnit ?? 'si'} onChange={(e) => set('tokenUnit', e.target.value as 'si' | 'ko')}>
-                      <option value="si">12.4K · 340M</option>
-                      <option value="ko">1.24만 · 3.4억</option>
+                      <option value="si">12.4K, 340M</option>
+                      <option value="ko">1.24만, 3.4억</option>
                     </select>
                   </Field>
                   <Toggle label={L('추정 비용 보이기', 'Show estimated cost')} hint={L('API로 쓸 때만 의미가 있어요. 로컬 토큰 수 × 아래 단가로 계산한 추정치예요', 'Only meaningful with API use. Estimated from local token counts × the prices below')} v={s.showCost ?? false} on={(v) => set('showCost', v)} />
                   {s.showCost && (['claude', 'codex'] as const).map((a) => {
                     const k = a === 'claude' ? 'costClaudePerM' : 'costCodexPerM';
                     return (
-                      <Field key={a} label={`${a === 'claude' ? 'Claude Code' : 'Codex'} ${L('단가', 'price')}`} hint={L('100만 토큰당 달러 (입력·출력·캐시를 섞은 평균)', 'USD per million tokens (a blend of input, output and cache)')} sub>
+                      <Field key={a} label={`${a === 'claude' ? 'Claude Code' : 'Codex'} ${L('단가', 'price')}`} hint={L('100만 토큰당 달러 (입력, 출력, 캐시를 섞은 평균)', 'USD per million tokens (a blend of input, output and cache)')} sub>
                         <input type="number" min={0} step={0.1} className="num-in" value={s[k] ?? 0} onChange={(e) => set(k, Math.max(0, Number(e.target.value) || 0))} />
                       </Field>
                     );
@@ -206,7 +206,7 @@ export function SettingsModal(props: {
                 <Group title={L('단축키', 'Shortcuts')}>
                   <p className="pn-note">{L('앱 창이 앞에 있을 때만 동작해요. 글자를 입력하는 칸에서는 쓰이지 않아요.', 'Work only while the app window is in front, and not while typing in a field.')}</p>
                   <dl className="info keys">
-                    <div><dt>D</dt><dd>{L('대시보드 방과 같이 보기 · 닫기', 'Dashboard beside the room · close')}</dd></div>
+                    <div><dt>D</dt><dd>{L('방 옆에 대시보드 열고 닫기', 'Open or close the dashboard beside the room')}</dd></div>
                     <div><dt>F</dt><dd>{L('대시보드만 보기', 'Dashboard only')}</dd></div>
                     <div><dt>N</dt><dd>{L('다음 내 차례 세션 열기', 'Open the next session waiting for you')}</dd></div>
                     <div><dt>/</dt><dd>{L('대시보드에서 세션 찾기', 'Find a session in the dashboard')}</dd></div>
@@ -215,7 +215,7 @@ export function SettingsModal(props: {
                 </Group>
                 <Group title={L('업데이트', 'Updates')}>
                   <div className="field">
-                    <span>{L('지금 버전', 'Version')} <b className="ver">{version || '—'}</b></span>
+                    <span>{L('지금 버전', 'Version')} <b className="ver">{version || L('확인 중', 'Checking')}</b></span>
                     <button className="btn" onClick={props.onCheckUpdate} disabled={!IN_TAURI}>{L('업데이트 확인', 'Check for updates')}</button>
                   </div>
                   <Toggle label={L('새 버전 자동 확인', 'Check for new versions')} hint={L('앱을 켤 때 확인하고, 새 버전이 있으면 설치할지 물어봐요', 'Checks when the app starts and asks before installing')} v={s.autoUpdateCheck ?? true} on={(v) => set('autoUpdateCheck', v)} />
@@ -244,8 +244,8 @@ export function SettingsModal(props: {
             )}
             {show('notify') && (
               <Group>
-                <Toggle label={L('승인·입력 요청', 'Approval or input asked')} hint={L('에이전트가 내 답을 기다릴 때', 'When an agent waits for your answer')} v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
-                <Toggle label={L('작업 완료·오류', 'Work done or failed')} v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
+                <Toggle label={L('승인이나 입력 요청', 'Approval or input asked')} hint={L('에이전트가 내 답을 기다릴 때', 'When an agent waits for your answer')} v={s.notifyApproval} on={(v) => set('notifyApproval', v)} />
+                <Toggle label={L('작업 완료나 오류', 'Work done or failed')} v={s.notifyComplete} on={(v) => set('notifyComplete', v)} />
                 {s.notifyComplete && (
                   <Field label={L('완료 알림을 받을 작업', 'Notify for')} sub>
                     <select value={s.notifyMinTurnSec ?? 0} onChange={(e) => set('notifyMinTurnSec', Number(e.target.value))}>
@@ -256,7 +256,7 @@ export function SettingsModal(props: {
                     </select>
                   </Field>
                 )}
-                <Field label={L('오래 기다리면 한 번 더', 'Remind me when it waits')} hint={L('승인·답변 요청이 이만큼 기다리면 다시 알려요', 'Notifies again when an approval or question waits this long')}>
+                <Field label={L('오래 기다리면 한 번 더', 'Remind me when it waits')} hint={L('승인이나 답변 요청이 이만큼 기다리면 다시 알려요', 'Notifies again when an approval or question waits this long')}>
                   <select value={s.renotifyMin ?? 5} onChange={(e) => set('renotifyMin', Number(e.target.value))}>
                     <option value={0}>{L('다시 알리지 않기', 'Never')}</option>
                     <option value={5}>{L('5분 뒤', 'After 5 min')}</option>
@@ -265,7 +265,7 @@ export function SettingsModal(props: {
                   </select>
                 </Field>
                 <Toggle label={L('남은 사용량 10% 이하', 'Usage left at 10% or less')} v={s.notifyLimits} on={(v) => set('notifyLimits', v)} />
-                <Toggle label={L('하루 요약', 'Day summary')} hint={L('정한 시각이 지나면 하루에 한 번, 오늘 끝낸 요청·테스트·고친 파일 수를 알려 줘요', 'Once a day after the hour you pick: today\'s requests done, tests and files edited')} v={s.dailySummary ?? false} on={(v) => set('dailySummary', v)} />
+                <Toggle label={L('하루 요약', 'Day summary')} hint={L('정한 시각이 지나면 하루에 한 번, 오늘 끝낸 요청, 테스트, 고친 파일 수를 알려 줘요', 'Once a day after the hour you pick: today\'s requests done, tests and files edited')} v={s.dailySummary ?? false} on={(v) => set('dailySummary', v)} />
                 {s.dailySummary && (
                   <Field label={L('알릴 시각', 'At')} sub>
                     <select value={s.dailySummaryHour ?? 18} onChange={(e) => set('dailySummaryHour', Number(e.target.value))}>
@@ -273,7 +273,7 @@ export function SettingsModal(props: {
                     </select>
                   </Field>
                 )}
-                <Toggle label={L('앱에서 승인하기 (Claude Code)', 'Approve in the app (Claude Code)')} hint={L('권한 요청을 메인 창·아일랜드·대시보드에서 허용하거나 거부해요. 기다리는 동안 Claude Code의 승인 창은 뜨지 않고, 시간 안에 답하지 않으면 원래대로 Claude Code가 물어봐요', 'Allow or deny permission requests from the main window, island or dashboard. Claude Code\'s own prompt waits meanwhile, and asks as usual if you don\'t answer in time')} v={s.approveInApp ?? false} on={(v) => {
+                <Toggle label={L('앱에서 승인하기 (Claude Code)', 'Approve in the app (Claude Code)')} hint={L('권한 요청을 메인 창, 아일랜드, 대시보드에서 허용하거나 거부해요. 기다리는 동안 Claude Code의 승인 창은 뜨지 않고, 시간 안에 답하지 않으면 원래대로 Claude Code가 물어봐요', 'Allow or deny permission requests from the main window, island or dashboard. Claude Code\'s own prompt waits meanwhile, and asks as usual if you don\'t answer in time')} v={s.approveInApp ?? false} on={(v) => {
                   set('approveInApp', v);
                   // the permission hook needs its longer timeout, which reinstalling writes (only where it is already installed)
                   if (v && IN_TAURI) void backend.hooksStatus().then(async (all) => { if (all.some((h) => h.agent === 'claude' && h.installed !== 'none')) await backend.hooksInstall('claude'); }).catch(() => undefined);
@@ -417,7 +417,7 @@ export function SettingsModal(props: {
                         <option value="pointer">{L('마우스가 있는 화면', 'The screen with the pointer')}</option>
                       </select>
                     </Field>
-                    <Toggle label={L('내 차례가 생기면 잠깐 펼치기', 'Open briefly when something needs you')} hint={L('승인·답변을 기다리는 세션이 새로 생기면 3초 동안 펼쳐서 보여 줘요', 'Opens for 3 seconds when a session starts waiting for an approval or answer')} sub v={s.islandPeek ?? true} on={(v) => set('islandPeek', v)} />
+                    <Toggle label={L('내 차례가 생기면 잠깐 펼치기', 'Open briefly when something needs you')} hint={L('승인이나 답변을 기다리는 세션이 새로 생기면 3초 동안 펼쳐서 보여 줘요', 'Opens for 3 seconds when a session starts waiting for an approval or answer')} sub v={s.islandPeek ?? true} on={(v) => set('islandPeek', v)} />
                     <Toggle label={L('일이 없을 땐 숨기기', 'Hide when idle')} sub v={s.islandHideIdle ?? false} on={(v) => set('islandHideIdle', v)} />
                     {s.showLimits && <Toggle label={L('접혔을 때 남은 사용량', 'Usage left when closed')} sub v={s.islandUsage ?? true} on={(v) => set('islandUsage', v)} />}
                   </>
@@ -442,7 +442,7 @@ function Group({ title, children }: { title?: string; children: React.ReactNode 
   );
 }
 
-const SOUND_EVENTS = (): [Sfx, string][] => [['start', L('작업 시작', 'Work starts')], ['done', L('작업 완료', 'Work done')], ['alert', L('승인·입력 요청', 'Approval or input asked')], ['error', L('오류', 'Error')]];
+const SOUND_EVENTS = (): [Sfx, string][] => [['start', L('작업 시작', 'Work starts')], ['done', L('작업 완료', 'Work done')], ['alert', L('승인이나 입력 요청', 'Approval or input asked')], ['error', L('오류', 'Error')]];
 
 /** pick your own file per effect; stored in ~/.agent-room/sounds, played instead of the built-in tone */
 function Sounds({ sound, onChanged }: { sound: Sound; onChanged: () => Promise<void> }) {
@@ -470,7 +470,7 @@ function Sounds({ sound, onChanged }: { sound: Sound; onChanged: () => Promise<v
     <Group title={L('효과음 바꾸기', 'Change sounds')}>
       {SOUND_EVENTS().map(([ev, label]) => (
         <div key={ev} className="field">
-          <span>{label} <small className="muted">· {mine.includes(ev) ? L('내 파일', 'my file') : L('기본음', 'default')}</small></span>
+          <span>{label} <small className="muted">({mine.includes(ev) ? L('내 파일', 'my file') : L('기본음', 'default')})</small></span>
           <div className="row tight">
             <button className="btn small" onClick={() => { sound.unlock(); sound.play(ev, true); }}>{L('듣기', 'Play')}</button>
             <label className="btn small">
@@ -483,7 +483,7 @@ function Sounds({ sound, onChanged }: { sound: Sound; onChanged: () => Promise<v
       ))}
       {note && <p className="small">{note}</p>}
       <p className="muted small">
-        {L('2MB 이하 mp3·wav·ogg·m4a 파일을 고르면 그 소리로 바뀌어요. 다른 사이트에서 받은 소리는 그 사이트의 이용 조건을 확인하고 써 주세요. 파일은 이 컴퓨터의 ~/.agent-room/sounds 폴더에만 저장돼요.', 'Pick an mp3, wav, ogg or m4a file up to 2 MB to use that sound. For sounds from other sites, check that site\'s terms. Files are kept only in ~/.agent-room/sounds on this computer.')}
+        {L('2MB 이하 mp3, wav, ogg, m4a 파일을 고르면 그 소리로 바뀌어요. 다른 사이트에서 받은 소리는 그 사이트의 이용 조건을 확인하고 써 주세요. 파일은 이 컴퓨터의 ~/.agent-room/sounds 폴더에만 저장돼요.', 'Pick an mp3, wav, ogg or m4a file up to 2 MB to use that sound. For sounds from other sites, check that site\'s terms. Files are kept only in ~/.agent-room/sounds on this computer.')}
       </p>
     </Group>
   );
@@ -570,7 +570,7 @@ function Pets({ settings: s, onChange, names, onAdded }: { settings: Settings; o
   const checkedCount = pool.filter((x) => x.startsWith('builtin/') || names.includes(x)).length;
   return (
     <>
-      <Group title={L(`쓸 펫 고르기 · ${checkedCount}마리`, `Pets to use · ${checkedCount}`)}>
+      <Group title={L(`쓸 펫 고르기 (${checkedCount}마리)`, `Pets to use (${checkedCount})`)}>
         <p className="muted small set-lead">{L('체크한 펫 중에서 방에 없는 펫이 무작위로 나와요. 체크한 펫이 모두 방에 있을 때만 같은 펫이 또 나와요.', 'New sessions get a random checked pet not already in the room. A pet repeats only when all checked pets are in.')}</p>
         <div className="pet-grid">
           {BUILTIN_CRITTERS.map(([id, label]) => {
@@ -770,7 +770,7 @@ function Dev(props: { demoRunning: boolean; onToggleDemo: () => void; realCount:
       </Group>
       <Group title={L('데이터', 'Data')}>
         <p className="muted small">
-          {L('이벤트는 메모리에만 보관하고, 알림 탭의 기록 보관을 켰을 때만 이 컴퓨터에 저장해요. 프롬프트, 응답, 파일 내용, 명령 출력은 앱에 전달되기 전에 버려져요. 앱 데이터 폴더: ', 'Events stay in memory and are written to this computer only when history is turned on. Prompts, replies, file contents and command output are dropped before they reach the app. App data folder: ')}<span className="mono">{dir}</span>
+          {L('이벤트는 메모리에만 보관하고, 알림 탭의 기록 보관을 켰을 때만 이 컴퓨터에 저장해요. 프롬프트, 응답, 파일 내용, 명령 출력은 앱에 전달되기 전에 버려져요. 앱 데이터는 ', 'Events stay in memory and are written to this computer only when history is turned on. Prompts, replies, file contents and command output are dropped before they reach the app. App data lives in ')}<span className="mono">{dir}</span>{L('에 있어요.', '.')}
         </p>
       </Group>
       <Group title={L('에이전트 설정 백업 복원', 'Restore agent settings backup')}>

@@ -71,7 +71,7 @@ pub(crate) fn list_sounds() -> Vec<SoundFile> {
 pub(crate) fn save_sound(event: String, name: String, bytes: Vec<u8>) -> Result<(), String> {
     let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     if !SOUND_EVENTS.contains(&event.as_str()) || !SOUND_EXTS.contains(&ext.as_str()) || bytes.len() > 2 << 20 {
-        return Err(tr("2MB 이하의 mp3·wav·ogg·m4a 파일만 쓸 수 있어요", "Only mp3, wav, ogg or m4a files up to 2 MB").into());
+        return Err(tr("2MB 이하의 mp3, wav, ogg, m4a 파일만 쓸 수 있어요", "Only mp3, wav, ogg or m4a files up to 2 MB").into());
     }
     remove_sound(event.clone())?;
     std::fs::create_dir_all(sounds_dir()).map_err(|e| e.to_string())?;

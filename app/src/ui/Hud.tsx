@@ -21,13 +21,13 @@ export function Hud({ s, now, onOpenApp }: { s: Snapshot; now: number; onOpenApp
   const active = ACTIVE.includes(s.state) && s.connection === 'live';
   const turnMs = s.turnStartedAt ? (s.turnEndedAt && !active ? s.turnEndedAt : now) - s.turnStartedAt : null;
   const note = noteOf(s, now);
-  const doing = s.tool && s.connection === 'live' ? [activityLabel(s.activity), s.tool, s.detail].filter(Boolean).join(' · ') : null;
+  const doing = s.tool && s.connection === 'live' ? [activityLabel(s.activity), s.tool, s.detail].filter(Boolean).join(' ') : null;
   return (
     <div className={`card shud t-${tone}`}>
       <AgentMark agent={s.isDemo ? 'demo' : s.agent} size={20} />
       <div className="shud-id">
         <b title={`${chatName(s) ?? ''}\n${s.cwd ?? ''}`.trim()}>{chatName(s) ?? s.project ?? L('프로젝트 미확인', 'Unknown project')}</b>
-        <small>{AGENT_NAME[s.agent]}{chatName(s) && s.project && ` · ${s.project}`}{s.isDemo && <span className="tag demo">DEMO</span>}</small>
+        <small>{AGENT_NAME[s.agent]}{chatName(s) && s.project && `, ${s.project}`}{s.isDemo && <span className="tag demo">DEMO</span>}</small>
       </div>
       <div className={`shud-state tone-${tone}`}><i className="pulse" />{stateLabel(s)}</div>
       <div className={`shud-what ${note ? `note ${note.tone}` : ''}`} title={note?.text ?? doing ?? ''}>
@@ -41,7 +41,7 @@ export function Hud({ s, now, onOpenApp }: { s: Snapshot; now: number; onOpenApp
       )}
       {turnMs !== null && <span className="shud-time" title={active ? L('작업 시간', 'Working for') : L('소요 시간', 'Took')}><Icon name="clock" />{fmtDuration(turnMs)}</span>}
       <ApproveButtons s={s} now={now} />
-      {onOpenApp && !canApprove(s, now) && <button className="btn primary open-app" onClick={onOpenApp} title={L('이 세션이 열린 터미널 탭·편집기 창·Codex 대화로 이동해요', 'Goes to the terminal tab, editor window or Codex chat this session runs in')}>{L('세션 열기', 'Open session')}</button>}
+      {onOpenApp && !canApprove(s, now) && <button className="btn primary open-app" onClick={onOpenApp} title={L('이 세션이 열린 터미널 탭이나 편집기 창, Codex 대화로 이동해요', 'Goes to the terminal tab, editor window or Codex chat this session runs in')}>{L('세션 열기', 'Open session')}</button>}
     </div>
   );
 }
@@ -52,9 +52,9 @@ function noteOf(s: Snapshot, now: number): { tone: 'wait' | 'bad' | 'muted'; tex
   if (s.connection === 'lost') return { tone: 'muted', text: L('에이전트 프로세스가 종료 이벤트 없이 사라졌어요.', 'The agent process went away without an end event.') };
   if (s.connection === 'ended') return { tone: 'muted', text: L('세션이 끝났어요.', 'The session ended.') };
   if (s.waiting)
-    return { tone: 'wait', text: `${s.waiting.kind === 'approval' ? L(`${s.waiting.tool ?? '도구'} 실행 승인을 기다려요`, `Waiting for you to approve ${s.waiting.tool ?? 'a tool'}`) : L('답변을 기다려요', 'Waiting for your answer')} · ${fmtAgo(now - s.waiting.since)}` };
+    return { tone: 'wait', text: `${s.waiting.kind === 'approval' ? L(`${s.waiting.tool ?? '도구'} 실행 승인을 기다려요`, `Waiting for you to approve ${s.waiting.tool ?? 'a tool'}`) : L('답변을 기다려요', 'Waiting for your answer')} (${fmtAgo(now - s.waiting.since)})` };
   if (s.state === 'error' && s.error)
     // a failed test run reads as one, as the overview card says ("테스트 실패 확인"), not as "Bash 실행 실패"
-    return { tone: 'bad', text: `${s.error.fatal ? L('작업이 오류로 중단됐어요', 'The work stopped with an error') : s.lastTest?.ok === false && s.lastTest.at === s.error.at ? L('테스트 실패', 'Tests failed') : L(`${s.error.tool ?? '도구'} 실행 실패`, `${s.error.tool ?? 'Tool'} failed`)}${s.error.message ? ` · ${s.error.message}` : ''}` };
+    return { tone: 'bad', text: `${s.error.fatal ? L('작업이 오류로 중단됐어요', 'The work stopped with an error') : s.lastTest?.ok === false && s.lastTest.at === s.error.at ? L('테스트 실패', 'Tests failed') : L(`${s.error.tool ?? '도구'} 실행 실패`, `${s.error.tool ?? 'Tool'} failed`)}${s.error.message ? ` (${s.error.message})` : ''}` };
   return null;
 }

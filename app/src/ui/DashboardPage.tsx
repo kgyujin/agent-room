@@ -8,7 +8,7 @@ import { useFit } from './fit';
 import { Lanes } from './Lanes';
 import { backend, IN_TAURI } from '../bridge';
 import type { HistLine, MemoryFile, Snapshot, TimelineEntry, UsageHistory } from '../types';
-import { AGENT_NAME, ORIGIN_LABEL, chatName, doingLabel, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
+import { AGENT_NAME, ORIGIN_LABEL, chatName, doingLabel, doingParts, fmtClock, timelineText, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { ActivityLog, SessionTable, StatCards, type SessFilter, type StatId } from './Activity';
 import { userTodo } from './Overview';
@@ -149,7 +149,7 @@ export function DashboardPage(props: {
       <header className="dp-head">
         <div className="dp-title">
           <h2>{L('대시보드', 'Dashboard')}</h2>
-          <p>{L(`세션 ${live.length}개 · 내 차례 ${todo}건`, `${live.length} sessions · ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
+          <p>{L(`세션 ${live.length}개, 내 차례 ${todo}건`, `${live.length} sessions, ${todo} need you`)}{props.notice && <em className="dp-notice">{props.notice}</em>}</p>
         </div>
         <button className="btn" onClick={() => setTodayOpen(true)}><Icon name="note" />{L('오늘 요약', 'Today')}</button>
         {props.historyDays > 0 && <button className="btn" onClick={() => setPastOpen(true)}><Icon name="clock" />{L('지난 기록', 'Past days')}</button>}
@@ -229,8 +229,7 @@ export function DashboardPage(props: {
 function mapLine(s: Snapshot, now: number): string | null {
   const todo = userTodo(s, now);
   if (todo) return todo.text;
-  const d = doingLabel(s);
-  return d && d.includes(' · ') ? d : chatName(s) ? s.project : null;
+  return doingParts(s)?.detail ? doingLabel(s) : chatName(s) ? s.project : null;
 }
 
 /** me → each agent → its projects → their sessions (with sub-agent counts), like an org chart */
@@ -329,7 +328,7 @@ function UsageShare({ h }: { h: UsageHistory | null }) {
     <div className="dshare pad">
       <div className="ubars" role="img" aria-label={L('최근 14일 토큰', 'Tokens, last 14 days')}>
         {days.map((d, i) => (
-          <span key={d.day} className={i === days.length - 1 ? 'today' : ''} title={`${dayLabel(d.day)} · Claude ${fmtTokens(d.claude)} · Codex ${fmtTokens(d.codex)}`}>
+          <span key={d.day} className={i === days.length - 1 ? 'today' : ''} title={`${dayLabel(d.day)}\nClaude ${fmtTokens(d.claude)}\nCodex ${fmtTokens(d.codex)}`}>
             <i className="a-codex" style={{ height: `${(d.codex / max) * 100}%` }} />
             <i className="a-claude" style={{ height: `${(d.claude / max) * 100}%` }} />
           </span>
@@ -385,20 +384,20 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
         <div className="dt-kpis">
           <span><b>{fmtSpan(d.workMs)}</b><small>{L('에이전트 작업', 'Agents working')}</small></span>
           <span className="wait"><b>{fmtSpan(d.waitMs)}</b><small>{L('내 차례 기다림', 'Waiting for you')}</small></span>
-          {d.first !== null && <span><b>{fmtClock(d.first).slice(0, 5)}–{fmtClock(d.last ?? now).slice(0, 5)}</b><small>{L('활동 시간대', 'Active between')}</small></span>}
+          {d.first !== null && <span><b>{fmtClock(d.first).slice(0, 5)} ~ {fmtClock(d.last ?? now).slice(0, 5)}</b><small>{L('활동 시간대', 'Active between')}</small></span>}
         </div>
       </section>
       <section className="dt-chart" aria-label={L('시간대별 작업', 'Work by hour')}>
         <div className="dt-bars">
           {hours.map((x) => (
-            <div key={x.h} className={`dt-bar ${x.h === nowH ? 'now' : ''}`} title={L(`${x.h}시 · 작업 ${fmtSpan(x.work)} · 기다림 ${fmtSpan(x.wait)}`, `${x.h}:00 · working ${fmtSpan(x.work)} · waiting ${fmtSpan(x.wait)}`)}>
+            <div key={x.h} className={`dt-bar ${x.h === nowH ? 'now' : ''}`} title={L(`${x.h}시\n작업 ${fmtSpan(x.work)}\n기다림 ${fmtSpan(x.wait)}`, `${x.h}:00\nworking ${fmtSpan(x.work)}\nwaiting ${fmtSpan(x.wait)}`)}>
               <i className="wait" style={{ height: `${(x.wait / scale) * 100}%` }} />
               <i className="work" style={{ height: `${(x.work / scale) * 100}%` }} />
             </div>
           ))}
         </div>
         <div className="dt-hours">{hours.map((x) => <span key={x.h}>{(x.h - startH) % step === 0 ? L(`${x.h}시`, `${x.h}h`) : ''}</span>)}</div>
-        <div className="lane-legend dt-legend"><span><i className="seg work" />{L('작업', 'Working')}</span><span><i className="seg wait" />{L('내 차례', 'Your turn')}</span><small>{L(`세션 시간을 더한 값 · 맨 위 ${fmtSpan(scale)}`, `Sessions added up · top ${fmtSpan(scale)}`)}</small></div>
+        <div className="lane-legend dt-legend"><span><i className="seg work" />{L('작업', 'Working')}</span><span><i className="seg wait" />{L('내 차례', 'Your turn')}</span><small>{L(`세션 시간을 더한 값이에요. 맨 위가 ${fmtSpan(scale)}`, `Sessions added up, top is ${fmtSpan(scale)}`)}</small></div>
       </section>
       <div className="dt-tiles">
         <Tile k={L('끝낸 요청', 'Requests done')} v={d.turns} />
@@ -407,13 +406,13 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
           <div className="dt-tests"><b className="ok">{d.testsOk}</b><span>{L('통과', 'passed')}</span><b className={d.testsFail ? 'bad' : ''}>{d.testsFail}</b><span>{L('실패', 'failed')}</span></div>
           {d.testsOk + d.testsFail > 0 && <span className="dt-split"><i className="ok" style={{ flex: d.testsOk }} /><i className="bad" style={{ flex: d.testsFail }} /></span>}
         </div>
-        <Tile k={L('승인·답변 요청', 'Approvals and questions')} v={d.asks} />
+        <Tile k={L('승인과 답변 요청', 'Approvals and questions')} v={d.asks} />
         <Tile k={L('고친 파일', 'Files edited')} v={d.files} />
         <div className={`dt-tile ${total ? '' : 'zero'}`}>
           <small>{L('토큰', 'Tokens')}</small>
-          <b>{d.tokens ? fmtTokens(total) : '—'}</b>
+          <b>{d.tokens ? fmtTokens(total) : L('없음', 'None')}</b>
           {d.tokens && total > 0 && (
-            <span className="dt-split" title={`Claude Code ${fmtTokens(d.tokens.claude)} · Codex ${fmtTokens(d.tokens.codex)}`}>
+            <span className="dt-split" title={`Claude Code ${fmtTokens(d.tokens.claude)}\nCodex ${fmtTokens(d.tokens.codex)}`}>
               <i className="a-claude" style={{ flex: d.tokens.claude }} /><i className="a-codex" style={{ flex: d.tokens.codex }} />
             </span>
           )}
@@ -427,7 +426,7 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
             <li key={`${x.project}-${i}`}>
               <div className="dt-sess-top">
                 <AgentMark agent={agentOf(x.agent)} size={13} /><b>{x.project}</b>
-                <span>{fmtSpan(x.workMs)} · {L(`요청 ${x.turns} · 파일 ${x.files.length}`, `${x.turns} requests · ${x.files.length} files`)}</span>
+                <span>{L(`${fmtSpan(x.workMs)} 동안 요청 ${x.turns}개, 파일 ${x.files.length}개`, `${fmtSpan(x.workMs)}, ${x.turns} requests, ${x.files.length} files`)}</span>
               </div>
               <span className={`dt-meter a-${agentOf(x.agent)}`}><i style={{ width: `${(x.workMs / maxWork) * 100}%` }} /></span>
               {x.files.length > 0 && <div className="dt-files">{x.files.slice(0, 8).map((f) => <code key={f} title={f}>{f.split('/').pop()}</code>)}{x.files.length > 8 && <small>+{x.files.length - 8}</small>}</div>}
@@ -436,7 +435,7 @@ function TodayReport({ day, h, now, cost }: { day: DayLog | null; h: UsageHistor
         </ul>
       ) : <p className="muted small">{L('오늘 받은 이벤트가 아직 없어요.', 'No events yet today.')}</p>}
       <details className="dt-md">
-        <summary>{L('보고서 원문 (Markdown)', 'Report text (Markdown)')} <small className="muted">{L('저장·복사하면 이 내용이 들어가요. 프로젝트와 파일 이름이 포함돼요.', 'This is what gets saved or copied. It includes project and file names.')}</small></summary>
+        <summary>{L('보고서 원문 (Markdown)', 'Report text (Markdown)')} <small className="muted">{L('저장하거나 복사하면 이 내용이 들어가요. 프로젝트와 파일 이름이 포함돼요.', 'This is what gets saved or copied. It includes project and file names.')}</small></summary>
         <pre className="dtoday-md">{md}</pre>
       </details>
       <div className="dtoday-act">
@@ -471,8 +470,8 @@ function PastDays({ days, now }: { days: number; now: number }) {
     <div className="dash-log dpast">
       <div className="dash-chips">
         <input type="date" value={day} min={iso(now - (days - 1) * 86_400_000)} max={iso(now)} onChange={(e) => e.target.value && setDay(e.target.value)} />
-        <span className="muted small">{lines ? L(`세션 ${projects}개 · 기록 ${lines.length}개`, `${projects} sessions · ${lines.length} entries`) : L('읽는 중…', 'Reading…')}</span>
-        <input type="search" placeholder={L('프로젝트·내용 검색', 'Search projects and text')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="muted small">{lines ? L(`세션 ${projects}개, 기록 ${lines.length}개`, `${projects} sessions, ${lines.length} entries`) : L('읽는 중…', 'Reading…')}</span>
+        <input type="search" placeholder={L('프로젝트나 내용 검색', 'Search projects and text')} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {lines && !shown.length && <p className="muted pad">{lines.length ? L('검색과 맞는 기록이 없어요.', 'Nothing matches the search.') : L('이 날의 기록이 없어요. 기록은 설정에서 켠 뒤부터 쌓여요.', 'Nothing kept for this day. History builds up once it is on in settings.')}</p>}
       <ol>
@@ -528,7 +527,7 @@ function MemoryBrowser() {
   return (
     <div className="dmem">
       <section className="dmem-list">
-        <input type="search" placeholder={L('파일·내용 검색', 'Search files and text')} value={q} autoFocus
+        <input type="search" placeholder={L('파일이나 내용 검색', 'Search files and text')} value={q} autoFocus
           onChange={(e) => { setQ(e.target.value); setPick(0); setHit(0); }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go(e.shiftKey ? -1 : 1); } }} />
         {shown.map((x, i) => (
@@ -556,7 +555,7 @@ function MemoryBrowser() {
               {lines.map((t, i) => <div key={i} data-line={i} className={/^#{1,3}\s/.test(t) ? 'h' : ''}><span className="ln">{i + 1}</span><span className="tx">{mark(t)}</span></div>)}
             </div>
           </div>
-          <p className="pn-note pad">{note ?? L(`줄 ${lines.length}개 · 제목 ${heads.length}개 · 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.`, `${lines.length} lines · ${heads.length} headings · read straight from this computer and sent nowhere.`)}</p>
+          <p className="pn-note pad">{note ?? L(`${lines.length}줄, 제목 ${heads.length}개. 이 컴퓨터의 파일을 바로 읽어 보여 줄 뿐, 어디에도 보내지 않아요.`, `${lines.length} lines, ${heads.length} headings. Read straight from this computer and sent nowhere.`)}</p>
         </section>
       )}
     </div>
