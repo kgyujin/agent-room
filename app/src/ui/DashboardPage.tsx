@@ -94,6 +94,8 @@ export function DashboardPage(props: {
   const todo = live.filter((x) => userTodo(x, now)).length;
   const pick = props.onSelect;
   const canOpen = (s: Snapshot) => IN_TAURI && !s.isDemo;
+  const openRow = (s: Snapshot) => { if (canOpen(s)) props.onOpen(s.key); };
+  const forget = props.onForget && ((keys: string[]) => keys.forEach((k) => props.onForget!(k)));
   // the activity card shows lanes or the plain log; remembered per computer (a convenience only)
   const [actView, setActView] = useState<'lanes' | 'log'>(() => { try { return localStorage.getItem('dashAct') === 'log' ? 'log' : 'lanes'; } catch { return 'lanes'; } });
   const pickActView = (v: 'lanes' | 'log') => { setActView(v); try { localStorage.setItem('dashAct', v); } catch { /* private window */ } };
@@ -129,7 +131,7 @@ export function DashboardPage(props: {
     </>, actView === 'lanes' ? <Lanes sessions={sessions} timelines={props.timelines} now={now} selected={selected?.key ?? null} onSelect={pick} /> : <ActivityLog sessions={sessions} timelines={props.timelines} onSelect={pick} compact />],
     usage: () => ['g-use', L('남은 사용량', 'Usage left'), <><LimitCards ring sessions={sessions} now={now} accountLimits={props.accountLimits} onSettings={props.onSettings} /><UsageShare h={h} /></>],
     board: () => ['g-board', L('작업 보드', 'Task board'), <TaskBoard sessions={live} now={now} onPick={pick} />],
-    sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} />],
+    sessions: () => ['g-sess', <>{L('세션', 'Sessions')} <span className="pn-count">{sessions.length}</span></>, <SessionTable sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} onOpen={openRow} onForget={forget} />],
     picked: () => ['g-pick', <>
       {selected ? <><AgentMark agent={selected.isDemo ? 'demo' : selected.agent} size={14} /> {sessionNames(sessions)[selected.key] ?? L('세션', 'Session')}</> : L('선택한 세션', 'Picked session')}
       {selected && canOpen(selected) && <button className="link dp-open" onClick={() => props.onOpen(selected.key)}>{L('세션 열기', 'Open session')}</button>}
@@ -178,7 +180,7 @@ export function DashboardPage(props: {
         </div>
       )}
       <div className="dp-body dp-one" style={{ '--rows': rows } as React.CSSProperties}>
-        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} cost={props.cost} onOpen={openStat} /></div>
+        <div className="g-stats"><StatCards sessions={sessions} now={now} h={h} day={props.day} cost={props.cost} onOpen={openStat} /></div>
         {shown.map(([id], i) => {
           const [cls, title, body] = cards[id]();
           const last = i === shown.length - 1 && rest > 0;
@@ -189,7 +191,7 @@ export function DashboardPage(props: {
         <div className="dp-over" onClick={() => setWhole(null)}>
           <section className={`dash-card ${cards[whole]()[0]}`} onClick={(e) => e.stopPropagation()}>
             <h4 className="dash-h">{cards[whole]()[1]}<button className="link dp-open" onClick={() => setWhole(null)}>{L('닫기', 'Close')}</button></h4>
-            <div className="dp-scroll">{whole === 'sessions' ? <SessionTable filter={wholeFilter} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} /> : cards[whole]()[2]}</div>
+            <div className="dp-scroll">{whole === 'sessions' ? <SessionTable filter={wholeFilter} sessions={sessions} now={now} selected={selected?.key ?? null} onSelect={pick} onOpen={openRow} onForget={forget} /> : cards[whole]()[2]}</div>
           </section>
         </div>
       )}
