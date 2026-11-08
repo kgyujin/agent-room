@@ -370,15 +370,6 @@ export default function App() {
     snd.setBgm(settings.bgm);
   }, [settings, ready]);
 
-  // room camera: both atlases share one furniture layout, so pets keep their spots on a switch
-  useEffect(() => {
-    const view = settings.roomView ?? 'iso';
-    if (!ready || sceneRef.current?.view === view) return;
-    let cancelled = false;
-    loadAtlas(view).then((atlas) => { if (!cancelled) sceneRef.current?.setAtlas(atlas); });
-    return () => { cancelled = true; };
-  }, [settings.roomView, ready]);
-
   // 1 s clock for elapsed time (only while visible)
   useEffect(() => {
     const id = window.setInterval(() => !document.hidden && setNow(Date.now()), 1000);
@@ -762,7 +753,6 @@ export default function App() {
         {!mini && <ToolBtn icon="monitor" label={L('대시보드 보기', 'Dashboard')} on={dashSplit} onClick={() => { setOffice(false); setDashView(dashSplit ? 'off' : 'split'); }} />}
         {!mini && <ToolBtn icon="eye" label={office ? L('HUD 보이기', 'Show HUD') : L('HUD 숨기기', 'Hide HUD')} on={office} onClick={() => setOffice(!office)} />}
         <ToolBtn icon="mini" label={mini ? L('창으로 보기', 'Window') : L('방만 띄우기', 'Room only')} on={mini} onClick={() => toggleMini()} />
-        <ToolBtn icon={settings.roomView === 'top' ? 'iso' : 'top'} label={settings.roomView === 'top' ? L('대각선으로 보기', 'Isometric view') : L('탑다운으로 보기', 'Top-down view')} onClick={() => saveSettings({ ...settings, roomView: settings.roomView === 'top' ? 'iso' : 'top' })} />
         {/* views above, the window itself below */}
         <i className="tb-sep" aria-hidden />
         <ToolBtn icon="pin" label={L('항상 위에 표시', 'Always on top')} on={onTop} onClick={() => saveSettings({ ...settings, [onTopKey]: !onTop })} />

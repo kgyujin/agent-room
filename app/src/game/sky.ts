@@ -69,7 +69,7 @@ const SKY_TOP = 40;
  * The left wall faces the sunrise and the right wall the sunset: the sun (and the moon)
  * is only ever in one place, rising on the left in the morning and setting on the right.
  */
-export function paintSky(boxes: Box[], span: Box, d: Date, tick: number, walls: ('L' | 'R')[] = [], origin: [number, number] = [0, 0], camera: 'iso' | 'top' = 'iso'): ImageData {
+export function paintSky(boxes: Box[], span: Box, d: Date, tick: number, walls: ('L' | 'R')[] = [], origin: [number, number] = [0, 0]): ImageData {
   const [sx, sy, sw, sh] = span;
   const img = new ImageData(sw, sh);
   const px = img.data;
@@ -85,8 +85,7 @@ export function paintSky(boxes: Box[], span: Box, d: Date, tick: number, walls: 
   // u (along the wall) and z (height) of a screen pixel on a wall, and back
   const uOf = (w: 'L' | 'R', x: number) => (w === 'L' ? OX - x - 0.5 : x + 0.5 - OX) / 2;
   // the top-down camera sees the back wall face on: no slant along u
-  const slant = camera === 'top' ? 0 : 1;
-  const toScreen = (w: 'L' | 'R', u: number, z: number): [number, number] => [w === 'L' ? OX - 2 * u - 0.5 : OX + 2 * u - 0.5, OY + slant * u - z - 0.5];
+  const toScreen = (w: 'L' | 'R', u: number, z: number): [number, number] => [w === 'L' ? OX - 2 * u - 0.5 : OX + 2 * u - 0.5, OY - z - 0.5];
   // span of each wall's windows along the wall
   const range: Record<string, [number, number]> = {};
   boxes.forEach(([bx, , bw], i) => {
@@ -124,7 +123,7 @@ export function paintSky(boxes: Box[], span: Box, d: Date, tick: number, walls: 
     for (let y = by; y < by + bh; y++) {
       for (let x = bx; x < bx + bw; x++) {
         const u = uOf(wall, x);
-        const z = Math.floor(OY + slant * u - y - 0.5 + 0.5);
+        const z = Math.floor(OY - y);
         // hills: far row then near row, continuous along the wall
         const far = HORIZON + 2 + Math.round(Math.sin((u + seed) * 0.22) * 2 + Math.sin((u + seed) * 0.074 + 1) * 2);
         const near = HORIZON - 3 + Math.round(Math.sin((u + seed) * 0.38 + 2) * 1.5 + Math.sin((u + seed) * 0.1) * 2);
@@ -144,16 +143,14 @@ export function paintSky(boxes: Box[], span: Box, d: Date, tick: number, walls: 
           c = hex('#fffbe6');
         } else {
           // clouds: one puffy cloud per 64 px of wall, at a per-cell height in the upper sky,
-          // shaped in screen space so they stay level on the slanted walls
           const gx = 2 * (u + seed) + drift;
           const cell = Math.floor(gx / 64);
           const cx = cell * 64 + 12 + hsh(cell, seed, 1) * 36;
           const cz = HORIZON + 7 + hsh(cell, seed, 2) * 12;
-          const uc = (cx - drift) / 2 - seed;
           const rx = 6 + hsh(cell, seed, 3) * 5;
           // screen offset from the cloud centre: x along the wall, y down the screen
           const ox = gx - cx;
-          const oy = slant * (u - uc) - (z - cz);
+          const oy = cz - z;
           const ex = ox / rx;
           const ey = oy / 2.2;
           const ex2 = (ox - rx * 0.35) / (rx * 0.55);

@@ -1,8 +1,7 @@
 """Generates every pixel-art asset for Agent Room (deterministic; run `python3 gen_art.py`).
 
 Outputs to app/public/assets/:
-  atlas.png / atlas.json         - the room seen diagonally (iso): sprites + scene layout
-  atlas-top.png / atlas-top.json - the same room, same layout, seen top-down
+  atlas-top.png / atlas-top.json - the room seen top-down: sprites + scene layout
 """
 import json
 import os
@@ -215,8 +214,6 @@ def pack(sprites, layout, stem):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    # the diagonal view keeps the old file name; the top-down view sits next to it
-    pack(*build('iso'), 'atlas')
     pack(*build('top'), 'atlas-top')
 
 

@@ -29,7 +29,7 @@ const PANE_KEYS: Partial<Record<SettingsPane, (keyof Settings)[]>> = {
   notify: ['approveInApp', 'approveWaitSec', 'dailySummary', 'dailySummaryHour', 'notifyApproval', 'notifyComplete', 'notifyLimits', 'notifyMinTurnSec', 'notifyOnlyWhenHidden', 'quietFrom', 'quietHours', 'quietTo', 'renotifyMin'],
   sound: ['bgm', 'sfx'],
   pets: ['desktopPets', 'desktopPetSize', 'petBubbles', 'petEnergy'],
-  look: ['alwaysOnTop', 'alwaysOnTopRoom', 'backdrop', 'dashHidden', 'idleTags', 'roomView', 'showDock', 'showTabs', 'tagLook', 'tagStyle', 'theme'],
+  look: ['alwaysOnTop', 'alwaysOnTopRoom', 'backdrop', 'dashHidden', 'idleTags', 'showDock', 'showTabs', 'tagLook', 'tagStyle', 'theme'],
   bar: ['trayPet'],
   island: ['island', 'islandHideIdle', 'islandOpen', 'islandPeek', 'islandScreen', 'islandUsage'],
 };
@@ -320,12 +320,6 @@ export function SettingsModal(props: {
                   <Toggle label={L('방만 띄울 때 항상 위에 표시', 'Always on top in room-only mode')} v={s.alwaysOnTopRoom} on={(v) => set('alwaysOnTopRoom', v)} />
                 </Group>
                 <Group title={L('방', 'Room')}>
-                  <Field label={L('시점', 'View')}>
-                    <select value={s.roomView ?? 'iso'} onChange={(e) => set('roomView', e.target.value as Settings['roomView'])}>
-                      <option value="iso">{L('대각선', 'Isometric')}</option>
-                      <option value="top">{L('탑다운', 'Top-down')}</option>
-                    </select>
-                  </Field>
                   <Field label={L('조명', 'Lighting')}>
                     <select value={s.theme} onChange={(e) => set('theme', e.target.value as Settings['theme'])}>
                       <option value="auto">{L('실제 시간에 맞춰', 'Follow the time of day')}</option>
