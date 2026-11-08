@@ -95,4 +95,6 @@
 .is-use-head span { font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 .is-use .lc { padding: 8px 10px; gap: 6px; }
 .is-use .lc-row { gap: 3px; }
+/* one agent with limits: its card takes the whole row */
+.is-use .lc:only-child { grid-column: 1 / -1; }
 .is-use .lc-foot b { font-size: 12px; }

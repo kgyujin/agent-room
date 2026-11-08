@@ -14,7 +14,7 @@ export function SessionTabs({ sessions, selected, pinned, onSelect }: { sessions
         {L('자동', 'Auto')}
       </button>
       {sessions.map((s) => (
-        <button key={s.key} role="tab" className={`tab ${selected === s.key && pinned ? 'on' : ''}`} onClick={(e) => { onSelect(s.key); e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }} title={`${names[s.key]}\n${AGENT_NAME[s.agent]} · ${s.cwd ?? ''}`}>
+        <button key={s.key} role="tab" className={`tab ${selected === s.key && pinned ? 'on' : ''}`} onClick={(e) => { onSelect(s.key); e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }} title={`${names[s.key]}\n${AGENT_NAME[s.agent]}, ${s.cwd ?? ''}`}>
           <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
           <span>{names[s.key]}</span>
           <span className={`dot tone-${stateTone(s)}`} />

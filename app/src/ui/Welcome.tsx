@@ -26,7 +26,7 @@ export function Welcome({ detected, onDemo, onSettings, onClose }: { detected: O
       <button className="tool wl-close" onClick={onClose} aria-label={L('닫기', 'Close')} title={L('닫기', 'Close')}><Icon name="close" /></button>
       <div className="wl-head">
         <b>{L('Agent Room에 오신 걸 환영해요', 'Welcome to Agent Room')}</b>
-        <span className="muted">{L('Claude Code·Codex가 일하는 모습을 작은 방으로 보여줘요. 에이전트 대화에 끼어들지 않고, 추가 토큰도 쓰지 않아요.', 'Shows Claude Code and Codex at work as a tiny room. It never joins the agents\' conversations and uses no extra tokens.')}</span>
+        <span className="muted">{L('Claude Code와 Codex가 일하는 모습을 작은 방으로 보여줘요. 에이전트 대화에 끼어들지 않고, 추가 토큰도 쓰지 않아요.', 'Shows Claude Code and Codex at work as a tiny room. It never joins the agents\' conversations and uses no extra tokens.')}</span>
       </div>
       <ol className="wl-steps">
         <li className={connected.length ? 'done' : 'now'}>
@@ -39,7 +39,7 @@ export function Welcome({ detected, onDemo, onSettings, onClose }: { detected: O
                   <AgentMark agent={h.agent} size={20} />
                   <span className="wl-name">
                     <b>{h.agent === 'claude' ? 'Claude Code' : 'Codex'}</b>
-                    <small>{h.installed === 'full' ? L('연결됨', 'Connected') : h.agentDetected ? L('이 컴퓨터에 설치돼 있어요', 'Installed on this computer') : L('아직 설치 전 · 미리 연결해 둘 수 있어요', 'Not installed yet · connect ahead')}</small>
+                    <small>{h.installed === 'full' ? L('연결됨', 'Connected') : h.agentDetected ? L('이 컴퓨터에 설치돼 있어요', 'Installed on this computer') : L('아직 설치 전이지만 미리 연결해 둘 수 있어요', 'Not installed yet, but you can connect ahead')}</small>
                   </span>
                   {h.installed === 'full' ? (
                     <span className="wl-ok"><Icon name="check" size={12} /></span>
@@ -69,7 +69,7 @@ export function Welcome({ detected, onDemo, onSettings, onClose }: { detected: O
           <span className="wl-n">3</span>
           <div>
             <b>{L('한눈에 보기', 'At a glance')}</b>
-            <span className="muted">{L('이름표 색이 ', 'Tag colours: ')}<i className="wl-dot work" />{L('작업 중, ', 'working, ')}<i className="wl-dot wait" />{L('내 차례(승인·답변), ', 'your turn (approve or answer), ')}<i className="wl-dot ok" />{L('완료예요. 화면 맨 위 알약과 대시보드에서도 볼 수 있어요.', 'done. The pills at the top and the dashboard show them too.')}</span>
+            <span className="muted">{L('이름표 색이 ', 'Tag colours: ')}<i className="wl-dot work" />{L('작업 중, ', 'working, ')}<i className="wl-dot wait" />{L('내 차례(승인이나 답변), ', 'your turn (approve or answer), ')}<i className="wl-dot ok" />{L('완료예요. 화면 맨 위 알약과 대시보드에서도 볼 수 있어요.', 'done. The pills at the top and the dashboard show them too.')}</span>
           </div>
         </li>
       </ol>

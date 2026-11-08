@@ -25,7 +25,7 @@ describe('screen work', () => {
   it('reads as using the screen, not as a command', () => {
     const s = { connection: 'live', state: 'running', activity: 'desktop', tool: 'Bash', detail: 'agent-desktop click' } as unknown as Snapshot;
     expect(stateLabel(s)).toBe('화면 사용 중');
-    expect(doingLabel(s)).toBe('화면 사용 중 · agent-desktop cli…');
+    expect(doingLabel(s)).toBe('화면 사용 중 (agent-desktop cli…)');
   });
 });
 
@@ -47,12 +47,12 @@ describe('sessionNames', () => {
   it('keeps unique names and tells twins apart', () => {
     const n = sessionNames([snap('c:aaaa1111', 'web', '/a/one/web'), snap('c:bbbb2222', 'web', '/a/two/web'), snap('c:cccc3333', 'api', '/a/api')]);
     expect(n['c:cccc3333']).toBe('api');
-    expect(n['c:aaaa1111']).toBe('web · one');
-    expect(n['c:bbbb2222']).toBe('web · two');
+    expect(n['c:aaaa1111']).toBe('web (one)');
+    expect(n['c:bbbb2222']).toBe('web (two)');
   });
   it('numbers twins in the same folder by start', () => {
     const n = sessionNames([{ ...snap('c:x-0002', 'web', '/a/web'), startedAt: 20 }, { ...snap('c:x-0001', 'web', '/a/web'), startedAt: 10 }] as Snapshot[]);
-    expect([n['c:x-0001'], n['c:x-0002']]).toEqual(['web · 1', 'web · 2']);
+    expect([n['c:x-0001'], n['c:x-0002']]).toEqual(['web 1', 'web 2']);
   });
   it('uses the chat name when the session has one', () => {
     const n = sessionNames([{ ...snap('c:a', 'web', '/a/web'), chatTitle: '로그인 버그 고쳐줘' }, snap('c:b', 'web', '/a/web'), { ...snap('c:c', 'web', '/a/web'), title: 'Desktop title', chatTitle: 'x' }] as Snapshot[]);

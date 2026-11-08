@@ -97,7 +97,7 @@ export function UsageStrip({ sessions, now, onOpen }: { sessions: Snapshot[]; no
   const rows = (['claude', 'codex', 'demo'] as const).map((a) => [a, latestLimits(sessions, a)] as const).filter((r) => r[1]);
   if (!rows.length) return null;
   return (
-    <button className="usage-strip" onClick={onOpen} disabled={!onOpen} title={L('남은 사용량 · 눌러서 사용량 자세히 보기', 'Usage left · click for details')}>
+    <button className="usage-strip" onClick={onOpen} disabled={!onOpen} title={L('남은 사용량이에요. 누르면 자세히 볼 수 있어요', 'Usage left. Click for details')}>
       {rows.map(([a, l]) => (
         <div key={a} className="us-agent">
           <AgentMark agent={a} size={14} />
@@ -137,7 +137,7 @@ export function Limits({ sessions, now }: { sessions: Snapshot[]; now: number })
           ))}
         </div>
       ) : (
-        <p className="muted small ov-none">{L('에이전트가 다음 응답을 받으면 5시간·주간 남은 양이 보여요. (Claude는 Pro·Max 요금제만)', 'The 5-hour and weekly usage left shows after the next reply. (Claude: Pro and Max plans only)')}</p>
+        <p className="muted small ov-none">{L('에이전트가 다음 응답을 받으면 5시간과 주간 남은 양이 보여요. Claude는 Pro와 Max 요금제에서만 보여요.', 'The 5-hour and weekly usage left shows after the next reply. For Claude, only on Pro and Max plans.')}</p>
       )}
     </>
   );
@@ -148,7 +148,7 @@ export function LimitBar({ w, now }: { w: LimitWindow; now: number }) {
   const reset = w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '';
   const resetShort = w.resetsAt && w.resetsAt > now ? `↻ ${fmtUntil(w.resetsAt - now).replace(' 후', '').replace('in ', '')}` : '';
   return (
-    <div className={`ov-lim-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={`${L('사용', 'Used')} ${Math.round(w.usedPct)}%${reset ? ` · ${reset}` : ''}`}>
+    <div className={`ov-lim-row ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={`${L('사용', 'Used')} ${Math.round(w.usedPct)}%${reset ? `, ${reset}` : ''}`}>
       <span className="ov-lim-name">{windowLabel(w.minutes)}</span>
       <span className="ov-lim-bar"><i style={{ width: `${left}%` }} /></span>
       <b>{left}%</b>

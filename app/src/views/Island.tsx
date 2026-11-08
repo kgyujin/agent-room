@@ -3,7 +3,7 @@
 // click, by setting) opens the list. Its window stays one fixed size and lets clicks through outside the pill.
 // Hover comes from Rust as well: macOS sends no mouse-over events to an inactive app's window.
 import { ApproveButtons, canApprove } from '../ui/Approve';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { backend } from '../bridge';
 import { fmtAgo, fmtDuration, justDone, sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon, type IconName } from '../ui/icons';
@@ -15,8 +15,6 @@ import { useLive } from './useLive';
 import { L } from '../i18n';
 
 const ROW = 40;
-/** height of the usage section in the open card (header line + one row of limit cards) */
-const USAGE_H = 182;
 /** one small icon per state, next to the words */
 const STATE_ICON: Record<Snapshot['state'], IconName> = {
   waiting: 'bell', error: 'cross', starting: 'cog', planning: 'note', reading: 'book', editing: 'pencil',
@@ -60,8 +58,11 @@ export function Island() {
   const working = list.filter((s) => isActive(s) && !userTodo(s, now));
   // only a turn that just finished shows the check; after that the agent is simply idle
   const done = list.filter((s) => justDone(s, now, settings?.doneShownSec ?? 60));
-  // remaining plan usage per agent, one line under the list
+  // remaining plan usage, under the list: only agents that reported limits get a card, and with
+  // none the section is left out instead of showing empty placeholder cards
   const showLimits = settings?.showLimits ?? true;
+  const limitAgents = (['claude', 'codex'] as const).filter((a) => latestLimits(list, a));
+  const showUsage = showLimits && limitAgents.length > 0;
   // remaining share of each agent's session (5-hour) and weekly window, always on the collapsed pill:
   // Claude at the far left, Codex at the far right, each in its own colour
   const usageOn = showLimits && (settings?.islandUsage ?? true);
@@ -72,8 +73,19 @@ export function Island() {
   const lastDay = usage?.days[usage.days.length - 1];
   const today = lastDay ? lastDay.claude + lastDay.codex : 0;
 
+  // the open card is as tall as what it holds: the body under the bar is always rendered (clipped
+  // while collapsed) and measured, so the window never opens onto an empty band
+  const body = useRef<HTMLDivElement>(null);
+  const [bodyH, setBodyH] = useState(0);
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBodyH(Math.ceil(el.scrollHeight)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // never narrower than the collapsed pill: hover is hit-tested against the current size
-  const openSize: [number, number] = [Math.max(420, notchW + 230, COLLAPSED[0]), barH + 10 + (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 12 + (showLimits ? USAGE_H : 0)];
+  const openSize: [number, number] = [Math.max(420, notchW + 230, COLLAPSED[0]), barH + (bodyH || (Math.max(1, Math.min(list.length, 8)) + (note ? 1 : 0)) * ROW + 14)];
   useEffect(() => {
     // a little extra room below so the spring's overshoot is not clipped by the window
     const [w, h] = big ? [openSize[0], openSize[1] + 10] : COLLAPSED;
@@ -157,10 +169,10 @@ export function Island() {
           {!open && codexLeft && <UsageLeft agent="codex" v={codexLeft} />}
         </div>
       </div>
-      {open && (
+      <div className="is-body" ref={body}>
         <ul className="is-list">
           {note && <li className="is-empty is-note">{note}</li>}
-          {list.length === 0 && <li className="is-empty">{running ? L('에이전트가 실행 중이에요 · 다음 작업부터 여기에 보여요', 'Agents are running · they show here from their next task') : L('진행 중인 작업이 없어요', 'Nothing in progress')}</li>}
+          {list.length === 0 && <li className="is-empty">{running ? L('에이전트가 실행 중이에요. 다음 작업부터 여기에 보여요', 'Agents are running. They show here from their next task') : L('진행 중인 작업이 없어요', 'Nothing in progress')}</li>}
           {(list.length > 8 ? list.slice(0, 7) : list).map((s) => {
             const p = progressOf(s);
             const todo = userTodo(s, now);
@@ -193,20 +205,20 @@ export function Island() {
           })}
           {list.length > 8 && (
             <li className="is-empty">
-              <button className="is-more" onClick={(e) => { e.stopPropagation(); void backend.trayAction('open'); }}>{L(`+${list.length - 7}개 더 · 방에서 보기`, `+${list.length - 7} more · see the room`)}</button>
+              <button className="is-more" onClick={(e) => { e.stopPropagation(); void backend.trayAction('open'); }}>{L(`${list.length - 7}개 더 있어요. 방에서 보기`, `${list.length - 7} more. See the room`)}</button>
             </li>
           )}
         </ul>
-      )}
-      {open && showLimits && (
+      {showUsage && (
         <div className="is-use">
           <div className="is-use-head">
             <b><Icon name="bolt" />{L('사용량', 'Usage')}</b>
-            {usage && <span>{L(`오늘 ${fmtTokens(today)} 토큰 · 최근 10분 ${fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/분`, `Today ${fmtTokens(today)} tokens · last 10 min ${fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/min`)}</span>}
+            {usage && <span>{L(`오늘 ${fmtTokens(today)} 토큰, 최근 10분 동안 분당 ${fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}`, `Today ${fmtTokens(today)} tokens, ${fmtTokens(Math.round((usage.recentClaude + usage.recentCodex) / 10))}/min over the last 10 min`)}</span>}
           </div>
-          <LimitCards sessions={list} now={now} dark />
+          <LimitCards sessions={list} now={now} dark agents={limitAgents} />
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -224,11 +236,11 @@ function leftOf(list: Snapshot[], agent: 'claude' | 'codex'): Left | null {
 
 function UsageLeft({ agent, v }: { agent: 'claude' | 'codex'; v: Left }) {
   const name = agent === 'claude' ? 'Claude' : 'Codex';
-  const parts = [v.session !== null && `${L('세션', 'session')} ${v.session}%`, v.week !== null && `${L('주간', 'weekly')} ${v.week}%`].filter(Boolean).join(' · ');
+  const parts = [v.session !== null && `${L('세션', 'session')} ${v.session}%`, v.week !== null && `${L('주간', 'weekly')} ${v.week}%`].filter(Boolean).join(', ');
   return (
     <span className={`is-pct is-pct-${agent}`} title={`${name} ${L('남은 사용량', 'usage left')}: ${parts}`}>
       {v.session !== null && <b>{v.session}%</b>}
-      {v.session !== null && v.week !== null && <i>·</i>}
+      {v.session !== null && v.week !== null && <i>/</i>}
       {v.week !== null && <b>{v.week}%</b>}
     </span>
   );

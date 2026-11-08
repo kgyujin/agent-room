@@ -629,7 +629,7 @@ export default function App() {
     const ymd = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
     try { if (localStorage.getItem('summaryShown') === ymd) return; localStorage.setItem('summaryShown', ymd); } catch { return; }
     const t = daySummary(day, null, Date.now());
-    void backend.notifyText(L('오늘 요약', 'Today'), L(`끝낸 요청 ${t.turns}회 · 테스트 통과 ${t.testsOk}, 실패 ${t.testsFail} · 고친 파일 ${t.files}개`, `${t.turns} requests done · tests passed ${t.testsOk}, failed ${t.testsFail} · ${t.files} files edited`));
+    void backend.notifyText(L('오늘 요약', 'Today'), L(`오늘 요청 ${t.turns}개를 끝냈고 파일 ${t.files}개를 고쳤어요. 테스트는 ${t.testsOk}번 통과, ${t.testsFail}번 실패했어요.`, `${t.turns} requests done and ${t.files} files edited today. Tests passed ${t.testsOk} times and failed ${t.testsFail} times.`));
   }, [now, settings.dailySummary, settings.dailySummaryHour, day]);
   // a pet double-clicked for its details: the dashboard shows the picked card until it closes
   const [detailsAsked, setDetailsAsked] = useState(false);
@@ -683,7 +683,7 @@ export default function App() {
           const [x, y] = [e.clientX - r.left, e.clientY - r.top];
           const pet = sceneRef.current?.hitActor(x, y);
           const n = pet ? null : sceneRef.current?.furnitureAt(x, y) ?? null;
-          const tip = pet && sessions[pet] ? (mini ? L('두 번 눌러서 이 세션 열기', 'Double-click to open this session') : L('눌러서 이 세션 열기 · 두 번 누르면 자세히', 'Click to open this session · double-click for details')) : n ? furnTipOf(n, list, now) : null;
+          const tip = pet && sessions[pet] ? (mini ? L('두 번 눌러서 이 세션 열기', 'Double-click to open this session') : L('누르면 이 세션이 열리고, 두 번 누르면 자세히 보여요', 'Click to open this session, double-click for details')) : n ? furnTipOf(n, list, now) : null;
           if (tip !== furnTip) setFurnTip(tip);
           const hp = pet && sessions[pet] ? pet : null;
           if (hp !== hoverPet) hoverTo(hp);
@@ -692,10 +692,10 @@ export default function App() {
       {IS_MAC && IN_TAURI && !mini && <div className="titlebar" data-tauri-drag-region />}
 
       <div className="banners" ref={bannersRef} style={{ right: compact ? 8 : (panelOpen ? panelW : 0) + 12, left: compact ? 8 : 12, top: !mini && topH > 48 ? 14 + topH + 8 : undefined }}>
-        {!IN_TAURI && !compact && !office && !dashPage && <div className="banner preview">{L('브라우저 미리보기 · 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다', 'Browser preview · a design check, not connected to real agents')}</div>}
+        {!IN_TAURI && !compact && !office && !dashPage && <div className="banner preview">{L('브라우저 미리보기예요. 실제 에이전트와 연결되지 않은 디자인 확인용 화면입니다', 'Browser preview. A design check, not connected to real agents')}</div>}
         {(demoRunning || demoShown) && !dashPage && (
           <div className="banner demo">
-            {compact ? L('데모 · 실제 에이전트 아님', 'Demo · not real agents') : L('데모 모드 · 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)', 'Demo mode · replaying made-up events (not real agents)')}
+            {compact ? L('데모 (실제 에이전트 아님)', 'Demo (not real agents)') : L('데모 모드예요. 가상 이벤트를 재생하고 있어요 (실제 에이전트 아님)', 'Demo mode. Replaying made-up events (not real agents)')}
             {IN_TAURI && <button onClick={toggleDemo}>{L('끄기', 'Turn off')}</button>}
           </div>
         )}
@@ -707,7 +707,7 @@ export default function App() {
         )}
         {!compact && !office && !dashPage && list.length > (sceneRef.current?.capacity ?? 6) && (
           <div className="banner more">
-            {L(`방에는 책상 수만큼 ${sceneRef.current?.capacity ?? 6}마리만 있어요 · ${list.length - (sceneRef.current?.capacity ?? 6)}개 세션 더`, `The room fits ${sceneRef.current?.capacity ?? 6} pets, one per desk · ${list.length - (sceneRef.current?.capacity ?? 6)} more sessions`)}
+            {L(`방에는 책상 수만큼 ${sceneRef.current?.capacity ?? 6}마리만 있어서, 세션 ${list.length - (sceneRef.current?.capacity ?? 6)}개는 방 밖에 있어요`, `The room fits ${sceneRef.current?.capacity ?? 6} pets, one per desk, so ${list.length - (sceneRef.current?.capacity ?? 6)} more sessions are outside`)}
             <button onClick={() => { setOffice(false); setDashView(vw >= SPLIT_MIN_VW ? 'split' : 'full'); }}>{L('모두 보기', 'Show all')}</button>
           </div>
         )}
@@ -780,7 +780,7 @@ export default function App() {
           hidden={settings.dashHidden ?? []}
           historyDays={settings.historyDays ?? 0}
           cost={settings.showCost ? { claude: settings.costClaudePerM ?? 0, codex: settings.costCodexPerM ?? 0 } : undefined}
-          notice={dashPage ? ((demoRunning || demoShown) ? L('데모 모드 · 실제 에이전트 아님', 'Demo mode · not real agents') : !IN_TAURI ? L('브라우저 미리보기', 'Browser preview') : null) : null}
+          notice={dashPage ? ((demoRunning || demoShown) ? L('데모 모드 (실제 에이전트 아님)', 'Demo mode (not real agents)') : !IN_TAURI ? L('브라우저 미리보기', 'Browser preview') : null) : null}
           mac={IS_MAC && IN_TAURI}
         />
       )}
@@ -816,14 +816,14 @@ function ToolBtn({ icon, label, on, onClick }: { icon: Parameters<typeof Icon>[0
 
 /** what the furniture is for (hover tooltip); keys are sprite names without their number */
 const FURN_TIPS = (): Record<string, string> => ({
-  desk: L('작업 책상 · 생각하거나 코드를 고칠 때 앉아서 종이에 적어요. 종이에 지금 상태가 그려져요', 'Desk · pets sit here to think or edit code and write on paper; the paper shows what they are doing'),
+  desk: L('작업 책상이에요. 생각하거나 코드를 고칠 때 앉아서 종이에 적고, 종이에 지금 상태가 그려져요', 'The desk. Pets sit here to think or edit code and write on paper, and the paper shows what they are doing'),
   stool: L('작업 책상 의자', 'Desk chair'),
-  rig: L('테스트 장치 · 테스트나 명령을 실행할 때 여기서 작동시켜요. 불빛이 통과(초록)·실패(빨강)를 보여줘요', 'Test rig · used to run tests and commands; the light shows pass (green) or fail (red)'),
-  shelf: L('책장 · 파일이나 자료를 찾을 때 와요', 'Bookshelf · where pets look up files and docs'),
-  board: L('게시판 · 작업 계획(할 일 목록)을 세울 때 와요', 'Board · where pets make a plan (to-do list)'),
-  sofa: L('소파 · 일이 끝나면 쉬는 곳', 'Sofa · where pets rest after work'),
-  beanbag: L('빈백 · 쉬는 자리', 'Beanbag · a place to rest'),
-  coffee: L('커피 카트 · 쉬는 동안 들러요', 'Coffee cart · visited while resting'),
+  rig: L('테스트 장치예요. 테스트나 명령을 실행할 때 여기서 작동시키고, 통과하면 초록 불, 실패하면 빨간 불이 켜져요', 'The test rig. Pets run tests and commands here, and the light turns green on a pass and red on a fail'),
+  shelf: L('책장이에요. 파일이나 자료를 찾을 때 와요', 'The bookshelf. Pets come here to look up files and docs'),
+  board: L('게시판이에요. 할 일 목록을 세울 때 와요', 'The board. Pets come here to make a to-do list'),
+  sofa: L('소파예요. 일이 끝나면 여기서 쉬어요', 'The sofa. Pets rest here after work'),
+  beanbag: L('빈백이에요. 쉴 때 앉아요', 'The beanbag. Pets sit here to rest'),
+  coffee: L('커피 카트예요. 쉬는 동안 들러요', 'The coffee cart. Pets drop by while resting'),
   table: L('찻상', 'Tea table'),
 });
 
@@ -832,7 +832,7 @@ function furnTipOf(name: string, list: Snapshot[], now: number): string | null {
   const base = FURN_TIPS()[name.replace(/\d+$/, '')] ?? null;
   if (name !== 'rig') return base;
   const t = list.map((s) => s.lastTest).filter((x) => x && x.ok !== null).sort((a, b) => b!.at - a!.at)[0];
-  return t ? `${base}\n${L('마지막 결과', 'Last result')}: ${t.ok ? L('통과', 'passed') : L('실패', 'failed')} · ${fmtAgo(now - t.at)}` : base;
+  return t ? `${base}\n${L(`마지막 테스트는 ${fmtAgo(now - t.at)} ${t.ok ? '통과했어요' : '실패했어요'}`, `Last test ${t.ok ? 'passed' : 'failed'} ${fmtAgo(now - t.at)}`)}` : base;
 }
 
 const IS_MAC = /Mac/.test(navigator.userAgent);

@@ -394,8 +394,8 @@ fn memory_files(state: tauri::State<Shared>) -> Vec<MemoryFile> {
     };
     if let Some(home) = std::env::var_os("HOME") {
         let home = std::path::Path::new(&home);
-        add(tr("전역 · Claude Code", "Global · Claude Code").into(), home.join(".claude/CLAUDE.md"));
-        add(tr("전역 · Codex", "Global · Codex").into(), home.join(".codex/AGENTS.md"));
+        add(tr("전역 (Claude Code)", "Global (Claude Code)").into(), home.join(".claude/CLAUDE.md"));
+        add(tr("전역 (Codex)", "Global (Codex)").into(), home.join(".codex/AGENTS.md"));
     }
     let mut cwds: Vec<String> = state.store.lock().unwrap().snapshots().into_iter().filter_map(|s| s.cwd).collect();
     cwds.sort();
@@ -404,7 +404,7 @@ fn memory_files(state: tauri::State<Shared>) -> Vec<MemoryFile> {
         let dir = std::path::Path::new(&cwd);
         let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| cwd.clone());
         for f in ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md"] {
-            add(format!("{name} · {f}"), dir.join(f));
+            add(format!("{name} ({f})"), dir.join(f));
         }
     }
     out

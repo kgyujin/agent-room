@@ -52,11 +52,11 @@ export function StatCards({ sessions, now, h, day, cost, onOpen }: { sessions: S
   const daily = days.slice(-14).map((d) => d.claude + d.codex);
   const weekly = days.length >= 7 ? days.slice(-14).map((_, i, a) => sum(days.slice(Math.max(0, days.length - a.length + i - 6), days.length - a.length + i + 1))) : [];
   const cards: { id: StatId; label: string; value: string; sub?: string; tr?: ReturnType<typeof trend>; spark?: number[] }[] = [
-    { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인·답변 기다림', 'Waiting for you') },
+    { id: 'todo', label: L('내 차례', 'Your turn'), value: String(live.filter((x) => userTodo(x, now)).length), sub: L('승인이나 답변을 기다려요', 'Waiting for you') },
     { id: 'work', label: L('작업 중', 'Working'), value: String(live.filter((x) => isActive(x) && !userTodo(x, now)).length), sub: L(`열린 세션 ${live.length}개`, `${live.length} open sessions`) },
     { id: 'done', label: L('오늘 완료한 요청', 'Requests done today'), value: String(d.turns), sub: L(`수정한 파일 ${d.files}개`, `${d.files} files edited`) },
-    { id: 'today', label: L('오늘 토큰', 'Tokens today'), value: h ? fmtTokens(today) : '—', sub: h ? `${L('어제', 'Yesterday')} ${fmtTokens(yday)}${usd !== null ? ` · ${L('추정', 'est.')} ${fmtUsd(usd)}` : ''}` : L('불러오는 중', 'Loading'), tr: trend(today, yday), spark: daily },
-    { id: 'week', label: L('최근 7일 토큰', 'Tokens, last 7 days'), value: h ? fmtTokens(week) : '—', sub: h ? `${L('그 전 7일', 'The 7 before')} ${fmtTokens(prevWeek)}` : L('불러오는 중', 'Loading'), tr: trend(week, prevWeek), spark: weekly },
+    { id: 'today', label: L('오늘 토큰', 'Tokens today'), value: h ? fmtTokens(today) : '…', sub: h ? `${L('어제', 'Yesterday')} ${fmtTokens(yday)}${usd !== null ? `, ${L('추정', 'est.')} ${fmtUsd(usd)}` : ''}` : L('불러오는 중', 'Loading'), tr: trend(today, yday), spark: daily },
+    { id: 'week', label: L('최근 7일 토큰', 'Tokens, last 7 days'), value: h ? fmtTokens(week) : '…', sub: h ? `${L('그 전 7일', 'The 7 before')} ${fmtTokens(prevWeek)}` : L('불러오는 중', 'Loading'), tr: trend(week, prevWeek), spark: weekly },
   ];
   return (
     <div className="dash-stats">
@@ -94,7 +94,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, o
         {SESS_FILTERS().map(([id, label]) => (
           <button key={id} className={f === id ? 'on' : ''} onClick={() => setF(id)}>{label}<span>{id === 'all' ? all.length : all.filter((s) => kind(s) === id).length}</span></button>
         ))}
-        <input type="search" className="sess-q" placeholder={L('프로젝트·경로·에이전트', 'Project, path, agent')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" className="sess-q" placeholder={L('프로젝트, 경로, 에이전트', 'Project, path, agent')} value={q} onChange={(e) => setQ(e.target.value)} />
         {onForget && ended.length > 0 && <button className="sess-clear" onClick={() => onForget(ended.map((s) => s.key))} title={L('끝났거나 연결이 끊긴 세션을 목록에서 지워요', 'Takes ended and lost sessions off the list')}>{L('끝난 세션 지우기', 'Clear ended')}<span>{ended.length}</span></button>}
       </div>
     )}
@@ -110,7 +110,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, o
             <tr key={s.key} className={`${selected === s.key ? 'on' : ''} tone-row-${stateTone(s)}`} onClick={() => onSelect(s.key)} onDoubleClick={onOpen && (() => onOpen(s))} title={onOpen ? L('두 번 누르면 세션 열기', 'Double-click to open the session') : undefined}>
               <td><span className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={`${names[s.key]}${s.cwd ? `\n${s.cwd}` : ''}`}>{names[s.key]}</b></span></td>
               <td><span className={`st-badge tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
-              <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">—</small>}</td>
+              <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">{L('없음', 'None')}</small>}</td>
               <td className="num opt2">{fmtSpan(now - s.startedAt)}</td>
               <td className="num opt">{s.completedTurns}</td>
               <td className="num opt">{s.filesEdited.length}</td>
@@ -128,7 +128,7 @@ type Filter = 'all' | 'bad' | 'todo' | 'edit' | 'test' | 'done';
 const FILTERS = (): [Filter, string, (e: TimelineEntry) => boolean][] => [
   ['all', L('전체', 'All'), () => true],
   ['bad', L('오류', 'Errors'), (e) => e.ok === false || e.kind === 'tool_fail' || e.kind === 'turn_failed'],
-  ['todo', L('승인·질문', 'Asks'), (e) => e.kind === 'approval' || e.kind === 'input'],
+  ['todo', L('승인과 질문', 'Asks'), (e) => e.kind === 'approval' || e.kind === 'input'],
   ['edit', L('편집', 'Edits'), (e) => e.kind === 'tool' && e.activity === 'edit'],
   ['test', L('테스트', 'Tests'), (e) => e.kind === 'test'],
   ['done', L('완료', 'Done'), (e) => e.kind === 'turn_complete'],
@@ -179,8 +179,8 @@ export function ActivityLog({ sessions, timelines, onSelect, compact, tall }: { 
                   <div className="more">
                     <dl>
                       <dt>{L('시각', 'Time')}</dt><dd>{new Date(e.at).toLocaleString(isEn() ? 'en-GB' : 'ko-KR')}</dd>
-                      <dt>{L('세션', 'Session')}</dt><dd>{names[s.key]}{s.project && names[s.key] !== s.project && <small> · {s.project}</small>}</dd>
-                      <dt>{L('한 일', 'Event')}</dt><dd>{timelineText(e).split(' — ')[0]}</dd>
+                      <dt>{L('세션', 'Session')}</dt><dd>{names[s.key]}{s.project && names[s.key] !== s.project && <small> ({s.project})</small>}</dd>
+                      <dt>{L('한 일', 'Event')}</dt><dd>{timelineText({ ...e, detail: null })}</dd>
                       {e.tool && <><dt>{L('도구', 'Tool')}</dt><dd><code>{e.tool}</code></dd></>}
                       {e.detail && <><dt>{L('내용', 'Detail')}</dt><dd><code className="full">{e.detail}</code></dd></>}
                       {e.ok !== null && <><dt>{L('결과', 'Result')}</dt><dd className={e.ok ? 'ok' : 'bad'}>{e.ok ? L('성공', 'Passed') : L('실패', 'Failed')}</dd></>}

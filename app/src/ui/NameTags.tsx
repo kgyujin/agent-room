@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Anchor, Scene } from '../game/scene';
 import type { Settings, Snapshot } from '../types';
-import { AGENT_NAME, doingLabel, justDone, sessionNames, stateTone } from '../labels';
+import { AGENT_NAME, doingLabel, doingParts, justDone, sessionNames, stateTone } from '../labels';
 import { AgentMark } from './icons';
 import { progressOf } from './Hud';
 import { userTodo } from './Overview';
@@ -125,7 +125,7 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
         const urgent = needsYou(s);
         const doing = settled ? null : tagLabel(s, short);
         return (
-          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${names[a.key]}\n${AGENT_NAME[s.agent]} · ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`}>
+          <button key={a.key} className={`nametag t-${tone} ${selected === a.key ? 'on' : ''} ${urgent ? 'urgent' : ''} ${resting && idleTags === 'dim' ? 'settled' : ''}`} style={{ left: Math.round(a.x), top: Math.round(a.y) }} onClick={() => onSelect(a.key)} onMouseEnter={() => onHover(a.key)} onMouseLeave={() => onHover(null)} title={`${names[a.key]}\n${AGENT_NAME[s.agent]}, ${s.project ?? ''}${doingLabel(s) ? `\n${doingLabel(s)}` : ''}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`}>
             <AgentMark agent={s.isDemo ? 'demo' : s.agent} />
             {/* which pet is which: a short project name by default (so tags stay small and don't cover other pets);
                 the picked pet gets its whole name, and only full tags add what it does (the bar at the bottom says it) */}
@@ -150,7 +150,7 @@ export function NameTags({ scene, sessions, now, selected, onSelect, hidden, ful
 const TAG_H = 22;
 /** key prefix of a bundle of crowded tags */
 const GROUP = 'group:';
-const tagLabel = (s: Snapshot, short: boolean) => (short ? doingLabel(s)?.split(' · ')[0] ?? null : doingLabel(s));
+const tagLabel = (s: Snapshot, short: boolean) => (short ? doingParts(s)?.what ?? null : doingLabel(s));
 /** project name on a tag; a long one keeps its start and ends in "…" (a cut in the middle, "api-…ver", was hard to read) */
 const tagName = (name: string, max = 16) => {
   const ch = [...name];

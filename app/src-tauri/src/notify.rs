@@ -75,14 +75,14 @@ pub(crate) fn notify(app: &AppHandle, s: &Snapshot, n: Notice) {
     let tool = s.waiting.as_ref().and_then(|w| w.tool.clone()).unwrap_or_else(|| tr("도구", "a tool").into());
     let err = || s.error.as_ref().map(|e| e.message.clone());
     let (title, body) = match (n, is_en()) {
-        (Notice::Completed, false) => (format!("{project} · 작업 완료"), format!("{agent} 작업이 끝났어요.")),
-        (Notice::Failed, false) => (format!("{project} · 오류"), err().unwrap_or_else(|| format!("{agent}에서 오류가 났어요."))),
-        (Notice::NeedsApproval, false) => (format!("{project} · {tool} 승인 필요"), format!("{agent}가 {tool} 실행 승인을 기다리고 있어요.")),
-        (Notice::NeedsInput, false) => (format!("{project} · 입력 대기"), format!("{agent}가 답을 기다리고 있어요.")),
-        (Notice::Completed, true) => (format!("{project} · Done"), format!("{agent} finished its work.")),
-        (Notice::Failed, true) => (format!("{project} · Error"), err().unwrap_or_else(|| format!("{agent} ran into an error."))),
-        (Notice::NeedsApproval, true) => (format!("{project} · {tool} needs approval"), format!("{agent} is waiting for you to approve {tool}.")),
-        (Notice::NeedsInput, true) => (format!("{project} · Waiting for you"), format!("{agent} is waiting for your answer.")),
+        (Notice::Completed, false) => (format!("{project} 작업 완료"), format!("{agent} 작업이 끝났어요.")),
+        (Notice::Failed, false) => (format!("{project} 오류"), err().unwrap_or_else(|| format!("{agent}에서 오류가 났어요."))),
+        (Notice::NeedsApproval, false) => (format!("{project} {tool} 승인 필요"), format!("{agent}가 {tool} 실행 승인을 기다리고 있어요.")),
+        (Notice::NeedsInput, false) => (format!("{project} 입력 대기"), format!("{agent}가 답을 기다리고 있어요.")),
+        (Notice::Completed, true) => (format!("{project} is done"), format!("{agent} finished its work.")),
+        (Notice::Failed, true) => (format!("Error in {project}"), err().unwrap_or_else(|| format!("{agent} ran into an error."))),
+        (Notice::NeedsApproval, true) => (format!("{project} needs approval for {tool}"), format!("{agent} is waiting for you to approve {tool}.")),
+        (Notice::NeedsInput, true) => (format!("{project} is waiting for you"), format!("{agent} is waiting for your answer.")),
     };
     if matches!(n, Notice::NeedsApproval | Notice::NeedsInput) {
         WAITING_SENT.lock().unwrap().push((s.key.clone(), title.clone()));

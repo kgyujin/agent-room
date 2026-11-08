@@ -121,20 +121,20 @@ const ymd = (t: number) => {
 
 export function dayMarkdown(d: DaySummary, fmtTok: (n: number) => string, cost: number | null): string {
   const lines = [
-    L(`# Agent Room 하루 요약 · ${ymd(d.from)}`, `# Agent Room day summary · ${ymd(d.from)}`),
+    L(`# ${ymd(d.from)} Agent Room 하루 요약`, `# Agent Room day summary for ${ymd(d.from)}`),
     '',
-    L(`- 끝낸 요청: ${d.turns}회`, `- Requests done: ${d.turns}`),
-    L(`- 테스트: 통과 ${d.testsOk}회, 실패 ${d.testsFail}회`, `- Tests: ${d.testsOk} passed, ${d.testsFail} failed`),
-    L(`- 승인·답변 요청: ${d.asks}회`, `- Approvals and questions: ${d.asks}`),
-    L(`- 고친 파일: ${d.files}개`, `- Files edited: ${d.files}`),
-    L(`- 작업 시간: ${fmtSpan(d.workMs)} (내 차례 기다림 ${fmtSpan(d.waitMs)})`, `- Working time: ${fmtSpan(d.workMs)} (waiting for you ${fmtSpan(d.waitMs)})`),
+    L(`- 요청 ${d.turns}개를 끝냈어요`, `- ${d.turns} requests done`),
+    L(`- 테스트는 ${d.testsOk}번 통과, ${d.testsFail}번 실패했어요`, `- Tests passed ${d.testsOk} times and failed ${d.testsFail} times`),
+    L(`- 승인이나 답변을 ${d.asks}번 요청받았어요`, `- ${d.asks} approvals and questions`),
+    L(`- 파일 ${d.files}개를 고쳤어요`, `- ${d.files} files edited`),
+    L(`- ${fmtSpan(d.workMs)} 동안 일했고, 내 차례를 ${fmtSpan(d.waitMs)} 기다렸어요`, `- Worked ${fmtSpan(d.workMs)} and waited for you ${fmtSpan(d.waitMs)}`),
   ];
   if (d.tokens) lines.push(`${L('- 토큰', '- Tokens')}: Claude Code ${fmtTok(d.tokens.claude)}, Codex ${fmtTok(d.tokens.codex)}`);
-  if (cost !== null) lines.push(L(`- 추정 비용: ${fmtUsd(cost)} (설정한 단가로 계산한 추정치)`, `- Estimated cost: ${fmtUsd(cost)} (from the prices you set)`));
+  if (cost !== null) lines.push(L(`- 설정한 단가로 계산하면 약 ${fmtUsd(cost)}예요`, `- About ${fmtUsd(cost)} at the prices you set`));
   lines.push('', L('## 세션', '## Sessions'), '');
   if (!d.sessions.length) lines.push(L('오늘 활동한 세션이 없어요.', 'No sessions were active today.'), '');
   for (const s of d.sessions) {
-    lines.push(`### ${s.project} (${s.agent})`, '', L(`- 끝낸 요청: ${s.turns}회`, `- Requests done: ${s.turns}`), L(`- 작업 시간: ${fmtSpan(s.workMs)}`, `- Working time: ${fmtSpan(s.workMs)}`));
+    lines.push(`### ${s.project} (${s.agent})`, '', L(`- 요청 ${s.turns}개를 ${fmtSpan(s.workMs)} 동안 처리했어요`, `- ${s.turns} requests in ${fmtSpan(s.workMs)}`));
     if (s.files.length) lines.push(`${L('- 고친 파일', '- Files edited')}: ${s.files.map((f) => `\`${f}\``).join(', ')}`);
     lines.push('');
   }
