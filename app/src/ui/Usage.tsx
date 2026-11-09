@@ -50,7 +50,7 @@ function noLimitsWhy(agent: 'claude' | 'codex', sessions: Snapshot[], accountLim
 
 /** why the numbers shown are old, so "64시간 전 기준" doesn't look like a silent bug */
 function staleWhy(agent: 'claude' | 'codex', accountLimits?: boolean): string | null {
-  if (agent === 'codex') return L('Codex가 최근 기록에 남은 사용량을 적지 않아 마지막으로 받은 값이에요.', "Codex hasn't written its usage to its recent logs, so this is the last one it reported.");
+  if (agent === 'codex') return L('Codex에서 새 값을 받지 못해 마지막으로 받은 값이에요. Codex에 로그인돼 있으면 5분 안에 다시 받아와요.', "Couldn't get new numbers from Codex, so this is the last one. If Codex is signed in, it is asked again within 5 minutes.");
   if (accountLimits === false) return null;
   if (claudeAccountWhy === 'login') return L('이 Mac의 Claude Code 로그인을 찾지 못해 계정에서 새로 받아오지 못했어요.', "Couldn't find the Claude Code sign-in on this Mac, so the account wasn't asked.");
   if (claudeAccountWhy === 'expired') return L('터미널 Claude Code 로그인이 만료돼 새로 받아오지 못했어요. 터미널에서 claude 를 한 번 실행하면 갱신돼요.', 'The terminal Claude Code sign-in has expired. Run claude in a terminal once to renew it.');

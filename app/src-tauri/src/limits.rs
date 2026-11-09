@@ -2,11 +2,103 @@
 
 use super::*;
 
-/// Codex's remaining usage from its newest log, so it shows even with no session open in Agent Room
-/// (limits are per account; the desktop app and VS Code write the same logs).
+/// Codex's remaining usage, so it shows even with no session open in Agent Room (limits are per
+/// account). From its newest log, or from Codex itself (`codex app-server`) when that is newer:
+/// recent Codex versions write `rate_limits: null` to their logs. Codex is asked at most once per
+/// 5 minutes; it signs in and refreshes on its own, and this is not a model request.
 #[tauri::command]
-pub(crate) async fn codex_limits() -> Option<agent_room_core::model::RateLimits> {
-    agent_room_core::logs::newest_codex_limits(&agent_room_core::logs::LogDirs::from_env())
+pub(crate) async fn codex_limits(app: AppHandle) -> Option<agent_room_core::model::RateLimits> {
+    let from_log = agent_room_core::logs::newest_codex_limits(&agent_room_core::logs::LogDirs::from_env());
+    let on = app.state::<Shared>().settings.lock().unwrap().show_limits;
+    if !on {
+        return from_log;
+    }
+    static LAST: Mutex<(u64, Option<agent_room_core::model::RateLimits>)> = Mutex::new((0, None));
+    let now = now_ms();
+    let due = now >= LAST.lock().unwrap().0;
+    if due {
+        let got = codex_rpc_usage(now);
+        let mut last = LAST.lock().unwrap();
+        last.0 = now + 5 * 60_000;
+        if got.is_some() {
+            last.1 = got;
+        }
+    }
+    let asked = LAST.lock().unwrap().1.clone();
+    match (from_log, asked) {
+        (Some(a), Some(b)) => Some(if a.at >= b.at { a } else { b }),
+        (a, b) => a.or(b),
+    }
+}
+
+/// Asks a short-lived `codex app-server` (read-only sandbox, never approves anything) for
+/// `account/rateLimits/read`, then closes it. None when Codex isn't installed or doesn't answer in 15 s.
+fn codex_rpc_usage(now: u64) -> Option<agent_room_core::model::RateLimits> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+    let bin = codex_bin()?;
+    let mut child = Command::new(bin)
+        .args(["-s", "read-only", "-a", "never", "app-server"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdin = child.stdin.take()?;
+    let stdout = child.stdout.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let version = env!("CARGO_PKG_VERSION");
+    let msgs = format!(
+        "{{\"id\":1,\"method\":\"initialize\",\"params\":{{\"clientInfo\":{{\"name\":\"agent_room\",\"title\":\"Agent Room\",\"version\":\"{version}\"}}}}}}\n{{\"method\":\"initialized\"}}\n{{\"id\":2,\"method\":\"account/rateLimits/read\"}}\n"
+    );
+    let mut got = None;
+    if stdin.write_all(msgs.as_bytes()).is_ok() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
+            let Ok(line) = rx.recv_timeout(left) else { break };
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            if v.get("id").and_then(|i| i.as_u64()) == Some(2) {
+                got = v.get("result").and_then(|r| agent_room_core::limits::from_codex_rpc(r, now));
+                break;
+            }
+        }
+    }
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    got
+}
+
+/// The Codex CLI: the usual install places (an app started from Finder has no shell PATH),
+/// then the login shell's PATH. Remembered once found.
+fn codex_bin() -> Option<std::path::PathBuf> {
+    static FOUND: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+    if let Some(p) = FOUND.lock().unwrap().clone().filter(|p| p.is_file()) {
+        return Some(p);
+    }
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_default();
+    let mut found = ["/opt/homebrew/bin/codex", "/usr/local/bin/codex", "/Applications/Codex.app/Contents/Resources/codex"]
+        .iter()
+        .map(std::path::PathBuf::from)
+        .chain([".local/bin/codex", ".npm-global/bin/codex", ".bun/bin/codex", ".volta/bin/codex"].iter().map(|p| home.join(p)))
+        .find(|p| p.is_file());
+    #[cfg(target_os = "macos")]
+    if found.is_none() {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+        found = run_for(std::process::Command::new(shell).args(["-lc", "command -v codex"]), None)
+            .and_then(|o| String::from_utf8(o).ok())
+            .map(|s| std::path::PathBuf::from(s.trim()))
+            .filter(|p| p.is_absolute() && p.is_file());
+    }
+    *FOUND.lock().unwrap() = found.clone();
+    found
 }
 
 /// Claude's remaining usage from the account, for sessions whose status line never reports it
