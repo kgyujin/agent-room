@@ -192,21 +192,25 @@ unsafe fn mac_pointer_screen() -> Option<usize> {
 
 /// Moves a window that follows the pointer to the display the pointer settled on, quietly: the page
 /// fades out ("<label>-leaving"), the window moves while it can't be seen, and the page fades back in
-/// when told it arrived ("island-screen" / "desk-screen").
+/// when told it arrived ("island-screen" / "desk-screen"). The display `to` becomes the target only
+/// after the fade out, so a placement in between (the 10 s tick) can't move a window still in view.
 #[cfg(target_os = "macos")]
-fn follow_pointer_screen(app: &AppHandle, label: &'static str) {
-    let _ = app.emit_to(label, &format!("{label}-leaving"), ());
+fn follow_pointer_screen(app: &AppHandle, to: usize, island: bool, desk: bool) {
+    for (on, label) in [(island, "island"), (desk, "desk")] {
+        if on {
+            let _ = app.emit_to(label, &format!("{label}-leaving"), ());
+        }
+    }
     let app = app.clone();
     let _ = std::thread::Builder::new().name("agent-room-move".into()).spawn(move || {
         // a little longer than the page's fade out
         std::thread::sleep(Duration::from_millis(180));
-        match label {
-            "island" => sync_island(&app),
-            _ => {
-                if let Some(w) = app.get_webview_window("desk") {
-                    place_desk(&app, &w);
-                }
-            }
+        POINTER_SCREEN.store(to, Ordering::Relaxed);
+        if island {
+            sync_island(&app);
+        }
+        if let Some(w) = app.get_webview_window("desk").filter(|_| desk) {
+            place_desk(&app, &w);
         }
     });
 }
@@ -469,14 +473,9 @@ pub(crate) fn watch_hover(app: AppHandle) {
                         Some(i) if settled == usize::MAX => POINTER_SCREEN.store(i, Ordering::Relaxed),
                         Some(i) if i != settled => match pending_screen {
                             Some((p, since)) if p == i && since.elapsed() >= SCREEN_DWELL => {
+                                // set again after this move's fade out, so the dwell starts over meanwhile
                                 pending_screen = None;
-                                POINTER_SCREEN.store(i, Ordering::Relaxed);
-                                if island_follows {
-                                    follow_pointer_screen(&app, "island");
-                                }
-                                if desk_follows {
-                                    follow_pointer_screen(&app, "desk");
-                                }
+                                follow_pointer_screen(&app, i, island_follows, desk_follows);
                             }
                             Some((p, _)) if p == i => {}
                             _ => pending_screen = Some((i, std::time::Instant::now())),
