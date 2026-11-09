@@ -12,6 +12,12 @@ const TIMELINE_MAX: usize = 300;
 const FILES_MAX: usize = 30;
 /// ended / lost sessions are dropped from the list after this long
 const FORGET_AFTER_MS: u64 = 30 * 60 * 1000;
+/// a session left idle (finished, failed, waiting for a new prompt) is dropped after this long
+/// without an event, even while its terminal is still open; its next event brings it back
+const IDLE_FORGET_AFTER_MS: u64 = 30 * 60 * 1000;
+/// a session still marked working or waiting for the user is kept longer (a long command sends no
+/// event until it ends), but not forever when its end was never heard
+const BUSY_FORGET_AFTER_MS: u64 = 3 * 60 * 60 * 1000;
 /// a session that just sent an event is alive, whatever process the event came through
 const LOST_GRACE_MS: u64 = 15 * 1000;
 
@@ -534,6 +540,12 @@ impl SessionStore {
                 }
                 _ => {}
             }
+            let quiet = now.saturating_sub(s.last_event_at);
+            let busy = is_active(s.state) || s.state == AgentState::Waiting;
+            if quiet > if busy { BUSY_FORGET_AFTER_MS } else { IDLE_FORGET_AFTER_MS } {
+                forget.push(key.clone());
+                continue;
+            }
             if let Some(pid) = sess.pid {
                 if now.saturating_sub(s.last_event_at) > LOST_GRACE_MS && !alive(pid) {
                     s.connection = Connection::Lost;
@@ -611,6 +623,25 @@ mod tests {
         let u = st.tick(st.stale_after_ms + 2, &mut |_| false);
         assert_eq!(u[0].snapshot.connection, Connection::Lost);
         assert_eq!(u[0].snapshot.state, AgentState::Disconnected);
+    }
+
+    #[test]
+    fn long_quiet_sessions_are_forgotten() {
+        let mut st = SessionStore::default();
+        st.apply(ev(EvKind::TurnComplete, 0));
+        // still open in its terminal, but nothing for a long while: off the list
+        assert!(st.tick(IDLE_FORGET_AFTER_MS, &mut |_| true).iter().all(|u| !u.removed));
+        let u = st.tick(IDLE_FORGET_AFTER_MS + 1, &mut |_| true);
+        assert!(u[0].removed);
+        assert!(st.snapshots().is_empty());
+        // a session still working (a long command) is kept longer
+        st.apply(ev(EvKind::ToolStart { tool: "Bash".into(), activity: Activity::Run, detail: None }, 0));
+        assert!(st.tick(IDLE_FORGET_AFTER_MS + 1, &mut |_| true).iter().all(|u| !u.removed));
+        let u = st.tick(BUSY_FORGET_AFTER_MS + 1, &mut |_| true);
+        assert!(u[0].removed);
+        // its next event brings it back
+        assert!(st.apply(ev(EvKind::PromptSubmitted, BUSY_FORGET_AFTER_MS + 2)).is_some());
+        assert_eq!(st.snapshots().len(), 1);
     }
 
     #[test]
