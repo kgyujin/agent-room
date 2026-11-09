@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleMinutes: 3, panelOpen: true, alwaysOnTop: false, alwaysOnTopRoom: true, showLimits: true, petPool: [], trayPet: 'builtin/shiba', critterColors: {}, uiTheme: 'clean', island: true,
   font: 'mixed', backdrop: '', tagStyle: 'compact', tagLook: 'soft', showDock: true, showTabs: false,
   petEnergy: 'normal', islandOpen: 'hover',
-  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, claudeCliRefresh: false, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto', desktopPets: false, desktopPetSize: 2,
+  doneShownSec: 60, idleTags: 'dim', petBubbles: true, islandHideIdle: false, islandUsage: true, islandScreen: 'auto', notifyMinTurnSec: 0, autoUpdateCheck: true, uiZoom: 1, claudeAccountLimits: true, claudeCliRefresh: false, tokenUnit: 'si', dashHidden: [], dailySummary: false, dailySummaryHour: 18, showCost: false, costClaudePerM: 0, costCodexPerM: 0, historyDays: 0, approveInApp: false, approveWaitSec: 30, quietHours: false, quietFrom: 22, quietTo: 8, renotifyMin: 5, islandPeek: true, language: 'auto', desktopPets: false, desktopPetSize: 2, deskScreen: 'main',
 };
 
 export interface Backend {
@@ -30,7 +30,7 @@ export interface Backend {
   timeline(key: string): Promise<TimelineEntry[]>;
   onUpdate(cb: (u: Update) => void): Promise<Unlisten>;
   onDetected(cb: (d: Overview['detected']) => void): Promise<Unlisten>;
-  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'open-dashboard' | 'hover-desk' | 'pet-skins' | 'characters-changed', cb: (payload: unknown) => void): Promise<Unlisten>;
+  onTrayEvent(name: 'set-mini' | 'select-session' | 'open-settings' | 'check-update' | 'ui-zoom' | 'popover-shown' | 'settings-changed' | 'hover-main' | 'hover-island' | 'island-screen' | 'island-leaving' | 'desk-screen' | 'desk-leaving' | 'open-dashboard' | 'hover-desk' | 'pet-skins' | 'characters-changed', cb: (payload: unknown) => void): Promise<Unlisten>;
   /** menu bar popover / island buttons: open, mini, settings, select (key), quit */
   trayAction(action: string, key?: string): Promise<void>;
   /** resize the island window, kept centred at the top of the screen */

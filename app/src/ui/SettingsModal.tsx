@@ -28,7 +28,7 @@ const PANE_KEYS: Partial<Record<SettingsPane, (keyof Settings)[]>> = {
   agents: ['doneShownSec', 'staleMinutes'],
   notify: ['approveInApp', 'approveWaitSec', 'dailySummary', 'dailySummaryHour', 'notifyApproval', 'notifyComplete', 'notifyLimits', 'notifyMinTurnSec', 'notifyOnlyWhenHidden', 'quietFrom', 'quietHours', 'quietTo', 'renotifyMin'],
   sound: ['bgm', 'sfx'],
-  pets: ['desktopPets', 'desktopPetSize', 'petBubbles', 'petEnergy'],
+  pets: ['deskScreen', 'desktopPets', 'desktopPetSize', 'petBubbles', 'petEnergy'],
   look: ['alwaysOnTop', 'alwaysOnTopRoom', 'backdrop', 'dashHidden', 'idleTags', 'showDock', 'showTabs', 'tagLook', 'tagStyle', 'theme'],
   bar: ['trayPet'],
   island: ['island', 'islandHideIdle', 'islandOpen', 'islandPeek', 'islandScreen', 'islandUsage'],
@@ -637,6 +637,13 @@ function Pets({ settings: s, onChange, names, onAdded }: { settings: Settings; o
             <option value={2}>{L('작게', 'Small')}</option>
             <option value={3}>{L('보통', 'Medium')}</option>
             <option value={4}>{L('크게', 'Large')}</option>
+          </select>
+        </Field>
+        <Field label={L('표시할 화면', 'Screen')}>
+          <select value={s.deskScreen ?? 'main'} disabled={!s.desktopPets} onChange={(e) => set('deskScreen', e.target.value as Settings['deskScreen'])}>
+            <option value="auto">{L('노치 있는 화면 (없으면 메뉴 막대 화면)', 'The notched screen (or the menu bar screen)')}</option>
+            <option value="main">{L('메뉴 막대가 있는 화면', 'The menu bar screen')}</option>
+            <option value="pointer">{L('마우스가 있는 화면', 'The screen with the pointer')}</option>
           </select>
         </Field>
       </Group>

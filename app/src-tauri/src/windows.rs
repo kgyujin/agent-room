@@ -143,9 +143,10 @@ pub(crate) unsafe fn mac_notch_h(screen: *mut objc2::runtime::AnyObject) -> f64 
     inset.0.max(0.0)
 }
 
-/// The display that holds the island (index in NSScreen.screens, screen) for the island_screen
-/// setting. With several displays the notch is often on the laptop while the menu bar is on the
-/// big monitor, so "auto" follows the notch and falls back to the menu bar's display.
+/// The display (index in NSScreen.screens, screen) for the island_screen or desk_screen setting.
+/// With several displays the notch is often on the laptop while the menu bar is on the big
+/// monitor, so "auto" follows the notch and falls back to the menu bar's display. "pointer" is the
+/// display the pointer settled on (see `watch_hover`), not every display it passes over.
 #[cfg(target_os = "macos")]
 pub(crate) unsafe fn mac_island_screen(mode: &str) -> Option<(usize, *mut objc2::runtime::AnyObject)> {
     use objc2::runtime::AnyObject;
@@ -158,17 +159,56 @@ pub(crate) unsafe fn mac_island_screen(mode: &str) -> Option<(usize, *mut objc2:
     let at = |i: usize| -> *mut AnyObject { msg_send![screens, objectAtIndex: i] };
     let pick = match mode {
         "main" => None,
-        "pointer" => {
-            let p: MacPoint = msg_send![class!(NSEvent), mouseLocation];
-            (0..count).find(|&i| {
-                let f: MacRect = msg_send![at(i), frame];
-                p.0 >= f.0 && p.0 < f.0 + f.2 && p.1 >= f.1 && p.1 <= f.1 + f.3
-            })
-        }
+        "pointer" => Some(POINTER_SCREEN.load(Ordering::Relaxed)).filter(|&i| i < count).or_else(|| mac_pointer_screen()),
         _ => (0..count).find(|&i| mac_notch_h(at(i)) > 0.0),
     }
     .unwrap_or(0);
     Some((pick, at(pick)))
+}
+
+/// The display the pointer has stayed on for `SCREEN_DWELL`; usize::MAX until the hover watcher
+/// first looks. Windows set to follow the pointer go there.
+#[cfg(target_os = "macos")]
+static POINTER_SCREEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX);
+/// How long the pointer stays on another display before the windows follow it, so passing over a
+/// display on the way to another one moves nothing.
+#[cfg(target_os = "macos")]
+const SCREEN_DWELL: Duration = Duration::from_millis(400);
+
+/// The display under the pointer right now (index in NSScreen.screens). Main thread only.
+#[cfg(target_os = "macos")]
+unsafe fn mac_pointer_screen() -> Option<usize> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
+    let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
+    let p: MacPoint = msg_send![class!(NSEvent), mouseLocation];
+    (0..count).find(|&i| {
+        let screen: *mut AnyObject = msg_send![screens, objectAtIndex: i];
+        let f: MacRect = msg_send![screen, frame];
+        p.0 >= f.0 && p.0 < f.0 + f.2 && p.1 >= f.1 && p.1 <= f.1 + f.3
+    })
+}
+
+/// Moves a window that follows the pointer to the display the pointer settled on, quietly: the page
+/// fades out ("<label>-leaving"), the window moves while it can't be seen, and the page fades back in
+/// when told it arrived ("island-screen" / "desk-screen").
+#[cfg(target_os = "macos")]
+fn follow_pointer_screen(app: &AppHandle, label: &'static str) {
+    let _ = app.emit_to(label, &format!("{label}-leaving"), ());
+    let app = app.clone();
+    let _ = std::thread::Builder::new().name("agent-room-move".into()).spawn(move || {
+        // a little longer than the page's fade out
+        std::thread::sleep(Duration::from_millis(180));
+        match label {
+            "island" => sync_island(&app),
+            _ => {
+                if let Some(w) = app.get_webview_window("desk") {
+                    place_desk(&app, &w);
+                }
+            }
+        }
+    });
 }
 
 #[cfg(target_os = "macos")]
@@ -347,8 +387,9 @@ pub(crate) fn watch_hover(app: AppHandle) {
         let mut last_island: Option<bool> = None;
         let mut last_main: Option<Option<(i32, i32)>> = None;
         let mut last_desk: Option<Option<(i32, i32)>> = None;
+        // the display the pointer moved to and since when, until it has stayed there SCREEN_DWELL
         #[cfg(target_os = "macos")]
-        let mut last_screen: Option<usize> = None;
+        let mut pending_screen: Option<(usize, std::time::Instant)> = None;
         let mut last_pointer: Option<(f64, f64)> = None;
         let mut still = 0u32;
         loop {
@@ -366,7 +407,11 @@ pub(crate) fn watch_hover(app: AppHandle) {
             // 20th tick in case a window moved or opened under a still pointer. Checking them on every
             // tick kept the main thread and the page busy while nobody touched the mouse
             still += 1;
-            if pointer == last_pointer && still < 20 {
+            #[cfg(target_os = "macos")]
+            let waiting = pending_screen.is_some();
+            #[cfg(not(target_os = "macos"))]
+            let waiting = false;
+            if pointer == last_pointer && still < 20 && !waiting {
                 continue;
             }
             last_pointer = pointer;
@@ -405,13 +450,40 @@ pub(crate) fn watch_hover(app: AppHandle) {
                 }
                 let _ = app.emit_to("island", "hover-island", island);
             }
-            // "pointer": move the island when the pointer goes to another display
+            // "pointer": the island and the desktop pets follow the pointer to another display once
+            // it has stayed there a moment, fading out and back in instead of jumping
             #[cfg(target_os = "macos")]
-            if app.get_webview_window("island").is_some() && app.state::<Shared>().settings.lock().unwrap().island_screen == "pointer" {
-                let idx = mac_on_main(&app, || unsafe { mac_island_screen("pointer").map(|s| s.0) }).flatten();
-                if idx.is_some() && idx != last_screen {
-                    last_screen = idx;
-                    sync_island(&app);
+            {
+                let (island_mode, desk_mode) = {
+                    let st = app.state::<Shared>().settings.lock().unwrap();
+                    (st.island_screen == "pointer", st.desk_screen == "pointer")
+                };
+                let island_follows = island_mode && app.get_webview_window("island").is_some();
+                let desk_follows = desk_mode && desk_on;
+                if island_follows || desk_follows {
+                    let idx = mac_on_main(&app, || unsafe { mac_pointer_screen() }).flatten();
+                    let settled = POINTER_SCREEN.load(Ordering::Relaxed);
+                    match idx {
+                        // first look: the windows were just placed on the pointer's display
+                        Some(i) if settled == usize::MAX => POINTER_SCREEN.store(i, Ordering::Relaxed),
+                        Some(i) if i != settled => match pending_screen {
+                            Some((p, since)) if p == i && since.elapsed() >= SCREEN_DWELL => {
+                                pending_screen = None;
+                                POINTER_SCREEN.store(i, Ordering::Relaxed);
+                                if island_follows {
+                                    follow_pointer_screen(&app, "island");
+                                }
+                                if desk_follows {
+                                    follow_pointer_screen(&app, "desk");
+                                }
+                            }
+                            Some((p, _)) if p == i => {}
+                            _ => pending_screen = Some((i, std::time::Instant::now())),
+                        },
+                        _ => pending_screen = None,
+                    }
+                } else {
+                    pending_screen = None;
                 }
             }
             // the desktop pets' strip: the pointer on every tick while it is over the strip, so the
@@ -607,23 +679,24 @@ pub(crate) fn show_desk(app: &AppHandle, on: bool) {
     let _ = w.set_ignore_cursor_events(true);
 }
 
-/// Lays the strip along the bottom of the menu bar's display, just above the Dock.
+/// Lays the strip along the bottom of the display picked in settings (desk_screen, same choices as
+/// the island's), just above the Dock.
 pub(crate) fn place_desk(app: &AppHandle, w: &WebviewWindow) {
     #[cfg(target_os = "macos")]
     {
         use objc2::runtime::AnyObject;
-        use objc2::{class, msg_send};
+        use objc2::msg_send;
         let Ok(ptr) = w.ns_window() else { return };
         let ns = ptr as usize;
+        let mode = app.state::<Shared>().settings.lock().unwrap().desk_screen.clone();
+        let app = app.clone();
         let _ = w.run_on_main_thread(move || unsafe {
             let ns = ns as *mut AnyObject;
-            let screens: *mut AnyObject = msg_send![class!(NSScreen), screens];
-            let count: usize = if screens.is_null() { 0 } else { msg_send![screens, count] };
-            if ns.is_null() || count == 0 {
+            let Some((_, screen)) = mac_island_screen(&mode) else { return };
+            if ns.is_null() {
                 return;
             }
-            // screens[0] holds the menu bar; Cocoa's origin is at the bottom-left
-            let screen: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
+            // Cocoa's origin is at the bottom-left
             let vis: MacRect = msg_send![screen, visibleFrame];
             let r = MacRect(vis.0, vis.1, vis.2, DESK_H.min(vis.3));
             let now: MacRect = msg_send![ns, frame];
@@ -631,8 +704,9 @@ pub(crate) fn place_desk(app: &AppHandle, w: &WebviewWindow) {
                 return;
             }
             let _: () = msg_send![ns, setFrame: r, display: true];
+            // the page fades the pets back in
+            let _ = app.emit_to("desk", "desk-screen", ());
         });
-        let _ = app;
     }
     #[cfg(not(target_os = "macos"))]
     {

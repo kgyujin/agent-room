@@ -1,6 +1,9 @@
 /* desktop pets: a see-through strip along the bottom of the screen */
 html.view-desk, html.view-desk body, html.view-desk #root { background: transparent; overflow: hidden; }
 .desk { position: fixed; inset: 0; user-select: none; -webkit-user-select: none; cursor: default; }
+/* following the pointer to another display: fade out, move unseen, fade back in */
+.desk.moving { transition: opacity 0.24s ease; }
+.desk.away { opacity: 0; transition: opacity 0.14s ease; }
 /* pets stand on the strip's bottom edge; Desk.tsx moves them with transforms */
 .desk-pet { position: absolute; left: 0; bottom: 0; image-rendering: pixelated; pointer-events: none; }
 /* the wrapper is moved (Desk.tsx); the tag inside keeps the room tags' look */

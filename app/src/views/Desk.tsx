@@ -13,6 +13,7 @@ import { AgentMark } from '../ui/icons';
 import { L } from '../i18n';
 import type { Snapshot } from '../types';
 import { useLive } from './useLive';
+import { useScreenMove } from './useScreenMove';
 
 /** with no session the menu bar pet strolls about on its own */
 const REST_KEY = '__rest';
@@ -59,6 +60,8 @@ export function Desk() {
   const energy = settings?.petEnergy ?? 'normal';
   const scale = Math.min(4, Math.max(2, Math.round(settings?.desktopPetSize ?? 2)));
   const bubbles = settings?.petBubbles ?? true;
+  // following the pointer to another display: the pets fade out and back in instead of jumping
+  const moveClass = useScreenMove('desk-leaving', 'desk-screen');
 
   // who is out: the same critters as in the room, wearing the same pets (the room tells which).
   // A session the room has no critter for yet (it waits a few seconds, and has a desk limit) stays in.
@@ -255,7 +258,7 @@ export function Desk() {
 
   const keys = Object.keys(wear);
   return (
-    <div className="desk" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+    <div className={`desk ${moveClass}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       {keys.map((k) => (
         <canvas key={k} className="desk-pet" ref={(el) => { if (el) canvases.current.set(k, el); else canvases.current.delete(k); }} />
       ))}
