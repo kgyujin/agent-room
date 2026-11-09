@@ -118,7 +118,9 @@ Hook은 아무것도 출력하지 않고 항상 성공으로 끝나요. 그래�
 | 세션 대화 로그 | 세션 이름을 붙이려고 `/rename`으로 정한 이름, 요약, 첫 요청의 첫 줄 중 하나만 48자까지 읽어요. 저장하지 않아요 |
 | `~/Library/Application Support/Claude/claude-code-sessions` | 데스크톱 앱에서 연 세션을 구분하려고 세션 id와 제목만 읽어요. 키 파일은 열지 않아요 |
 | 상태줄 입력, Codex rollout 로그 | 남은 사용량 숫자인 `rate_limits`만 읽어요 |
+| `codex app-server` | Codex가 로그에 사용량을 남기지 않을 때 5분마다 한 번 `account/rateLimits/read`로 Codex에 직접 물어봐요. 로그인 정보는 앱이 읽지 않고 Codex가 처리하며, 모델 호출이 아니라 토큰이 들지 않아요 |
 | 키체인의 Claude Code 로그인 | 상태줄이 없는 Claude 세션의 사용량을 5분마다 한 번 물어보는 데만 써요. 토큰은 저장하지 않고, 설정에서 끌 수 있어요 |
+| `claude` 잠깐 실행 (기본 꺼짐) | '만료된 로그인 자동 갱신'을 켜면, 로그인이 만료됐을 때 보이지 않게 `claude`를 띄워 Claude Code가 직접 로그인을 갱신하게 하고 바로 닫아요. 30분에 한 번까지이고, 아무것도 입력하지 않아요 |
 
 </details>
 

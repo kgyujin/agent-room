@@ -41,7 +41,8 @@ fn main() {
         }
         return;
     }
-    if arg != "claude" && arg != "codex" {
+    // Agent Room's own short `claude` run that renews an expired login is not a session
+    if (arg != "claude" && arg != "codex") || std::env::var_os("AGENT_ROOM_PROBE").is_some() {
         return;
     }
     let Ok(raw) = serde_json::from_slice::<serde_json::Value>(&buf) else { return };

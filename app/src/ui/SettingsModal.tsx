@@ -24,7 +24,7 @@ export type SettingsPane = (typeof PANES)[number]['id'];
 
 /** settings each pane's "기본값으로" puts back (not the pet list, colours, sounds or kept history) */
 const PANE_KEYS: Partial<Record<SettingsPane, (keyof Settings)[]>> = {
-  general: ['autoUpdateCheck', 'claudeAccountLimits', 'font', 'showCost', 'costClaudePerM', 'costCodexPerM', 'showLimits', 'tokenUnit', 'uiTheme', 'uiZoom'],
+  general: ['autoUpdateCheck', 'claudeAccountLimits', 'claudeCliRefresh', 'font', 'showCost', 'costClaudePerM', 'costCodexPerM', 'showLimits', 'tokenUnit', 'uiTheme', 'uiZoom'],
   agents: ['doneShownSec', 'staleMinutes'],
   notify: ['approveInApp', 'approveWaitSec', 'dailySummary', 'dailySummaryHour', 'notifyApproval', 'notifyComplete', 'notifyLimits', 'notifyMinTurnSec', 'notifyOnlyWhenHidden', 'quietFrom', 'quietHours', 'quietTo', 'renotifyMin'],
   sound: ['bgm', 'sfx'],
@@ -171,6 +171,7 @@ export function SettingsModal(props: {
                 <Group title={L('사용량', 'Usage')}>
                   <Toggle label={L('남은 사용량 보이기', 'Show usage left')} hint={L('5시간 한도와 주간 한도를 메인 창, 메뉴바, 아일랜드에 보여 줘요', 'Shows the 5-hour and weekly limits in the main window, menu bar and island')} v={s.showLimits} on={(v) => set('showLimits', v)} />
                   {s.showLimits && <Toggle label={L('Claude 계정에서 받아오기', 'Get from the Claude account')} hint={L('데스크톱 앱과 VS Code 세션의 한도도 보여요. 키체인의 Claude Code 로그인으로 Anthropic에만 묻고, 저장하지 않아요', 'Limits for desktop app and VS Code sessions too. Asks only Anthropic, with the Claude Code login in the Keychain, and stores nothing')} sub v={s.claudeAccountLimits ?? true} on={(v) => set('claudeAccountLimits', v)} />}
+                  {s.showLimits && (s.claudeAccountLimits ?? true) && <Toggle label={L('만료된 로그인 자동 갱신', 'Renew an expired login')} hint={L('로그인이 만료되면 보이지 않게 claude 를 잠깐 실행해 Claude Code가 직접 갱신하게 해요. 아무것도 입력하지 않지만, Claude Code가 시작할 때 보내는 요청은 그대로 나가요', 'When the login has expired, claude is started briefly out of sight so Claude Code renews it. Nothing is typed, but the requests Claude Code makes at start still go out')} sub v={s.claudeCliRefresh ?? false} on={(v) => set('claudeCliRefresh', v)} />}
                   <Field label={L('토큰 단위', 'Token units')} hint={L('토큰 수를 어떻게 줄여 쓸지 골라요', 'How token counts are shortened')}>
                     <select value={s.tokenUnit ?? 'si'} onChange={(e) => set('tokenUnit', e.target.value as 'si' | 'ko')}>
                       <option value="si">12.4K, 340M</option>

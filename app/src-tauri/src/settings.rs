@@ -66,6 +66,8 @@ pub struct Settings {
     /// Claude usage from the account (macOS): the login Claude Code keeps in the Keychain is read
     /// in memory and sent only to Anthropic's usage endpoint; nothing is stored
     pub claude_account_limits: bool,
+    /// when that login has expired, start `claude` briefly in the background so Claude Code renews it
+    pub claude_cli_refresh: bool,
     /// token counts as "si" (12.4K, 340M) or "ko" (1.2만, 3.4억)
     pub token_unit: String,
     /// dashboard cards the user turned off ("map", "activity", "usage", "board", "sessions", "picked")
@@ -137,6 +139,7 @@ impl Default for Settings {
             auto_update_check: true,
             ui_zoom: 1.0,
             claude_account_limits: true,
+            claude_cli_refresh: false,
             token_unit: "si".into(),
             dash_hidden: Vec::new(),
             daily_summary: false,

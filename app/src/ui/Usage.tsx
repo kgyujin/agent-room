@@ -32,7 +32,7 @@ export { fmtTokens };
 export function LimitCards({ sessions, now, dark, ring, accountLimits, onSettings, agents = AGENTS }: { sessions: Snapshot[]; now: number; dark?: boolean; /** each window as a ring gauge (the dashboard) */ ring?: boolean; accountLimits?: boolean; onSettings?: () => void; /** which agents get a card (all by default) */ agents?: readonly ('claude' | 'codex')[] }) {
   return (
     <div className={`lc-grid ${dark ? 'dark' : ''} ${ring ? 'rings' : ''}`}>
-      {agents.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} ring={ring} why={noLimitsWhy(a, sessions, accountLimits)} onSettings={onSettings} />)}
+      {agents.map((a) => <LimitCard key={a} agent={a} l={latestLimits(sessions, a)} now={now} ring={ring} why={noLimitsWhy(a, sessions, accountLimits)} staleWhy={staleWhy(a, accountLimits)} onSettings={onSettings} />)}
     </div>
   );
 }
@@ -48,6 +48,16 @@ function noLimitsWhy(agent: 'claude' | 'codex', sessions: Snapshot[], accountLim
   return { text: agent === 'claude' ? L('다음 응답부터 보여요. Pro와 Max 요금제만 한도가 있어요.', 'Shows from the next reply. Only Pro and Max plans have limits.') : L('다음 응답부터 보여요.', 'Shows from the next reply.') };
 }
 
+/** why the numbers shown are old, so "64시간 전 기준" doesn't look like a silent bug */
+function staleWhy(agent: 'claude' | 'codex', accountLimits?: boolean): string | null {
+  if (agent === 'codex') return L('Codex에서 새 값을 받지 못해 마지막으로 받은 값이에요. Codex에 로그인돼 있으면 5분 안에 다시 받아와요.', "Couldn't get new numbers from Codex, so this is the last one. If Codex is signed in, it is asked again within 5 minutes.");
+  if (accountLimits === false) return null;
+  if (claudeAccountWhy === 'login') return L('이 Mac의 Claude Code 로그인을 찾지 못해 계정에서 새로 받아오지 못했어요.', "Couldn't find the Claude Code sign-in on this Mac, so the account wasn't asked.");
+  if (claudeAccountWhy === 'expired') return L("터미널 Claude Code 로그인이 만료돼 새로 받아오지 못했어요. 터미널에서 claude 를 한 번 실행하거나 설정의 '만료된 로그인 자동 갱신'을 켜면 갱신돼요.", "The terminal Claude Code sign-in has expired. Run claude in a terminal once, or turn on 'Renew an expired login' in settings.");
+  if (claudeAccountWhy === 'failed') return L('계정에서 새 값을 받아오지 못했어요. 잠시 뒤 다시 시도해요.', "Couldn't get new numbers from the account. Trying again shortly.");
+  return null;
+}
+
 /** what is left of one window as a ring with the percentage inside */
 function Ring({ left }: { left: number }) {
   const r = 24;
@@ -61,7 +71,10 @@ function Ring({ left }: { left: number }) {
   );
 }
 
-function LimitCard({ agent, l, now, ring, why, onSettings }: { agent: 'claude' | 'codex'; l: RateLimits | null; now: number; ring?: boolean; why: { text: string; fix?: boolean }; onSettings?: () => void }) {
+function LimitCard({ agent, l, now, ring, why, staleWhy, onSettings }: { agent: 'claude' | 'codex'; l: RateLimits | null; now: number; ring?: boolean; why: { text: string; fix?: boolean }; staleWhy: string | null; onSettings?: () => void }) {
+  const stale = !!l && !!limitsAge(l, now);
+  // a pace worked out from an old report would be wrong now
+  const pace = (w: RateLimits['windows'][number]) => (stale ? null : paceNote(w, l!.at));
   return (
     <div className="lc">
       <div className="lc-head">
@@ -75,7 +88,7 @@ function LimitCard({ agent, l, now, ring, why, onSettings }: { agent: 'claude' |
           const reset = w.resetsAt && w.resetsAt > now ? L(`${fmtUntil(w.resetsAt - now)} 초기화`, `resets ${fmtUntil(w.resetsAt - now)}`) : '';
           if (ring)
             return (
-              <div key={w.minutes} className={`lc-row lc-r ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={paceNote(w, l.at) ?? undefined}>
+              <div key={w.minutes} className={`lc-row lc-r ${left <= 10 ? 'low' : left <= 30 ? 'mid' : ''}`} title={pace(w) ?? undefined}>
                 <Ring left={left} />
                 <span className="lc-name">{windowLabel(w.minutes)}</span>
                 {w.resetsAt && w.resetsAt > now && <small className="lc-reset">{fmtUntil(w.resetsAt - now)}</small>}
@@ -86,11 +99,13 @@ function LimitCard({ agent, l, now, ring, why, onSettings }: { agent: 'claude' |
               <span className="lc-name">{w.minutes <= 300 ? `${L('세션', 'Session')} (${windowLabel(w.minutes)})` : windowLabel(w.minutes)}</span>
               <span className={`lc-bar a-${agent}`}><i style={{ width: `${left}%` }} /></span>
               <div className="lc-foot"><b>{L(`${left}% 남음`, `${left}% left`)}</b><small>{reset}</small></div>
-              {paceNote(w, l.at) && <small className="lc-pace">{paceNote(w, l.at)}</small>}
+              {pace(w) && <small className="lc-pace">{pace(w)}</small>}
             </div>
           );
         })
-      ) : (
+      ) : null}
+      {stale && staleWhy && <p className="lc-none">{staleWhy}</p>}
+      {!l && (
         <p className="lc-none">{why.text}{why.fix && onSettings && <> <button className="link" onClick={onSettings}>{L('설정 열기', 'Open settings')}</button></>}</p>
       )}
     </div>

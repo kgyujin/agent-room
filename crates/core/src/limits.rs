@@ -1,7 +1,8 @@
 //! Remaining plan usage (rate-limit windows), read from what the agents already report locally.
 //!
 //! * Claude Code: the `rate_limits` object it passes to its status line command (Pro/Max only).
-//! * Codex: the `rate_limits` of the latest `token_count` line in its rollout log.
+//! * Codex: the `rate_limits` of the latest `token_count` line in its rollout log, or Codex's own
+//!   `codex app-server` answer to `account/rateLimits/read` (Codex 0.16x logs leave them null).
 //!
 //! * Claude account (opt-out setting, macOS): Anthropic's own usage endpoint, with the login
 //!   Claude Code keeps in the Keychain. See the app's `claude_limits`.
@@ -51,6 +52,24 @@ pub fn from_codex(rl: &Value, at: u64) -> Option<RateLimits> {
                 None => w.get("resets_in_seconds").and_then(Value::as_f64).map(|s| at + (s * 1000.0) as u64),
             };
             Some(LimitWindow { minutes: w.get("window_minutes").and_then(Value::as_u64).unwrap_or(0) as u32, used_pct: w.get("used_percent")?.as_f64()?, resets_at })
+        })
+        .collect();
+    (!windows.is_empty()).then_some(RateLimits { windows, at })
+}
+
+/// Codex app-server `account/rateLimits/read` result:
+/// `{"rateLimits": {"primary": {"usedPercent", "windowDurationMins", "resetsAt" (seconds)}, "secondary": {...}}}`
+pub fn from_codex_rpc(result: &Value, at: u64) -> Option<RateLimits> {
+    let rl = result.get("rateLimits")?;
+    let windows: Vec<LimitWindow> = ["primary", "secondary"]
+        .iter()
+        .filter_map(|k| {
+            let w = rl.get(*k)?;
+            Some(LimitWindow {
+                minutes: w.get("windowDurationMins").and_then(Value::as_u64).unwrap_or(0) as u32,
+                used_pct: w.get("usedPercent")?.as_f64()?,
+                resets_at: w.get("resetsAt").and_then(Value::as_f64).map(|s| (s * 1000.0) as u64),
+            })
         })
         .collect();
     (!windows.is_empty()).then_some(RateLimits { windows, at })
@@ -138,6 +157,16 @@ mod tests {
         assert_eq!((l.windows[0].minutes, l.windows[0].used_pct, l.windows[0].resets_at), (300, 37.0, Some(1762336800000)));
         assert_eq!((l.windows[1].minutes, l.windows[1].used_pct, l.windows[1].resets_at), (10080, 12.5, None));
         assert!(from_claude_usage(&json!({"error": "x"}), 5).is_none());
+    }
+
+    #[test]
+    fn codex_rpc_windows() {
+        let v = json!({"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 15, "windowDurationMins": 300, "resetsAt": 1_793_851_134}, "secondary": null, "credits": null}, "rateLimitsByLimitId": null});
+        let l = from_codex_rpc(&v, 7).unwrap();
+        assert_eq!(l.windows.len(), 1, "null window skipped");
+        assert_eq!((l.windows[0].minutes, l.windows[0].used_pct, l.windows[0].resets_at, l.at), (300, 15.0, Some(1_793_851_134_000), 7));
+        assert!(from_codex_rpc(&json!({"rateLimits": {"primary": null, "secondary": null}}), 7).is_none());
+        assert!(from_codex_rpc(&json!({}), 7).is_none());
     }
 
     #[test]
