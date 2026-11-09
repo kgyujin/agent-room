@@ -455,7 +455,8 @@ pub(crate) fn watch_hover(app: AppHandle) {
             #[cfg(target_os = "macos")]
             {
                 let (island_mode, desk_mode) = {
-                    let st = app.state::<Shared>().settings.lock().unwrap();
+                    let shared = app.state::<Shared>();
+                    let st = shared.settings.lock().unwrap();
                     (st.island_screen == "pointer", st.desk_screen == "pointer")
                 };
                 let island_follows = island_mode && app.get_webview_window("island").is_some();
