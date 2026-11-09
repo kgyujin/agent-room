@@ -127,6 +127,8 @@ export interface Settings {
   /** size of the main window's contents, 1 = 100% (⌘+ / ⌘− / ⌘0) */
   uiZoom: number;
   claudeAccountLimits?: boolean;
+  /** start claude briefly in the background to renew an expired login */
+  claudeCliRefresh?: boolean;
   /** token counts as 12.4K / 340M ('si') or 1.2만 / 3.4억 ('ko') */
   tokenUnit?: 'si' | 'ko';
   /** dashboard cards turned off, by id (see DASH_CARDS) */

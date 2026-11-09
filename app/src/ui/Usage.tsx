@@ -53,7 +53,7 @@ function staleWhy(agent: 'claude' | 'codex', accountLimits?: boolean): string | 
   if (agent === 'codex') return L('Codex에서 새 값을 받지 못해 마지막으로 받은 값이에요. Codex에 로그인돼 있으면 5분 안에 다시 받아와요.', "Couldn't get new numbers from Codex, so this is the last one. If Codex is signed in, it is asked again within 5 minutes.");
   if (accountLimits === false) return null;
   if (claudeAccountWhy === 'login') return L('이 Mac의 Claude Code 로그인을 찾지 못해 계정에서 새로 받아오지 못했어요.', "Couldn't find the Claude Code sign-in on this Mac, so the account wasn't asked.");
-  if (claudeAccountWhy === 'expired') return L('터미널 Claude Code 로그인이 만료돼 새로 받아오지 못했어요. 터미널에서 claude 를 한 번 실행하면 갱신돼요.', 'The terminal Claude Code sign-in has expired. Run claude in a terminal once to renew it.');
+  if (claudeAccountWhy === 'expired') return L("터미널 Claude Code 로그인이 만료돼 새로 받아오지 못했어요. 터미널에서 claude 를 한 번 실행하거나 설정의 '만료된 로그인 자동 갱신'을 켜면 갱신돼요.", "The terminal Claude Code sign-in has expired. Run claude in a terminal once, or turn on 'Renew an expired login' in settings.");
   if (claudeAccountWhy === 'failed') return L('계정에서 새 값을 받아오지 못했어요. 잠시 뒤 다시 시도해요.', "Couldn't get new numbers from the account. Trying again shortly.");
   return null;
 }
