@@ -12,6 +12,7 @@ import { progressOf } from '../ui/Hud';
 import { isActive, latestLimits, userTodo } from '../ui/Overview';
 import { LimitCards, fmtTokens, useUsageHistory } from '../ui/Usage';
 import { useLive } from './useLive';
+import { useScreenMove } from './useScreenMove';
 import { L } from '../i18n';
 
 const ROW = 40;
@@ -33,12 +34,10 @@ export function Island() {
   // the bar is as tall as the notch and leaves the notch itself empty
   const [[notchW, barH], setNotch] = useState<[number, number]>([190, 34]);
   // asked again whenever the island moves to another display (it may have another notch, or none)
-  useEffect(() => {
-    const ask = () => void backend.notchSize().then((n) => setNotch(n ? [Math.round(n[0]), Math.round(n[1])] : NO_NOTCH));
-    ask();
-    const off = backend.onTrayEvent('island-screen', ask);
-    return () => void off.then((f) => f());
-  }, []);
+  const askNotch = () => backend.notchSize().then((n) => setNotch(n ? [Math.round(n[0]), Math.round(n[1])] : NO_NOTCH));
+  useEffect(() => void askNotch(), []);
+  // moving to another display: a quiet fade, and the new notch's size taken without the spring
+  const moveClass = useScreenMove('island-leaving', 'island-screen', askNotch);
   // `open` is how the pill is drawn; `big` is how large its window is. Opening grows the window
   // first and then morphs the pill; closing morphs the pill back and then shrinks the window,
   // so the shape change is animated instead of jumping with the window.
@@ -140,7 +139,7 @@ export function Island() {
   return (
     // hover comes only from Rust: the page's own mouseenter/leave also fired while the window was
     // being resized under a still pointer, and the two sources together opened and closed it in a loop
-    <div className={`island ${open ? 'open' : ''} ${todos.length ? 'alert' : ''}`} style={{ width: w, height: h, ['--bar-h' as string]: `${barH}px`, ['--notch-w' as string]: `${notchW}px` }}
+    <div className={`island ${open ? 'open' : ''} ${todos.length ? 'alert' : ''} ${moveClass}`} style={{ width: w, height: h, ['--bar-h' as string]: `${barH}px`, ['--notch-w' as string]: `${notchW}px` }}
       onClick={enter}>
       <div className="is-bar">
         <div className="is-left">

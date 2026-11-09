@@ -685,6 +685,10 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     show_island(&app, settings.island);
     sync_island(&app);
     show_desk(&app, settings.desktop_pets);
+    // a changed "표시할 화면" moves the pets' strip right away
+    if let Some(w) = app.get_webview_window("desk") {
+        place_desk(&app, &w);
+    }
     // the popover and island keep their pages alive, so they pick up the change from this event
     let _ = app.emit("settings-changed", &settings);
     Ok(())

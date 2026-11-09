@@ -99,6 +99,8 @@ pub struct Settings {
     pub desktop_pets: bool,
     /// screen points per art pixel of the desktop pets (2, 3 or 4)
     pub desktop_pet_size: u32,
+    /// which display the desktop pets walk on: same choices as `island_screen`
+    pub desk_screen: String,
 }
 
 impl Default for Settings {
@@ -158,6 +160,7 @@ impl Default for Settings {
             language: "auto".into(),
             desktop_pets: false,
             desktop_pet_size: 2,
+            desk_screen: "main".into(),
         }
     }
 }

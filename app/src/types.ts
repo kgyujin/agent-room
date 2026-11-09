@@ -159,6 +159,8 @@ export interface Settings {
   desktopPets?: boolean;
   /** screen px per art px of the desktop pets (2 small, 3 medium, 4 large) */
   desktopPetSize?: number;
+  /** which display the desktop pets walk on: same choices as islandScreen */
+  deskScreen?: 'auto' | 'main' | 'pointer';
   /** "작업 완료" notifications only for turns at least this long (seconds, 0 = all) */
   notifyMinTurnSec: number;
 }
