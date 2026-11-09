@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from './types';
-import { doingLabel, fmtAgo, fmtTokens, setTokenUnit, fmtDuration, fmtUntil, paceNote, sessionNames, shortName, stateLabel, windowLabel } from './labels';
+import { doingLabel, fmtAgo, fmtTokens, setTokenUnit, fmtDuration, fmtUntil, paceNote, withResets, sessionNames, shortName, stateLabel, windowLabel } from './labels';
 
 const snap = (key: string, project: string, cwd: string) => ({ key, project, cwd }) as unknown as Snapshot;
 
@@ -79,5 +79,16 @@ describe('fmtTokens', () => {
     expect(fmtTokens(340_000_000)).toBe('3.4억');
     expect(fmtTokens(9_800)).toBe('9,800');
     setTokenUnit('si');
+  });
+});
+
+describe('withResets', () => {
+  const l = { at: 0, windows: [{ minutes: 300, usedPct: 28, resetsAt: 1_000 }, { minutes: 10080, usedPct: 71, resetsAt: 9_000 }] };
+  it('fills a window whose reset passed since the report', () => {
+    expect(withResets(l, 5_000)!.windows).toEqual([{ minutes: 300, usedPct: 0, resetsAt: null }, { minutes: 10080, usedPct: 71, resetsAt: 9_000 }]);
+  });
+  it('keeps windows that have not reset yet', () => {
+    expect(withResets(l, 500)).toBe(l);
+    expect(withResets(null, 500)).toBeNull();
   });
 });

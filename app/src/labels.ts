@@ -1,4 +1,4 @@
-import type { Activity, AgentKind, Snapshot, TimelineEntry } from './types';
+import type { Activity, AgentKind, RateLimits, Snapshot, TimelineEntry } from './types';
 import { isEn, L } from './i18n';
 
 export const AGENT_NAME: Record<AgentKind, string> = { claude: 'Claude Code', codex: 'Codex', get demo() { return L('데모', 'Demo'); } };
@@ -154,6 +154,12 @@ export function fmtUntil(ms: number): string {
  * window resets. Nothing in a window's first tenth (too early to tell) or when it lasts. `at` is when
  * the numbers were reported.
  */
+/** a window whose reset time has passed since the report is full again, not stuck at the old percentage */
+export function withResets(l: RateLimits | null, now = Date.now()): RateLimits | null {
+  if (!l || !l.windows.some((w) => w.resetsAt && w.resetsAt <= now)) return l;
+  return { ...l, windows: l.windows.map((w) => (w.resetsAt && w.resetsAt <= now ? { ...w, usedPct: 0, resetsAt: null } : w)) };
+}
+
 export function paceNote(w: { minutes: number; usedPct: number; resetsAt: number | null }, at: number): string | null {
   if (!w.resetsAt || w.minutes <= 0 || w.usedPct <= 0 || w.usedPct >= 100) return null;
   const span = w.minutes * 60_000;
