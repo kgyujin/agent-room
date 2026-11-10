@@ -37,7 +37,8 @@ fn codex_rpc_usage(now: u64) -> Option<agent_room_core::model::RateLimits> {
     use std::io::{BufRead, BufReader, Write};
     use std::process::{Command, Stdio};
     let bin = cli_bin("codex")?;
-    let mut child = Command::new(bin)
+    let mut child = Command::new(&bin)
+        .env("PATH", cli_path(&bin))
         .args(["-s", "read-only", "-a", "never", "app-server"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -103,6 +104,33 @@ fn cli_bin(name: &'static str) -> Option<std::path::PathBuf> {
         FOUND.lock().unwrap().push((name, p.clone()));
     }
     found
+}
+
+/// PATH to start an agent CLI with: its own folder, then the login shell's PATH. An app started from
+/// Finder only has /usr/bin:/bin:/usr/sbin:/sbin, and an npm-installed `codex` is a script that
+/// needs `node` from the user's PATH (without it, every start failed with "env: node: not found").
+fn cli_path(bin: &std::path::Path) -> std::ffi::OsString {
+    static SHELL_PATH: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    let rest = SHELL_PATH.get_or_init(login_shell_path).clone().map(std::ffi::OsString::from).or_else(|| std::env::var_os("PATH")).unwrap_or_default();
+    let mut path = bin.parent().map(|d| d.as_os_str().to_owned()).unwrap_or_default();
+    if !rest.is_empty() {
+        path.push(":");
+        path.push(rest);
+    }
+    path
+}
+
+#[cfg(target_os = "macos")]
+fn login_shell_path() -> Option<String> {
+    let sh = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    run_for(std::process::Command::new(sh).args(["-lc", "printf %s \"$PATH\""]), None)
+        .and_then(|o| String::from_utf8(o).ok())
+        .filter(|p| !p.trim().is_empty())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn login_shell_path() -> Option<String> {
+    None
 }
 
 /// Claude's remaining usage from the account, for sessions whose status line never reports it
@@ -207,6 +235,7 @@ fn renew_claude_login(now: u64) -> bool {
         .arg("-q")
         .arg("/dev/null")
         .arg(&bin)
+        .env("PATH", cli_path(&bin))
         .current_dir(&home)
         .env("AGENT_ROOM_PROBE", "1")
         .stdin(Stdio::piped())
