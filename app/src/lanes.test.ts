@@ -21,6 +21,12 @@ describe('activity lane segments', () => {
     expect(segments(tl, 0, 100)).toEqual([{ from: 10, to: 20, phase: 'work' }, { from: 20, to: 100, phase: 'wait' }]);
     expect(segments(tl, 0, 100, 35)).toEqual([{ from: 10, to: 20, phase: 'work' }, { from: 20, to: 35, phase: 'wait' }, { from: 35, to: 100, phase: 'work' }]);
   });
+  it('stops at the last event of a session that is no longer working', () => {
+    const tl = [e(1, 10, 'turn_start'), e(2, 20, 'tool')];
+    expect(segments(tl, 0, 100, 30, 30)).toEqual([{ from: 10, to: 30, phase: 'work' }]);
+    // went quiet before the window: nothing is drawn
+    expect(segments(tl, 50, 100, 30, 30)).toEqual([]);
+  });
   it('is empty without entries', () => {
     expect(segments([], 0, 100)).toEqual([]);
   });

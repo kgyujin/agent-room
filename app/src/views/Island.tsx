@@ -9,7 +9,7 @@ import { fmtAgo, fmtDuration, justDone, sessionNames, stateLabel, stateTone } fr
 import { AgentMark, Icon, type IconName } from '../ui/icons';
 import type { Snapshot } from '../types';
 import { progressOf } from '../ui/Hud';
-import { isActive, latestLimits, userTodo } from '../ui/Overview';
+import { isActive, latestLimits, turnMs, userTodo } from '../ui/Overview';
 import { LimitCards, fmtTokens, useUsageHistory } from '../ui/Usage';
 import { useLive } from './useLive';
 import { useScreenMove } from './useScreenMove';
@@ -175,7 +175,7 @@ export function Island() {
           {(list.length > 8 ? list.slice(0, 7) : list).map((s) => {
             const p = progressOf(s);
             const todo = userTodo(s, now);
-            const t = s.turnStartedAt ? (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt : null;
+            const t = turnMs(s, now);
             return (
               <li key={s.key}>
                 <button title={`${names[s.key]}${s.isDemo ? '' : '\n' + L('눌러서 이 세션 열기', 'Click to open this session')}`} onClick={(e) => {

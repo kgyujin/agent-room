@@ -6,7 +6,7 @@ import type { Snapshot, TimelineEntry, UsageHistory } from '../types';
 import { AGENT_NAME, fmtAgo, fmtClock, sessionNames, stateLabel, stateTone, timelineText } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { progressOf } from './Hud';
-import { isActive, userTodo } from './Overview';
+import { isActive, spanEnd, userTodo } from './Overview';
 import { fmtTokens } from './Usage';
 import { daySummary, estCost, fmtSpan, fmtUsd, type DayLog } from '../report';
 import { isEn, L } from '../i18n';
@@ -74,8 +74,9 @@ export function StatCards({ sessions, now, h, day, cost, onOpen }: { sessions: S
 }
 
 /** every session in one table, the one needing the user first */
-export type SessFilter = 'all' | 'todo' | 'work' | 'rest';
-const SESS_FILTERS = (): [SessFilter, string][] => [['all', L('전체', 'All')], ['todo', L('내 차례', 'Your turn')], ['work', L('작업 중', 'Working')], ['rest', L('쉬는 중', 'Resting')]];
+export type SessFilter = 'all' | 'todo' | 'work' | 'rest' | 'off';
+/** 'off': not responding, gone or ended; kept apart from resting so the chip agrees with the row's state */
+const SESS_FILTERS = (): [SessFilter, string][] => [['all', L('전체', 'All')], ['todo', L('내 차례', 'Your turn')], ['work', L('작업 중', 'Working')], ['rest', L('쉬는 중', 'Resting')], ['off', L('응답 없음·종료', 'Silent or ended')]];
 
 /** onOpen: a double-click brings the session's terminal, editor or app to the front; onForget takes ended sessions off the list */
 export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, onForget, filter = 'all' }: { sessions: Snapshot[]; now: number; selected: string | null; onSelect: (k: string) => void; onOpen?: (s: Snapshot) => void; onForget?: (keys: string[]) => void; filter?: SessFilter }) {
@@ -83,7 +84,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, o
   const [q, setQ] = useState('');
   if (!all.length) return <p className="muted small pad">{L('아직 세션이 없어요.', 'No sessions yet.')}</p>;
   const names = sessionNames(all);
-  const kind = (s: Snapshot): SessFilter => (userTodo(s, now) ? 'todo' : isActive(s) ? 'work' : 'rest');
+  const kind = (s: Snapshot): SessFilter => (userTodo(s, now) ? 'todo' : isActive(s) ? 'work' : s.connection !== 'live' ? 'off' : 'rest');
   const query = q.trim().toLowerCase();
   const sessions = all.filter((s) => (f === 'all' || kind(s) === f) && (!query || `${names[s.key]} ${s.project ?? ''} ${s.cwd ?? ''} ${AGENT_NAME[s.agent]} ${s.title ?? ''} ${s.chatTitle ?? ''}`.toLowerCase().includes(query)));
   const ended = all.filter((s) => s.connection === 'ended' || s.connection === 'lost');
@@ -91,9 +92,12 @@ export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, o
     <>
     {(all.length > 3 || (onForget && ended.length > 0)) && (
       <div className="dash-chips">
-        {SESS_FILTERS().map(([id, label]) => (
-          <button key={id} className={f === id ? 'on' : ''} onClick={() => setF(id)}>{label}<span>{id === 'all' ? all.length : all.filter((s) => kind(s) === id).length}</span></button>
-        ))}
+        {SESS_FILTERS().map(([id, label]) => {
+          const n = id === 'all' ? all.length : all.filter((s) => kind(s) === id).length;
+          // the silent/ended chip only while there is one (or it is picked)
+          if (id === 'off' && !n && f !== 'off') return null;
+          return <button key={id} className={f === id ? 'on' : ''} onClick={() => setF(id)}>{label}<span>{n}</span></button>;
+        })}
         <input type="search" className="sess-q" placeholder={L('프로젝트, 경로, 에이전트', 'Project, path, agent')} value={q} onChange={(e) => setQ(e.target.value)} />
         {onForget && ended.length > 0 && <button className="sess-clear" onClick={() => onForget(ended.map((s) => s.key))} title={L('끝났거나 연결이 끊긴 세션을 목록에서 지워요', 'Takes ended and lost sessions off the list')}>{L('끝난 세션 지우기', 'Clear ended')}<span>{ended.length}</span></button>}
       </div>
@@ -111,7 +115,7 @@ export function SessionTable({ sessions: all, now, selected, onSelect, onOpen, o
               <td><span className="who"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={14} /><b title={`${names[s.key]}${s.cwd ? `\n${s.cwd}` : ''}`}>{names[s.key]}</b></span></td>
               <td><span className={`st-badge tone-${stateTone(s)}`}>{stateLabel(s)}</span></td>
               <td>{p ? <span className="dash-prog"><span className="trk"><i style={{ width: `${(p.done / p.total) * 100}%` }} /></span><small>{p.done}/{p.total}</small></span> : <small className="muted">{L('없음', 'None')}</small>}</td>
-              <td className="num opt2">{fmtSpan(now - s.startedAt)}</td>
+              <td className="num opt2">{fmtSpan(spanEnd(s, now) - s.startedAt)}</td>
               <td className="num opt">{s.completedTurns}</td>
               <td className="num opt">{s.filesEdited.length}</td>
               <td className="num">{fmtAgo(now - s.lastEventAt)}</td>

@@ -3,6 +3,7 @@ import { AGENT_NAME, ORIGIN_LABEL, chatName, fmtAgo, fmtClock, timelineText } fr
 import { fmtSpan } from '../report';
 import { Icon } from './icons';
 import { progressOf } from './Hud';
+import { spanEnd } from './Overview';
 import { L } from '../i18n';
 
 export function Timeline({ entries }: { entries: TimelineEntry[] }) {
@@ -78,7 +79,7 @@ export function SessionInfo({ s, now, onForget }: { s: Snapshot; now: number; on
     ]],
     [L('시간', 'Time'), [
       [L('시작', 'Started'), `${fmtClock(s.startedAt)}${s.startExact ? '' : L(' (처음 본 시각)', ' (first seen)')}`],
-      [L('경과', 'Elapsed'), fmtSpan(now - s.startedAt)],
+      [L('경과', 'Elapsed'), fmtSpan(spanEnd(s, now) - s.startedAt)],
       [L('마지막 활동', 'Last active'), fmtAgo(now - s.lastEventAt)],
     ]],
     [L('상태', 'State'), [

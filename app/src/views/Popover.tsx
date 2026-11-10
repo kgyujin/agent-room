@@ -27,15 +27,18 @@ export function Popover() {
   const work = live.filter((s) => isActive(s) && !userTodo(s, now));
   // grouped by urgency like a task inbox: the user's turn, then working, then resting.
   // Rows that don't fit drop from the bottom (resting first) and the rest is one click away.
-  const rest = live.filter((s) => !todo.includes(s) && !work.includes(s));
+  // a session gone silent mid-task is not resting: it gets its own group, as its row says
+  const quiet = live.filter((s) => s.connection === 'stale');
+  const rest = live.filter((s) => !todo.includes(s) && !work.includes(s) && !quiet.includes(s));
   const groups: [string, string, Snapshot[]][] = [
     ['todo', L('내 차례', 'Your turn'), todo],
     ['work', L('작업 중', 'Working'), work],
+    ['quiet', L('응답 없음', 'Not responding'), quiet],
     ['rest', L('쉬는 중', 'Resting'), rest],
   ];
   const box = useRef<HTMLDivElement>(null);
   // the user's turn never drops: those rows are why the popover was opened
-  const more = useFit(box, ['.pp-g-rest .pp-rowwrap', '.pp-g-work .pp-rowwrap']);
+  const more = useFit(box, ['.pp-g-rest .pp-rowwrap', '.pp-g-quiet .pp-rowwrap', '.pp-g-work .pp-rowwrap']);
   const names = sessionNames(live);
   return (
     <div className="pop">
@@ -44,7 +47,8 @@ export function Popover() {
         <span className="pp-counts">
           {todo.length > 0 && <em className="todo">{L('내 차례', 'Your turn')} {todo.length}</em>}
           {work.length > 0 && <em>{L('작업 중', 'Working')} {work.length}</em>}
-          {!todo.length && !work.length && <em className="calm">{live.length ? L('모두 쉬는 중', 'All resting') : unhooked ? L('연결 안 됨', 'Not connected') : L('대기 중', 'Idle')}</em>}
+          {quiet.length > 0 && <em>{L('응답 없음', 'Not responding')} {quiet.length}</em>}
+          {!todo.length && !work.length && !quiet.length && <em className="calm">{live.length ? L('모두 쉬는 중', 'All resting') : unhooked ? L('연결 안 됨', 'Not connected') : L('대기 중', 'Idle')}</em>}
         </span>
       </header>
       {showLimits && <UsageBlock sessions={list} now={now} />}
