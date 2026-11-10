@@ -295,6 +295,8 @@
 .lane:hover .lane-name b, .lane.on .lane-name b { color: var(--accent-ink); }
 .lane-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
 .lane-name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* not responding, gone: the lane stops at its last event and the name greys like its state badge */
+.lane.off .lane-name { opacity: 0.55; }
 .lane-track { position: relative; height: 20px; border-radius: 6px; background: var(--fill); }
 .lane-track .grid { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .lane-track .seg { position: absolute; top: 3px; bottom: 3px; min-width: 3px; border-radius: 4px; }

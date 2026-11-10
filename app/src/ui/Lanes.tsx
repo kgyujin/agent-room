@@ -2,9 +2,9 @@
 // (working, waiting for the user), with marks where something failed. Built from the same hook
 // timeline the activity log reads, so it costs nothing extra.
 import type { Snapshot, TimelineEntry } from '../types';
-import { sessionNames, stateTone } from '../labels';
+import { sessionNames, stateLabel, stateTone } from '../labels';
 import { AgentMark } from './icons';
-import { userTodo } from './Overview';
+import { isActive, userTodo } from './Overview';
 import { L } from '../i18n';
 import { segments } from '../lanes';
 import { useRef, useState } from 'react';
@@ -61,11 +61,11 @@ export function Lanes({ sessions, timelines, now, minutes = 30, selected, onSele
         const tl = timelines[s.key] ?? [];
         const fails = tl.filter((e) => e.at > from && e.at <= end && (e.kind === 'tool_fail' || e.kind === 'turn_failed' || (e.kind === 'test' && e.ok === false)));
         return (
-          <button key={s.key} className={`lane ${selected === s.key ? 'on' : ''}`} onClick={() => onSelect(s.key)}>
-            <span className="lane-name"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={12} /><b title={names[s.key]}>{names[s.key]}</b></span>
+          <button key={s.key} className={`lane ${selected === s.key ? 'on' : ''} ${s.connection !== 'live' ? 'off' : ''}`} onClick={() => onSelect(s.key)}>
+            <span className="lane-name"><AgentMark agent={s.isDemo ? 'demo' : s.agent} size={12} /><b title={`${names[s.key]}\n${stateLabel(s)}`}>{names[s.key]}</b></span>
             <span className="lane-track">
               {ticks.map((m) => <i key={m} className="grid" style={{ left: x(end - m * MIN) }} />)}
-              {segments(tl, from, end, s.waiting ? undefined : s.lastEventAt).map((g) => <i key={g.from} className={`seg ${g.phase}`} style={{ left: x(g.from), width: `calc(${x(g.to)} - ${x(g.from)})` }} />)}
+              {segments(tl, from, end, s.waiting ? undefined : s.lastEventAt, isActive(s) ? undefined : s.lastEventAt).map((g) => <i key={g.from} className={`seg ${g.phase}`} style={{ left: x(g.from), width: `calc(${x(g.to)} - ${x(g.from)})` }} />)}
               {fails.map((e) => <i key={e.id} className="fail" style={{ left: x(e.at) }} title={e.detail ?? ''} />)}
             </span>
           </button>

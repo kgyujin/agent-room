@@ -16,8 +16,10 @@ const PHASE: Record<string, Phase> = {
  * Answering an approval or a question leaves no timeline entry, so a wait that is still open in the
  * log but over in the session (`answeredAt`: the session's last event, when it is no longer waiting)
  * ends there and the rest counts as work.
+ * `until`: for a session that is no longer working (no news, gone, ended, or resting without a closing
+ * entry), its last real event; nothing is drawn after it, so a silent session doesn't read as working.
  */
-export function segments(entries: TimelineEntry[], from: number, to: number, answeredAt?: number): Seg[] {
+export function segments(entries: TimelineEntry[], from: number, to: number, answeredAt?: number, until?: number): Seg[] {
   const ev = [...entries].sort((a, b) => a.at - b.at);
   let phase: Phase = 'idle';
   const out: Seg[] = [];
@@ -33,11 +35,12 @@ export function segments(entries: TimelineEntry[], from: number, to: number, ans
       at = e.at;
     }
   }
-  if (phase === 'wait' && answeredAt !== undefined && answeredAt > at && answeredAt < to) {
+  const stop = until === undefined ? to : Math.min(to, until);
+  if (phase === 'wait' && answeredAt !== undefined && answeredAt > at && answeredAt < stop) {
     out.push({ from: at, to: answeredAt, phase });
     phase = 'work';
     at = answeredAt;
   }
-  if (to > at) out.push({ from: at, to, phase });
+  if (stop > at) out.push({ from: at, to: stop, phase });
   return out.filter((s) => s.phase === 'work' || s.phase === 'wait');
 }

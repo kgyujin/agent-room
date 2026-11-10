@@ -12,6 +12,9 @@ const ACTIVE = ['starting', 'planning', 'reading', 'editing', 'running', 'testin
 
 export const isActive = (s: Snapshot) => s.connection === 'live' && ACTIVE.includes(s.state);
 
+/** where a session's elapsed time stops: its last event once it has ended or its process is gone */
+export const spanEnd = (s: Snapshot, now: number) => (s.connection === 'ended' || s.connection === 'lost' ? s.lastEventAt : now);
+
 /** what the user has to do for this session, if anything */
 export function userTodo(s: Snapshot, now: number): { text: string; since: number } | null {
   if (s.connection !== 'live') return null;
@@ -24,9 +27,10 @@ export function userTodo(s: Snapshot, now: number): { text: string; since: numbe
   return null;
 }
 
-function turnMs(s: Snapshot, now: number) {
+/** how long the current or last turn ran; a turn that went quiet (no news, gone) stops at its last event */
+export function turnMs(s: Snapshot, now: number) {
   if (!s.turnStartedAt) return null;
-  return (s.turnEndedAt && !isActive(s) ? s.turnEndedAt : now) - s.turnStartedAt;
+  return (isActive(s) ? now : s.turnEndedAt ?? s.lastEventAt) - s.turnStartedAt;
 }
 
 /** rough time left: average time per finished plan step x steps left (null until one step is done

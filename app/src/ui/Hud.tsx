@@ -3,6 +3,7 @@ import type { Snapshot } from '../types';
 import { activityLabel, AGENT_NAME, chatName, fmtAgo, fmtDuration, stateLabel, stateTone } from '../labels';
 import { AgentMark, Icon } from './icons';
 import { L } from '../i18n';
+import { turnMs } from './Overview';
 
 export function progressOf(s: Snapshot): { done: number; total: number } | null {
   if (!s.plan.length) return null;
@@ -19,7 +20,7 @@ export function Hud({ s, now, onOpenApp }: { s: Snapshot; now: number; onOpenApp
   const tone = stateTone(s);
   const prog = progressOf(s);
   const active = ACTIVE.includes(s.state) && s.connection === 'live';
-  const turnMs = s.turnStartedAt ? (s.turnEndedAt && !active ? s.turnEndedAt : now) - s.turnStartedAt : null;
+  const took = turnMs(s, now);
   const note = noteOf(s, now);
   const doing = s.tool && s.connection === 'live' ? [activityLabel(s.activity), s.tool, s.detail].filter(Boolean).join(' ') : null;
   return (
@@ -39,7 +40,7 @@ export function Hud({ s, now, onOpenApp }: { s: Snapshot; now: number; onOpenApp
           {prog.done}/{prog.total}
         </span>
       )}
-      {turnMs !== null && <span className="shud-time" title={active ? L('작업 시간', 'Working for') : L('소요 시간', 'Took')}><Icon name="clock" />{fmtDuration(turnMs)}</span>}
+      {took !== null && <span className="shud-time" title={active ? L('작업 시간', 'Working for') : L('소요 시간', 'Took')}><Icon name="clock" />{fmtDuration(took)}</span>}
       <ApproveButtons s={s} now={now} />
       {onOpenApp && !canApprove(s, now) && <button className="btn primary open-app" onClick={onOpenApp} title={L('이 세션이 열린 터미널 탭이나 편집기 창, Codex 대화로 이동해요', 'Goes to the terminal tab, editor window or Codex chat this session runs in')}>{L('세션 열기', 'Open session')}</button>}
     </div>
